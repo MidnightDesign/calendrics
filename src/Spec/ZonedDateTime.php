@@ -1760,6 +1760,10 @@ final class ZonedDateTime implements Stringable
                 }
                 $prevOffset = $curOffset;
             }
+            // No upcoming offset change in range. Without this return, the scan
+            // would fall through into the 'previous' branch below and report a
+            // historical transition as "next".
+            return null;
         }
 
         // 'previous': find the most recent transition strictly BEFORE the current instant.
