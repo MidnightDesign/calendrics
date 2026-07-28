@@ -14,4 +14,7 @@ RUN apt-get update && apt-get install -y git rsync unzip libzip-dev libicu-dev \
     && pecl install pcov \
     && docker-php-ext-enable pcov \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
+# The full-suite coverage run (composer test-coverage) exceeds PHP's default
+# 128M memory limit while aggregating pcov data for ~12k tests.
+RUN echo 'memory_limit=1G' > /usr/local/etc/php/conf.d/zz-memory-limit.ini
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

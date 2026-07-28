@@ -189,8 +189,11 @@ final class Instant implements Stringable
             if (
                 !is_finite($subNs)
                 || floor($subNs) !== $subNs
-                || $subNs > (float) PHP_INT_MAX
-                || $subNs < (float) PHP_INT_MIN
+                // ≥/≤: (float) PHP_INT_MAX rounds up to 2^63, which does not
+                // fit int64, and a subNs of exactly -2^63 would overflow the
+                // sub-second carry multiplication during normalization.
+                || $subNs >= (float) PHP_INT_MAX
+                || $subNs <= (float) PHP_INT_MIN
             ) {
                 throw new RangeError('Instant result is outside the representable nanosecond range.');
             }
@@ -719,7 +722,7 @@ final class Instant implements Stringable
                 throw new RangeError("Invalid timeZone \"{$tz}\": bare datetime without Z, offset, or bracket.");
             }
             // Inline offset must not include a seconds component (e.g. -07:00:01).
-            if (preg_match('/[+\-]\d{2}:\d{2}:\d{2}(?!\])/i', $tz) === 1) {
+            if (preg_match('/[+\-]\d{2}:\d{2}:\d{2}(?!\])/', $tz) === 1) {
                 throw new RangeError("Invalid timeZone \"{$tz}\": inline offset contains a seconds component.");
             }
         }
@@ -781,10 +784,8 @@ final class Instant implements Stringable
             $sign = $om[2] === '+' ? 1 : -1;
             return $sign * (((int) $om[3] * 3600) + ((int) $om[4] * 60));
         }
-        // IANA timezone name: look up the offset at the current epoch.
-        // This method doesn't have access to the instant's epoch, so we
-        // validate the timezone now and defer the offset computation to the caller.
-        self::validateTimeZoneString($tz);
+        // IANA timezone name: the caller has already run validateTimeZoneString()
+        // and resolves the offset at the instant's epoch itself.
         return null; // Signal to caller that it's an IANA timezone needing epoch-relative offset.
     }
 
@@ -922,7 +923,7 @@ final class Instant implements Stringable
             }
             // No bracket: inline offset (Z or ±HH:MM) required.
             // Reject sub-minute inline offset.
-            if (preg_match('/[+\-]\d{2}:\d{2}:\d{2}/i', $tz) === 1) {
+            if (preg_match('/[+\-]\d{2}:\d{2}:\d{2}/', $tz) === 1) {
                 throw new RangeError("Invalid time zone string \"{$tz}\": inline offset contains a seconds component.");
             }
             // Extract inline offset (Z or ±HH:MM at end or after time part).
@@ -947,7 +948,7 @@ final class Instant implements Stringable
             return sprintf('%s%s:%s', $m[1], $m[2], $m[3]);
         }
         // Anything with more than ±HH:MM (seconds or fractional) → reject.
-        if (preg_match('/^[+\-]\d{2}:\d{2}[:.].*/i', $tz) === 1) {
+        if (preg_match('/^[+\-]\d{2}:\d{2}[:.].*/', $tz) === 1) {
             throw new RangeError(
                 "Invalid time zone string \"{$tz}\": sub-minute offset is not a valid timezone identifier.",
             );
@@ -1282,7 +1283,7 @@ final class Instant implements Stringable
         // the integer seconds sum below cannot overflow.
         $specMaxSec = (float) EpochLimits::MAX_EPOCH_SECONDS;
         if ($floatDeltaSec > (4.0 * $specMaxSec) || $floatDeltaSec < (-4.0 * $specMaxSec)) {
-            throw new RangeError('Instant result is outside the representable nanosecond range.');
+            throw new RangeError('Instant arithmetic delta is outside the representable nanosecond range.');
         }
 
         // Decompose each field into whole seconds + sub-second nanoseconds.

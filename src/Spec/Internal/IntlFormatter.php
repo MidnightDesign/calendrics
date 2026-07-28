@@ -407,7 +407,7 @@ final class IntlFormatter
             /** @var mixed $fsd */
             $fsd = $opts['fractionalSecondDigits'];
             $digits = is_int($fsd) ? $fsd : (int) (is_string($fsd) ? $fsd : 0);
-            $parts[] = str_repeat('S', $digits);
+            $parts[] = str_repeat('S', max(0, $digits));
         }
         if (($opts['dayPeriod'] ?? null) !== null) {
             $parts[] = match ($opts['dayPeriod']) {

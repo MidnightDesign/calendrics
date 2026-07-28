@@ -51,7 +51,7 @@
             "@mago",
             "@mago-check",
             "@test-coverage",
-            "infection --threads=max --coverage=build/coverage --skip-initial-tests --filter=src/Calendar.php,src/Duration.php,src/Instant.php,src/Now.php,src/PlainDate.php,src/PlainDateTime.php,src/PlainMonthDay.php,src/PlainTime.php,src/PlainYearMonth.php,src/ZonedDateTime.php"
+            "infection --threads=max --coverage=build/coverage --skip-initial-tests --filter=src/Calendar.php,src/Duration.php,src/Instant.php,src/Now.php,src/PlainDate.php,src/PlainDateTime.php,src/PlainMonthDay.php,src/PlainTime.php,src/PlainYearMonth.php,src/ZonedDateTime.php,src/Spec/Now.php,src/Spec/Instant.php,src/Spec/PlainTime.php"
         ]
     },
     "config": {

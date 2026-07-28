@@ -51,4 +51,4 @@ jobs:
         if: matrix.php == '8.4'
         run: >-
           ./vendor/bin/infection --threads=max --coverage=build/coverage --skip-initial-tests
-          --filter='src/Calendar.php,src/Duration.php,src/Instant.php,src/Now.php,src/PlainDate.php,src/PlainDateTime.php,src/PlainMonthDay.php,src/PlainTime.php,src/PlainYearMonth.php,src/ZonedDateTime.php'
+          --filter='src/Calendar.php,src/Duration.php,src/Instant.php,src/Now.php,src/PlainDate.php,src/PlainDateTime.php,src/PlainMonthDay.php,src/PlainTime.php,src/PlainYearMonth.php,src/ZonedDateTime.php,src/Spec/Now.php,src/Spec/Instant.php,src/Spec/PlainTime.php'

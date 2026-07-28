@@ -138,6 +138,7 @@ final class PlainMonthDay implements Stringable
             );
         }
         /** @psalm-suppress InvalidPropertyAssignmentValue — $dayInt <= $daysInMonth <= 31 */
+        // @mago-expect analysis:invalid-property-assignment-value
         $this->isoDay = $dayInt;
 
         // TC39 range: the resulting date (referenceISOYear-month-day) must be within the

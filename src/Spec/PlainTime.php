@@ -217,6 +217,8 @@ final class PlainTime implements Stringable
      * @param array<array-key, mixed>|object $fields
      * @param mixed        $options Options bag (['overflow' => ...]), null/primitive (TypeError), or omitted.
      * @throws RangeError if a field value is infinite or out of range.
+     * @throws TypeError if $fields is a Temporal object, a non-object, contains
+     *         calendar/timeZone keys, or has no recognized time field.
      * @psalm-api
      */
     public function with(array|object $fields, mixed $options = []): self
@@ -308,9 +310,8 @@ final class PlainTime implements Stringable
             $ms = max(0, min(999, $ms));
             $us = max(0, min(999, $us));
             $ns = max(0, min(999, $ns));
-        } else {
-            CalendarMath::validateTimeFields($h, $min, $sec, $ms, $us, $ns);
         }
+        // 'reject': the constructor below validates the unclamped fields.
 
         return new self($h, $min, $sec, $ms, $us, $ns);
     }
@@ -887,9 +888,8 @@ final class PlainTime implements Stringable
             $ms = max(0, min(999, $ms));
             $us = max(0, min(999, $us));
             $ns = max(0, min(999, $ns));
-        } else {
-            CalendarMath::validateTimeFields($h, $min, $sec, $ms, $us, $ns);
         }
+        // 'reject': the constructor below validates the unclamped fields.
 
         return new self($h, $min, $sec, $ms, $us, $ns);
     }

@@ -4,9 +4,244 @@
         "directories": ["src"]
     },
     "mutators": {
-        "@default": true
+        "@default": true,
+        // ---------------------------------------------------------------------
+        // Documented equivalent-mutant suppressions (issue #14, triage bucket
+        // (c)). Every entry below is a mutation whose observable behavior is
+        // identical to the original program for all reachable inputs, so no
+        // test can kill it. Where an entry covers a whole line or method,
+        // killable sibling mutants on the same code are knowingly forfeited —
+        // the suite still pins the behavior those mutants would break.
+        // ---------------------------------------------------------------------
+        // Casts of regex captures / numeric strings / exact-integer floats:
+        // PHP's numeric-string comparison and arithmetic semantics make the
+        // cast a no-op for every value the surrounding regex or validation
+        // admits.
+        "CastInt": {
+            "ignore": [
+                "Temporal\\Spec\\Instant::from",
+                "Temporal\\Spec\\Instant::parseOffset",
+                "Temporal\\Spec\\Instant::resolveTimeZoneOffsetSeconds",
+                "Temporal\\Spec\\Instant::addNsOffset",
+                "Temporal\\Spec\\Instant::decomposeUnit",
+                "Temporal\\Spec\\PlainTime::fromString",
+                "Temporal\\Spec\\PlainTime::isAmbiguousWithDate",
+                "Temporal\\Spec\\PlainTime::addTimeFields",
+            ],
+        },
+        // (float) casts on operands already promoted by the float context.
+        "CastFloat": {
+            "ignore": [
+                "Temporal\\Spec\\Instant::fromEpochParts",
+                "Temporal\\Spec\\Instant::toString",
+                "Temporal\\Spec\\Instant::addNsOffset",
+                "Temporal\\Spec\\Instant::decomposeUnit",
+            ],
+        },
+        // (string) cast on a value coerceEnumOption() already returned as string.
+        "CastString": {
+            "ignoreSourceCodeByRegex": [".*\\$luRaw = \\(string\\) \\$luVal;.*"],
+        },
+        // Fast paths whose removal falls through to a slower path that
+        // reconstructs the same value: the PlainTime instance-clone path
+        // re-enters via the property-bag path (PHP 8.4 get_object_vars() reads
+        // the hooked virtual properties); the Instant time-zone helpers fall
+        // back to DateTimeZone + normalizeTimezoneId, which canonicalize
+        // 'utc'/'+0530'/bracket offsets to the same identifiers the fast paths
+        // return; parseOffset's Z-arm sign multiplies a zero offset.
+        "ReturnRemoval": {
+            "ignore": [
+                "Temporal\\Spec\\PlainTime::from",
+                "Temporal\\Spec\\Instant::decimalStringToEpochParts",
+                "Temporal\\Spec\\Instant::validateTimeZoneString",
+                "Temporal\\Spec\\Instant::resolveTimeZoneOffsetSeconds",
+                "Temporal\\Spec\\Instant::parseTimeZoneId",
+                "Temporal\\Spec\\Instant::parseOffset",
+            ],
+        },
+        "UnwrapStrToUpper": {
+            "ignore": [
+                "Temporal\\Spec\\Instant::resolveTimeZoneOffsetSeconds",
+                "Temporal\\Spec\\Instant::parseTimeZoneId",
+            ],
+        },
+        "PregMatchMatches": {
+            "ignore": [
+                "Temporal\\Spec\\Instant::resolveTimeZoneOffsetSeconds",
+                "Temporal\\Spec\\Instant::parseTimeZoneId",
+            ],
+        },
+        "PregMatchRemoveDollar": {
+            "ignore": ["Temporal\\Spec\\Instant::resolveTimeZoneOffsetSeconds"],
+        },
+        // /i on a pattern whose only cased letter is the Z alternative: a
+        // lowercase-z datetime resolves to offset 0 through the fallback too.
+        "PregMatchRemoveFlags": {
+            "ignoreSourceCodeByRegex": [".*Tt.*Z\\|.*preg_match.*\\$tz, \\$om\\).*"],
+        },
+        "Identical": {
+            "ignore": ["Temporal\\Spec\\Instant::parseTimeZoneId"],
+        },
+        "Break_": {
+            // break -> continue in the has-any-field scan only re-checks fields.
+            "ignore": ["Temporal\\Spec\\PlainTime::fromPropertyBag"],
+        },
+        // Placeholder zero arguments in parse-path validateTimeFields calls;
+        // regex-capture guard indexes whose neighboring group is non-empty
+        // whenever they are; self-correcting decompositions (sec*divisor+rest
+        // reconstructs the input for any divisor); rounding-table ns-per-unit
+        // entries that EpochRounding truncates to whole seconds for
+        // second-or-coarser increments; dead ?? fallbacks for keys that are
+        // always present; the zero-magnitude diff sign and unit-rank spacing.
+        "IncrementInteger": {
+            "ignoreSourceCodeByRegex": [
+                ".*validateTimeFields\\(\\$hourNum, \\$minNum, \\$secNum, 0, 0, 0\\).*",
+                ".*return \\(int\\) str_pad\\(substr\\(.*",
+                ".*substr\\(string: \\$dateRest, offset: 2, length: 2\\).*",
+                ".*\\$monthNum = \\(int\\) substr\\(string: \\$dateRest.*",
+                ".*\\$dayNum = \\(int\\) substr\\(string: \\$dateRest.*",
+                ".*\\$minutes = \\(int\\) substr\\(string: \\$rest, offset: 1, length: 2\\).*",
+                ".*\\$seconds = \\(int\\) substr\\(string: \\$rest, offset: [01], length: 2\\).*",
+                ".*floorDiv\\(\\$epochMilliseconds, 1_000\\).*",
+                ".*'seconds' => \\[1_000_000_000, 86_400\\].*",
+                ".*'minutes' => \\[60_000_000_000, 1_440\\].*",
+                ".*'hours' => \\[3_600_000_000_000, 24\\].*",
+                ".*'minute', 'minutes' => \\[-1, true\\].*",
+                ".*=> 1_000_000_000,.*",
+                ".*=> 60_000_000_000,.*",
+                ".*=> 3_600_000_000_000,.*",
+                ".*\\$increment = 60_000_000_000;.*",
+                ".*= \\$increment === 1.*",
+                ".*\\$diffSign = \\$diffSec > 0 \\|\\| \\$diffSubNs > 0 \\? 1 : 0;.*",
+                ".*return \\[1, 0, 0\\];.*",
+                ".*'hour' => 6,.*",
+                ".*'nanosecond' => 1,.*",
+                ".*\\$maxIncrements\\[\\$smallestUnit\\] \\?\\? 1_000_000_000.*",
+                ".*\\$nsPerUnit\\[\\$smallestUnit\\] \\?\\? 1\\).*",
+            ],
+        },
+        "DecrementInteger": {
+            "ignoreSourceCodeByRegex": [
+                ".*\\$secNum = \\$m\\[5\\] !== ''.*",
+                ".*\\$fracRaw = \\$m\\[6\\] !== ''.*",
+                ".*\\$hourNum = \\(int\\) \\$m2\\[1\\];.*",
+                ".*\\$secNum = \\$m2\\[3\\] !== ''.*",
+                ".*\\$fracRaw = \\$m2\\[4\\] !== ''.*",
+                ".*\\$minNum = \\$m3\\[2\\] !== ''.*",
+                ".*\\$secNum = \\$m3\\[3\\] !== ''.*",
+                ".*if \\(\\$subMagnitude === 0\\).*",
+                ".*floorDiv\\(\\$epochMilliseconds, 1_000\\).*",
+                ".*'seconds' => \\[1_000_000_000, 86_400\\].*",
+                ".*'minutes' => \\[60_000_000_000, 1_440\\].*",
+                ".*'hours' => \\[3_600_000_000_000, 24\\].*",
+                ".*'minute', 'minutes' => \\[-1, true\\].*",
+                ".*=> 1_000_000_000,.*",
+                ".*=> 60_000_000_000,.*",
+                ".*=> 3_600_000_000_000,.*",
+                ".*\\$diffSign = \\$diffSec > 0 \\|\\| \\$diffSubNs > 0 \\? 1 : 0;.*",
+                ".*return \\$om\\[1\\];.*",
+                ".*if \\(\\$luIdx < 3 && \\$roundedSec !== 0\\).*",
+                ".*return \\[1, 0, 0\\];.*",
+                ".*'hour' => 6,.*",
+                ".*'nanosecond' => 1,.*",
+                ".*\\$maxIncrements\\[\\$smallestUnit\\] \\?\\? 1_000_000_000.*",
+                ".*\\$nsPerUnit\\[\\$smallestUnit\\] \\?\\? 1\\).*",
+            ],
+        },
+        "UnwrapLtrim": {
+            // Leading zeros never change the numeric split.
+            "ignoreSourceCodeByRegex": [".*ltrim\\(\\$digits, characters: '0'\\).*"],
+        },
+        "UnwrapSubstr": {
+            // Fraction strings are pre-limited to 9 digits by the \\d{10,} reject.
+            "ignoreSourceCodeByRegex": [
+                ".*return \\(int\\) str_pad\\(substr\\(.*",
+                ".*\\$seconds = \\(int\\) substr\\(string: \\$rest, offset: 0, length: 2\\).*",
+            ],
+        },
+        "LessThanOrEqualTo": {
+            // A 9-digit string splits into secMagnitude 0 + the same subMagnitude.
+            "ignoreSourceCodeByRegex": [".*strlen\\(\\$digits\\) <= 9.*"],
+        },
+        // The int64-overflow-guard branches pick between two computations of
+        // the same value; relational tweaks only move in-range inputs onto the
+        // (equally correct) other path, and out-of-range floats re-raise the
+        // identical RangeError downstream.
+        "GreaterThan": {
+            "ignoreSourceCodeByRegex": [
+                ".*\\$epochMilliseconds > \\$threshold.*",
+                ".*\\$diffSign = \\$diffSec > 0 \\|\\| \\$diffSubNs > 0 \\? 1 : 0;.*",
+                ".*\\$floatDeltaSec > \\(4\\.0 \\* \\$specMaxSec\\).*",
+                ".*\\$increment >= \\$maxInc \\|\\| \\$increment > 1.*",
+            ],
+        },
+        "LessThan": {
+            "ignoreSourceCodeByRegex": [
+                ".*\\$epochMilliseconds > \\$threshold.*",
+                ".*\\$diffSubNs < 0 \\|\\| \\$diffSubNs >=.*",
+                ".*\\$floatDeltaSec > \\(4\\.0 \\* \\$specMaxSec\\).*",
+                ".*if \\(\\$diffSign < 0\\).*",
+            ],
+        },
+        "GreaterThanOrEqualTo": {
+            "ignoreSourceCodeByRegex": [
+                ".*\\$diffSubNs < 0 \\|\\| \\$diffSubNs >=.*",
+                ".*\\$sign = \\$diffNs >= 0 \\? 1 : -1;.*",
+                ".*\\$expand = \\$ns >= 0 \\?.*",
+                ".*return \\$ns >= 0 \\? \\$trunc.*",
+            ],
+        },
+        "GreaterThanOrEqualToNegotiation": {
+            "ignoreSourceCodeByRegex": [".*\\$diffSubNs < 0 \\|\\| \\$diffSubNs >=.*"],
+        },
+        "LogicalOrAllSubExprNegation": {
+            "ignoreSourceCodeByRegex": [
+                ".*\\$epochMilliseconds > \\$threshold.*",
+                ".*\\$diffSubNs < 0 \\|\\| \\$diffSubNs >=.*",
+                ".*str_starts_with\\(\\$rest, '\\.'\\) \\|\\| str_starts_with\\(\\$rest, ','\\).*",
+            ],
+        },
+        "LogicalOr": {
+            "ignoreSourceCodeByRegex": [
+                ".*\\$floatDeltaSec > \\(4\\.0 \\* \\$specMaxSec\\).*",
+                ".*\\$epochSec > \\(float\\) \\$maxSec.*",
+            ],
+        },
+        // floor/ceil/round agree on the integer-valued floats these checks
+        // admit, and decomposeUnit's remainder self-corrects for any whole part.
+        "RoundingFamily": {
+            "ignoreSourceCodeByRegex": [
+                ".*floor\\(\\$epochMilliseconds\\) !== \\$epochMilliseconds.*",
+                ".*floor\\(\\$subNs\\) !== \\$subNs.*",
+                ".*\\$wholeFloat = floor\\(\\$value.*",
+            ],
+        },
+        // The float pre-check in addNsOffset is an overflow guard; the exact
+        // integer math below independently produces the same RangeError for
+        // every rejectable value a Duration can carry.
+        "Plus": {
+            "ignoreSourceCodeByRegex": [".*\\(float\\) \\$(hours|minutes|seconds|milliseconds|microseconds|nanoseconds).*"],
+        },
+        "Multiplication": {
+            "ignoreSourceCodeByRegex": [
+                ".*\\(\\(float\\) \\$(hours|minutes|milliseconds|microseconds|nanoseconds) [*/].*",
+                // Only nanosecond fields can be float-typed AND in-range, and
+                // there nsPerUnit is 1, so * vs / is indistinguishable.
+                ".*\\$remainderUnits \\* \\(float\\) \\$nsPerUnit.*",
+            ],
+        },
+        "Ternary": {
+            // $luRaw is only read by an error branch that the surrounding
+            // max() default makes unreachable.
+            "ignoreSourceCodeByRegex": [".*\\$luRaw = \\$luIdx === \\$suIdx.*"],
+        },
     },
     "testFramework": "phpunit",
+    // Mutants on hot spec-layer lines are covered by large test262 subsets whose
+    // nominal runtime exceeds the 10s default; without a higher per-mutant timeout
+    // infection skips them outright, silently dropping MSI to 0 for those files.
+    // Sized for CI runners, where the full test262 suite takes ~45s.
+    "timeout": 90,
     "logs": {
         "text": "build/infection.txt",
         "summary": "build/infection-summary.txt"

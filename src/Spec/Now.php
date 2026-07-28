@@ -144,7 +144,7 @@ final class Now
      * @throws TypeError  for non-string arguments (including explicitly-passed null).
      * @throws RangeError for empty strings or otherwise invalid strings.
      */
-    private static function resolveTimeZone(?string $timeZone, bool $provided = false): string
+    private static function resolveTimeZone(?string $timeZone, bool $provided): string
     {
         if ($timeZone === null) {
             if ($provided) {
@@ -186,7 +186,7 @@ final class Now
             if (preg_match('/^[+-]\d{2}:\d{2}:/', $tzId) === 1) {
                 throw new RangeError("Temporal.Now: sub-minute offset in time zone annotation [{$tzId}].");
             }
-            return $tzId;
+            return self::requireValidTimeZoneId($tzId);
         }
 
         // No IANA annotation — check for sub-minute inline offset (±HH:MM:SS...).
@@ -219,6 +219,24 @@ final class Now
         if (preg_match('/^[+-]\d{2}:?\d{2}:/', $s) === 1) {
             throw new RangeError("Temporal.Now: time zone offset \"{$s}\" has sub-minute precision.");
         }
-        return $s;
+        return self::requireValidTimeZoneId($s);
+    }
+
+    /**
+     * Ensures an identifier is accepted by PHP's DateTimeZone, so an invalid
+     * time zone surfaces as the documented RangeError instead of leaking PHP's
+     * DateInvalidTimeZoneException from the later DateTimeZone construction.
+     *
+     * @throws RangeError for identifiers DateTimeZone does not recognize.
+     */
+    private static function requireValidTimeZoneId(string $tzId): string
+    {
+        try {
+            /** @psalm-suppress ArgumentTypeCoercion — empty strings are rejected before this runs */
+            new \DateTimeZone($tzId);
+        } catch (\Exception) {
+            throw new RangeError("Temporal.Now: invalid time zone identifier \"{$tzId}\".");
+        }
+        return $tzId;
     }
 }

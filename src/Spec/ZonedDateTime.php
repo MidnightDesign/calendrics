@@ -40,6 +40,7 @@ final class ZonedDateTime implements Stringable
 
     // Known ICU inconsistencies where an IANA link target is reported as
     // self-canonical instead of resolving to its true primary zone.
+    /** @var array<non-empty-string, non-empty-string> */
     private const array ICU_FIXUPS = [
         'Antarctica/McMurdo' => 'Pacific/Auckland',
         'Antarctica/South_Pole' => 'Antarctica/McMurdo',
@@ -1745,7 +1746,13 @@ final class ZonedDateTime implements Stringable
             $nTransitions = count($transitions);
             for ($i = 1; $i < $nTransitions; $i++) {
                 $curOffset = $transitions[$i]['offset'];
-                if ($curOffset !== $prevOffset) {
+                // The ts guard makes the scan robust against getTransitions()
+                // implementations that ignore the requested range start and
+                // return the zone's full history (observed with newer tzdata
+                // for zones whose only transition predates the range, e.g.
+                // Asia/Riyadh's 1947 LMT switch): a historical transition at
+                // or before the anchor is never "next".
+                if ($curOffset !== $prevOffset && $transitions[$i]['ts'] > $epochSec) {
                     // A transition whose whole-second nanoseconds would overflow the int64
                     // epochNanoseconds field is not representable: transitionAt() returns
                     // null per spec (and avoids the int64 overflow $ts * NS_PER_SECOND hits).
