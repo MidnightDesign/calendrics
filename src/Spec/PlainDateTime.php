@@ -2480,6 +2480,11 @@ final class PlainDateTime implements Stringable
         return 'datetime';
     }
 
+    protected function localeCalendarId(): string
+    {
+        return $this->calendarId;
+    }
+
     #[\Override]
     protected function localeIsDateOnly(): bool
     {
@@ -2493,7 +2498,7 @@ final class PlainDateTime implements Stringable
     }
 
     #[\Override]
-    protected function toLocaleTimestamp(): int
+    protected function toLocaleTimestamp(): int|float
     {
         $dt = new \DateTime(
             sprintf(
@@ -2507,6 +2512,10 @@ final class PlainDateTime implements Stringable
             ),
             new \DateTimeZone('UTC'),
         );
-        return $dt->getTimestamp();
+        $subNs = ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond;
+        if ($subNs === 0) {
+            return $dt->getTimestamp();
+        }
+        return (float) $dt->getTimestamp() + ((float) $subNs / 1e9);
     }
 }

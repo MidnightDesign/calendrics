@@ -59,6 +59,64 @@ final class IntlFormatter
     }
 
     /**
+     * Resolves the calendar a DateTimeFormat for the given locale and options would use.
+     *
+     * Mirrors ECMA-402 CreateDateTimeFormat's [[Calendar]] resolution: an explicit
+     * `calendar` option wins, then a `ca` keyword in the locale itself (either
+     * `-u-ca-…` or `@calendar=…` form), then the locale's default calendar per ICU.
+     * The result is a canonical BCP-47 calendar key, so callers can compare it
+     * against a Temporal object's `calendarId`.
+     *
+     * @param array<string, mixed> $opts
+     */
+    public static function resolvedCalendar(string $locale, array $opts): string
+    {
+        /** @var mixed $calendarOpt */
+        $calendarOpt = $opts['calendar'] ?? null;
+        if (is_string($calendarOpt) && $calendarOpt !== '') {
+            return self::icuCalendarToBcp47(strtolower($calendarOpt));
+        }
+
+        // IntlCalendar::createInstance honors a ca keyword in the locale (both
+        // `en-u-ca-hebrew` and `en@calendar=hebrew`) and otherwise falls back to
+        // the locale's default calendar, so a single ICU query covers the
+        // remaining resolution steps.
+        $calendar = self::intlCalendarForLocale($locale);
+        $icuType = $calendar === null ? 'gregorian' : $calendar->getType();
+        return self::icuCalendarToBcp47($icuType);
+    }
+
+    /**
+     * Returns the ICU calendar instance for a locale, or null if ICU cannot create one.
+     *
+     * Wraps {@see \IntlCalendar::createInstance()} behind an explicit ?\IntlCalendar
+     * return type: PHPStan's bundled stub types the factory as non-null, but the
+     * runtime and the PHP manual declare it nullable (invalid timezone or ICU OOM).
+     */
+    // PHPStan's stub makes the nullable return look dead (see docblock above);
+    // the ignore is scoped to exactly that too-wide-return report.
+    // @phpstan-ignore return.unusedType
+    private static function intlCalendarForLocale(string $locale): ?\IntlCalendar
+    {
+        return \IntlCalendar::createInstance(null, $locale);
+    }
+
+    /**
+     * Maps an ICU calendar type to its canonical BCP-47 unicode `ca` key.
+     *
+     * Most types are identical in both systems; only the historic ICU names differ.
+     */
+    private static function icuCalendarToBcp47(string $icuType): string
+    {
+        return match ($icuType) {
+            'gregorian' => 'gregory',
+            'ethiopic-amete-alem' => 'ethioaa',
+            'islamicc' => 'islamic-civil',
+            default => $icuType,
+        };
+    }
+
+    /**
      * Validates that dateStyle/timeStyle are not combined with individual component options.
      *
      * Per ECMA-402, mixing dateStyle or timeStyle with any individual date/time component
@@ -439,10 +497,15 @@ final class IntlFormatter
                 || ($opts['month'] ?? null) !== null
                 || ($opts['day'] ?? null) !== null
             );
+        // Per ECMA-402 ToDateTimeOptions, dayPeriod and fractionalSecondDigits count
+        // as time components for the needDefaults check (era and timeZoneName do not
+        // appear in either list, so alone they still get defaults added).
         $hasTimePart =
             ($opts['hour'] ?? null) !== null
             || ($opts['minute'] ?? null) !== null
-            || ($opts['second'] ?? null) !== null;
+            || ($opts['second'] ?? null) !== null
+            || ($opts['dayPeriod'] ?? null) !== null
+            || ($opts['fractionalSecondDigits'] ?? null) !== null;
         if (!$hasDatePart && !$hasTimePart) {
             // Add defaults based on mode
             if (

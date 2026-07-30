@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Temporal\Spec\Internal;
 
+use Temporal\Exception\RangeError;
+
 /** @internal */
 trait TemporalSerde
 {
@@ -30,8 +32,36 @@ trait TemporalSerde
     /**
      * Converts this temporal value to a Unix timestamp (seconds) suitable for
      * IntlDateFormatter::format().
+     *
+     * Types with sub-second fields (PlainTime, PlainDateTime) return a float whose
+     * fractional part carries them, so fractionalSecondDigits formatting works;
+     * date-only types return whole seconds.
      */
-    abstract protected function toLocaleTimestamp(): int;
+    abstract protected function toLocaleTimestamp(): int|float;
+
+    /**
+     * Returns this type's calendar identifier for toLocaleString's calendar-mismatch
+     * check. Types that carry a calendar (PlainDate, PlainDateTime, PlainYearMonth,
+     * PlainMonthDay) override this to return their `calendarId`; the default covers
+     * types without a calendar slot (PlainTime), which behave like ISO values.
+     */
+    protected function localeCalendarId(): string
+    {
+        return 'iso8601';
+    }
+
+    /**
+     * Whether toLocaleString's calendar-mismatch check exempts the ISO calendar.
+     *
+     * Full dates format in any locale when their calendar is iso8601 (the ISO
+     * fields are calendar-neutral), but PlainYearMonth and PlainMonthDay override
+     * this to false: their display is inherently calendar-dependent, so ECMA-402
+     * requires their calendar to equal the format calendar exactly.
+     */
+    protected function localeCalendarIsoExempt(): bool
+    {
+        return true;
+    }
 
     #[\Override]
     public function __toString(): string
@@ -80,6 +110,22 @@ trait TemporalSerde
         }
 
         $locale = IntlFormatter::resolveLocale($locales);
+
+        // ECMA-402 HandleDateTimeValue: the value's calendar must match the calendar
+        // the DateTimeFormat resolved from the locale and options; otherwise
+        // formatting throws RangeError. Full dates additionally format in any locale
+        // when their calendar is iso8601 (see localeCalendarIsoExempt()).
+        $calendarId = $this->localeCalendarId();
+        if (!($calendarId === 'iso8601' && $this->localeCalendarIsoExempt())) {
+            $formatCalendar = IntlFormatter::resolvedCalendar($locale, $opts);
+            if ($calendarId !== $formatCalendar) {
+                throw new RangeError(sprintf(
+                    'toLocaleString(): calendar %s of this object does not match the calendar %s to format in.',
+                    $calendarId,
+                    $formatCalendar,
+                ));
+            }
+        }
 
         // Plain types always format in UTC to prevent date/time shifting.
         // The timeZone option is accepted but ignored for display purposes.

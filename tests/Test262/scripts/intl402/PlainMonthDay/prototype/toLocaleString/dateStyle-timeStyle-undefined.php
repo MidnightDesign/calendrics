@@ -8,4 +8,10 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-Assert::incomplete('untranslatable new expression');
+$defaultFormatter = new \Temporal\Tests\Test262\IntlDateTimeFormat('en');
+$__destruct__ = $defaultFormatter->resolvedOptions();
+$calendar = $__destruct__->calendar;
+$monthday = new \Temporal\Spec\PlainMonthDay(5, 2, $calendar);
+$expected = $defaultFormatter->format($monthday);
+$actual = $monthday->toLocaleString('en', []);
+Assert::sameValue($actual, $expected, 'dateStyle undefined is the same as being absent');

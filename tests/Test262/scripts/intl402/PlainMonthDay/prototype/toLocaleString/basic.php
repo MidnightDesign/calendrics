@@ -8,10 +8,24 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-use Temporal\Tests\Test262\TemporalHelpers;
-$findPart = function ($parts, $expectedType) {
-return $parts->find(function ($__unknown__ = null) use (&$type, &$expectedType) { return $type === $expectedType; })->value;
+$findPart = function ($parts, $expectedType) use (&$__dp0) {
+return \Temporal\Tests\Test262\Js::arrayFind($parts, function ($__dp0) use (&$expectedType) { $type = \Temporal\Tests\Test262\Js::destructure($__dp0, 'type'); return $type === $expectedType; })->value;
 };
-$calendar = TemporalHelpers::defaultLocaleCalendar();
+$calendar = new \Temporal\Tests\Test262\IntlDateTimeFormat('en-US')->resolvedOptions()->calendarId;
 $monthday = \Temporal\Spec\PlainMonthDay::from(JsUndefined::strip(['monthCode' => 'M11', 'day' => 18, 'calendar' => $calendar]));
-Assert::incomplete('untranslatable new expression');
+$dtfNY = new \Temporal\Tests\Test262\IntlDateTimeFormat('en-US', ['timeZone' => 'America/New_York']);
+Assert::sameValue($monthday->toLocaleString('en-US', ['timeZone' => 'America/New_York']), $dtfNY->format($monthday), '');
+$partsNY = $dtfNY->formatToParts($monthday);
+$monthPartNY = $findPart($partsNY, 'month');
+$dayPartNY = $findPart($partsNY, 'day');
+$resultNY = $monthday->toLocaleString('en-US', ['timeZone' => 'America/New_York']);
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultNY, $monthPartNY), 'en-US locale string has a month part');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultNY, $dayPartNY), 'en-US locale string has a day part');
+$dtfVienna = new \Temporal\Tests\Test262\IntlDateTimeFormat('de-AT', JsUndefined::strip(['timeZone' => 'Europe/Vienna', 'calendar' => $calendar]));
+Assert::sameValue($monthday->toLocaleString('de-AT', JsUndefined::strip(['timeZone' => 'Europe/Vienna', 'calendar' => $calendar])), $dtfVienna->format($monthday), '');
+$partsVienna = $dtfVienna->formatToParts($monthday);
+$monthPartVienna = $findPart($partsVienna, 'month');
+$dayPartVienna = $findPart($partsVienna, 'day');
+$resultVienna = $monthday->toLocaleString('de-AT', JsUndefined::strip(['timeZone' => 'Europe/Vienna', 'calendar' => $calendar]));
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultVienna, $monthPartVienna), 'de-AT locale string has a month part');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultVienna, $dayPartVienna), 'de-AT locale string has a day part');

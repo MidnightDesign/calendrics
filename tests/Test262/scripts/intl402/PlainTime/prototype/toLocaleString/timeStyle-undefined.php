@@ -9,4 +9,7 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $time = new \Temporal\Spec\PlainTime(12, 34, 56, 987, 654, 321);
-Assert::incomplete('untranslatable new expression');
+$defaultFormatter = new \Temporal\Tests\Test262\IntlDateTimeFormat('en');
+$expected = $defaultFormatter->format($time);
+$actual = $time->toLocaleString('en', []);
+Assert::sameValue($actual, $expected, 'timeStyle undefined is the same as being absent');

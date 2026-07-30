@@ -1050,6 +1050,20 @@ final class ZonedDateTime implements Stringable
         }
 
         $locale = IntlFormatter::resolveLocale($locales);
+
+        // ECMA-402 HandleDateTimeTemporalZonedDateTime: a non-ISO calendar on the
+        // value must match the calendar resolved from the locale and options.
+        if ($this->calendarId !== 'iso8601') {
+            $formatCalendar = IntlFormatter::resolvedCalendar($locale, $opts);
+            if ($this->calendarId !== $formatCalendar) {
+                throw new RangeError(sprintf(
+                    'toLocaleString(): calendar %s of this object does not match the calendar %s to format in.',
+                    $this->calendarId,
+                    $formatCalendar,
+                ));
+            }
+        }
+
         $timeZone = $this->timeZoneId;
         $opts['_locale'] = $locale;
 

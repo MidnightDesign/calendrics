@@ -1750,6 +1750,11 @@ final class PlainDate implements Stringable
         return 'date';
     }
 
+    protected function localeCalendarId(): string
+    {
+        return $this->calendarId;
+    }
+
     #[\Override]
     protected function localeIsDateOnly(): bool
     {

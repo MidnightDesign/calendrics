@@ -474,21 +474,14 @@ final class CalendarMath
      */
     public static function isoWeekday(int $year, int $month, int $day): int
     {
-        /** @var array<int, int> $t */
-        static $t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-        if ($month < 3) {
-            $year--;
-        }
-        $dow =
-            (
-                $year + intdiv(num1: $year, num2: 4) - intdiv(num1: $year, num2: 100)
-                + intdiv(num1: $year, num2: 400)
-                + $t[$month - 1]
-                + $day
-            )
-            % 7;
-        /** @var int<1, 7> Sakamoto maps 0→7, rest 1–6 unchanged */
-        return $dow === 0 ? 7 : $dow;
+        // Derive from the Julian Day Number, which toJulianDay computes correctly
+        // for the full proleptic range including negative years. JDN 0 fell on a
+        // Monday, so JDN mod 7 (floored) is 0 = Monday … 6 = Sunday. The previous
+        // Sakamoto implementation used PHP's truncating % and returned negative
+        // "weekdays" for negative years.
+        $dow = ((self::toJulianDay($year, $month, $day) % 7) + 7) % 7;
+        /** @var int<1, 7> */
+        return $dow + 1;
     }
 
     /**

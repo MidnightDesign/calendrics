@@ -9,4 +9,11 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $epochMs = 1_735_213_600_321;
-Assert::incomplete('untranslatable new expression');
+$legacyDateLocal = new \Temporal\Tests\Test262\JsDate($epochMs);
+$legacyDate = new \Temporal\Tests\Test262\JsDate($epochMs + ($legacyDateLocal->getTimezoneOffset() * 60 * 1000));
+$plainTime = new \Temporal\Spec\PlainTime(11, 46, 40, 321);
+foreach ([['hour' => 'numeric'], ['minute' => 'numeric'], ['second' => 'numeric'], ['fractionalSecondDigits' => 3], ['dayPeriod' => 'short']] as $options) {
+$plainTimeResult = $plainTime->toLocaleString('en', $options);
+$legacyDateResult = $legacyDate->toLocaleString('en', $options);
+Assert::sameValue($plainTimeResult, $legacyDateResult, "PlainTime.toLocaleString should format lone option " . (json_encode($options)) . "");
+}

@@ -8,8 +8,27 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-$findPart = function ($parts, $expectedType) {
-return $parts->find(function ($__unknown__ = null) use (&$type, &$expectedType) { return $type === $expectedType; })->value;
+$findPart = function ($parts, $expectedType) use (&$__dp0) {
+return \Temporal\Tests\Test262\Js::arrayFind($parts, function ($__dp0) use (&$expectedType) { $type = \Temporal\Tests\Test262\Js::destructure($__dp0, 'type'); return $type === $expectedType; })->value;
 };
 $date = \Temporal\Spec\PlainDate::from('1976-11-18T15:23:30');
-Assert::incomplete('untranslatable new expression');
+$dtfNY = new \Temporal\Tests\Test262\IntlDateTimeFormat('en-US', (object) ['timeZone' => 'America/New_York']);
+Assert::sameValue($date->toLocaleString('en-US', (object) ['timeZone' => 'America/New_York']), $dtfNY->format($date), '');
+$partsNY = $dtfNY->formatToParts($date);
+$yearPartNY = $findPart($partsNY, 'year');
+$monthPartNY = $findPart($partsNY, 'month');
+$dayPartNY = $findPart($partsNY, 'day');
+$resultNY = $date->toLocaleString('en-US', (object) ['timeZone' => 'America/New_York']);
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultNY, $yearPartNY), 'en-US locale string has a year part');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultNY, $monthPartNY), 'en-US locale string has a month part');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultNY, $dayPartNY), 'en-US locale string has a day part');
+$dtfVienna = new \Temporal\Tests\Test262\IntlDateTimeFormat('de-AT', (object) ['timeZone' => 'Europe/Vienna']);
+Assert::sameValue($date->toLocaleString('de-AT', (object) ['timeZone' => 'Europe/Vienna']), $dtfVienna->format($date), '');
+$partsVienna = $dtfVienna->formatToParts($date);
+$yearPartVienna = $findPart($partsVienna, 'year');
+$monthPartVienna = $findPart($partsVienna, 'month');
+$dayPartVienna = $findPart($partsVienna, 'day');
+$resultVienna = $date->toLocaleString('de-AT', (object) ['timeZone' => 'Europe/Vienna']);
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultVienna, $yearPartVienna), 'de-AT locale string has a year part');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultVienna, $monthPartVienna), 'de-AT locale string has a month part');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultVienna, $dayPartVienna), 'de-AT locale string has a day part');

@@ -1324,6 +1324,16 @@ final class PlainMonthDay implements Stringable
         return 'monthday';
     }
 
+    protected function localeCalendarId(): string
+    {
+        return $this->calendarId;
+    }
+
+    protected function localeCalendarIsoExempt(): bool
+    {
+        return false;
+    }
+
     #[\Override]
     protected function localeIsDateOnly(): bool
     {

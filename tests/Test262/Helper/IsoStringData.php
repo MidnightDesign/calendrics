@@ -265,4 +265,19 @@ trait IsoStringData
             'vikram',
         ];
     }
+
+    /**
+     * PHP translation of JS `Intl.supportedValuesOf("calendar")`: all calendar
+     * IDs this implementation supports, alphabetically sorted.
+     *
+     * Delegates to the spec layer's own calendar registry so the harness can
+     * never drift from what the implementation actually accepts.
+     *
+     * @return list<string>
+     * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
+     */
+    public static function supportedCalendars(): array
+    {
+        return \Temporal\Spec\Internal\Calendar\CalendarFactory::supportedCalendars();
+    }
 }

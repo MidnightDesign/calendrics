@@ -8,4 +8,7 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-Assert::incomplete('untranslatable new expression');
+$date = new \Temporal\Tests\Test262\JsDate(0);
+$instant = new \Temporal\Spec\Instant(0, 'UTC');
+$options = (object) ['dateStyle' => 'full'];
+Assert::sameValue($date->toLocaleString('ja', $options), $instant->toLocaleString('ja', $options), '');

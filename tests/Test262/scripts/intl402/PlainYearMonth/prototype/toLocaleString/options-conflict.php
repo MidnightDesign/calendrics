@@ -8,9 +8,8 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-use Temporal\Tests\Test262\TemporalHelpers;
 $conflictingOptions = [['era', 'short'], ['year', 'numeric'], ['month', 'numeric']];
-$calendar = TemporalHelpers::defaultLocaleCalendar();
+$calendar = new \Temporal\Tests\Test262\IntlDateTimeFormat('en')->resolvedOptions()->calendarId;
 $ym = new \Temporal\Spec\PlainYearMonth(2024, 4, $calendar);
 $ym->toLocaleString('en', ['dateStyle' => 'short']);
 Assert::throws(\TypeError::class, function () use (&$ym) { $ym->toLocaleString('en', ['timeStyle' => 'short']); }, 'timeStyle conflicts with PlainYearMonth');
