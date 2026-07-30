@@ -250,6 +250,7 @@ final class PlainDate implements Stringable
             );
         }
         /** @psalm-suppress InvalidPropertyAssignmentValue — $dayInt <= $daysInMonth <= 31 */
+        // @mago-ignore analysis:invalid-property-assignment-value
         $this->isoDay = $dayInt;
         // TC39 range: Apr 19 −271821 … Sep 13 +275760.
         $epochDays = CalendarMath::toJulianDay($this->isoYear, $this->isoMonth, $this->isoDay) - 2_440_588;

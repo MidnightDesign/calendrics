@@ -40,6 +40,7 @@ final class ZonedDateTime implements Stringable
 
     // Known ICU inconsistencies where an IANA link target is reported as
     // self-canonical instead of resolving to its true primary zone.
+    /** @var array<string, string> */
     private const array ICU_FIXUPS = [
         'Antarctica/McMurdo' => 'Pacific/Auckland',
         'Antarctica/South_Pole' => 'Antarctica/McMurdo',
@@ -1755,6 +1756,11 @@ final class ZonedDateTime implements Stringable
                 }
                 $prevOffset = $curOffset;
             }
+            // Every entry in the window carries the same offset, so the zone has no
+            // further transitions. Return here rather than falling through — the
+            // 'previous' search below would happily report a historical transition
+            // as this instant's *next* one.
+            return null;
         }
 
         // 'previous': find the most recent transition strictly BEFORE the current instant.

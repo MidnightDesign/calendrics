@@ -490,7 +490,7 @@ docker compose exec php composer test262:build
 docker compose exec php composer test262:run
 ```
 
-Currently **6615 test262 tests passing** (0 failures, 1466 incomplete due to JS-only features like Symbol, Proxy, and property descriptor access).
+Currently **10,952 test262 scripts passing** (0 failures, 418 incomplete — mostly JS-only features like Symbol, Proxy, and property descriptor access, plus a handful of Chinese-calendar fixtures that need ICU ≥ 76).
 
 ---
 
