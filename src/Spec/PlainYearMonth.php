@@ -1455,6 +1455,12 @@ final class PlainYearMonth implements Stringable
     }
 
     #[\Override]
+    protected function localeCalendarId(): ?string
+    {
+        return $this->calendarId;
+    }
+
+    #[\Override]
     protected function toLocaleTimestamp(): int
     {
         // Use referenceISODay to ensure the timestamp falls within the correct
