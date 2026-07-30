@@ -30,7 +30,12 @@ final class JsSet
         }
     }
 
-    /** Number of members, mirroring JS `Set.prototype.size`. */
+    /**
+     * Number of members, mirroring JS `Set.prototype.size`.
+     *
+     * @psalm-suppress PropertyNotSetInConstructor — virtual property (get-only hook, no backing store)
+     * @psalm-suppress PossiblyUnusedProperty — accessed from transpiled test262 scripts
+     */
     public int $size {
         get => count($this->values);
     }
