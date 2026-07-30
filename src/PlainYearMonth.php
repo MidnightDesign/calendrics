@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Temporal;
 
 use Temporal\Spec\PlainYearMonth as SpecPlainYearMonth;
+use Temporal\Trait\HasLocalizedString;
 use Temporal\Trait\HasYearMonthProperties;
 use Temporal\Trait\HasYearMonthSpec;
 
@@ -18,6 +19,7 @@ use Temporal\Trait\HasYearMonthSpec;
 final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMonthSpec
 {
     use HasYearMonthProperties;
+    use HasLocalizedString;
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -262,6 +264,25 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
     public function toString(CalendarDisplay $calendarName = CalendarDisplay::Auto): string
     {
         return $this->spec->toString(['calendarName' => $calendarName->value]);
+    }
+
+    /**
+     * Returns this year-month rendered for human readers in the given locale.
+     *
+     * Only the year and month are shown. The style selects a field set rather
+     * than a fixed pattern, so the locale's own year-month pattern is used —
+     * `DateStyle::Long` gives "March 2024", never a full date with a filler
+     * day. A non-ISO {@see Calendar} carried by this value is honoured
+     * automatically, era included.
+     *
+     * @param string|null    $locale    BCP 47 locale tag (e.g. "de-DE"), or null for ICU's default locale.
+     * @param DateStyle|null $dateStyle How much of the year-month to spell out, or null for the locale's
+     *                                  all-numeric default (e.g. "3/2024" in `en-US`).
+     * @return string
+     */
+    public function toLocaleString(?string $locale = null, ?DateStyle $dateStyle = null): string
+    {
+        return $this->spec->toLocaleString($locale, self::localeStyleOptions(dateStyle: $dateStyle));
     }
 
     /**

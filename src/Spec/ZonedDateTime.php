@@ -1051,6 +1051,7 @@ final class ZonedDateTime implements Stringable
 
         $locale = IntlFormatter::resolveLocale($locales);
         $timeZone = $this->timeZoneId;
+        $opts = $this->withDefaultLocaleCalendar($opts);
         $opts['_locale'] = $locale;
 
         // TC39: ZDT's default format includes the timezone name.
@@ -4051,6 +4052,12 @@ final class ZonedDateTime implements Stringable
     protected function localeIsTimeOnly(): bool
     {
         return false;
+    }
+
+    #[\Override]
+    protected function localeCalendarId(): string
+    {
+        return $this->calendarId;
     }
 
     #[\Override]

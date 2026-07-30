@@ -1337,6 +1337,12 @@ final class PlainMonthDay implements Stringable
     }
 
     #[\Override]
+    protected function localeCalendarId(): string
+    {
+        return $this->calendarId;
+    }
+
+    #[\Override]
     protected function toLocaleTimestamp(): int
     {
         $dt = new \DateTime(

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Temporal;
 
 use Temporal\Spec\PlainTime as SpecPlainTime;
+use Temporal\Trait\HasLocalizedString;
 use Temporal\Trait\HasTimeOfDayProperties;
 use Temporal\Trait\HasTimeOfDaySpec;
 
@@ -17,6 +18,7 @@ use Temporal\Trait\HasTimeOfDaySpec;
 final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpec
 {
     use HasTimeOfDayProperties;
+    use HasLocalizedString;
 
     private readonly SpecPlainTime $spec;
 
@@ -262,6 +264,29 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
         $opts['roundingMode'] = $roundingMode->value;
 
         return $this->spec->toString($opts);
+    }
+
+    /**
+     * Returns this time rendered for human readers in the given locale.
+     *
+     * Formatting is delegated to ICU via `ext-intl`, so the result follows the
+     * locale's CLDR data and can change with the ICU version. It is display
+     * text: use {@see self::toString()} whenever the string will be parsed
+     * again.
+     *
+     * A PlainTime has no time zone, so {@see TimeStyle::Full} and
+     * {@see TimeStyle::Long} render the UTC label the formatter falls back to
+     * rather than a meaningful zone; {@see TimeStyle::Medium} is the widest
+     * style that stays zone-free.
+     *
+     * @param string|null    $locale    BCP 47 locale tag (e.g. "de-DE"), or null for ICU's default locale.
+     * @param TimeStyle|null $timeStyle How much of the time to show, or null for the locale's
+     *                                  hour-minute-second default (e.g. "9:30:45 AM" in `en-US`).
+     * @return string
+     */
+    public function toLocaleString(?string $locale = null, ?TimeStyle $timeStyle = null): string
+    {
+        return $this->spec->toLocaleString($locale, self::localeStyleOptions(timeStyle: $timeStyle));
     }
 
     /**

@@ -9,6 +9,7 @@ use Temporal\Trait\HasDayOfMonthProperties;
 use Temporal\Trait\HasDayOfMonthSpec;
 use Temporal\Trait\HasEpochProperties;
 use Temporal\Trait\HasEpochSpec;
+use Temporal\Trait\HasLocalizedString;
 use Temporal\Trait\HasTimeOfDayProperties;
 use Temporal\Trait\HasTimeOfDaySpec;
 use Temporal\Trait\HasYearMonthProperties;
@@ -34,6 +35,7 @@ final class ZonedDateTime implements
     use HasYearMonthProperties;
     use HasDayOfMonthProperties;
     use HasTimeOfDayProperties;
+    use HasLocalizedString;
 
     // -------------------------------------------------------------------------
     // Virtual (get-only) time-zone-specific properties
@@ -468,6 +470,35 @@ final class ZonedDateTime implements
         }
 
         return $this->spec->toString($opts);
+    }
+
+    /**
+     * Returns this date-time rendered for human readers in the given locale.
+     *
+     * Formatting is delegated to ICU via `ext-intl`, so the result follows the
+     * locale's CLDR data and can change with the ICU version. It is display
+     * text: use {@see self::toString()} whenever the string will be parsed
+     * again.
+     *
+     * Rendering happens in this value's own time zone — that zone cannot be
+     * overridden here, matching TC39. With neither style given the zone is
+     * labelled abbreviated ("3/15/2024, 9:30:45 AM GMT+1"); with a style it
+     * appears only where the locale's pattern puts it, which for
+     * {@see TimeStyle::Full} and {@see TimeStyle::Long} is the spelled-out and
+     * short zone name respectively. A non-ISO {@see Calendar} carried by this
+     * value is honoured automatically.
+     *
+     * @param string|null    $locale    BCP 47 locale tag (e.g. "de-DE"), or null for ICU's default locale.
+     * @param DateStyle|null $dateStyle How much of the date to spell out, or null.
+     * @param TimeStyle|null $timeStyle How much of the time to show, or null.
+     * @return string
+     */
+    public function toLocaleString(
+        ?string $locale = null,
+        ?DateStyle $dateStyle = null,
+        ?TimeStyle $timeStyle = null,
+    ): string {
+        return $this->spec->toLocaleString($locale, self::localeStyleOptions($dateStyle, $timeStyle));
     }
 
     /**

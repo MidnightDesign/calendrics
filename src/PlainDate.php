@@ -7,6 +7,7 @@ namespace Temporal;
 use Temporal\Spec\PlainDate as SpecPlainDate;
 use Temporal\Trait\HasDayOfMonthProperties;
 use Temporal\Trait\HasDayOfMonthSpec;
+use Temporal\Trait\HasLocalizedString;
 use Temporal\Trait\HasYearMonthProperties;
 use Temporal\Trait\HasYearMonthSpec;
 
@@ -21,6 +22,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
 {
     use HasYearMonthProperties;
     use HasDayOfMonthProperties;
+    use HasLocalizedString;
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -302,6 +304,28 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
     public function toString(CalendarDisplay $calendarName = CalendarDisplay::Auto): string
     {
         return $this->spec->toString(['calendarName' => $calendarName->value]);
+    }
+
+    /**
+     * Returns this date rendered for human readers in the given locale.
+     *
+     * Formatting is delegated to ICU via `ext-intl`, so the result follows the
+     * locale's CLDR data and can change with the ICU version. It is display
+     * text: use {@see self::toString()} whenever the string will be parsed
+     * again.
+     *
+     * A non-ISO {@see Calendar} carried by this date is honoured without being
+     * repeated here — a `Calendar::Hebrew` date renders Hebrew month names and
+     * year numbering.
+     *
+     * @param string|null    $locale    BCP 47 locale tag (e.g. "de-DE"), or null for ICU's default locale.
+     * @param DateStyle|null $dateStyle How much of the date to spell out, or null for the locale's
+     *                                  all-numeric default (e.g. "3/15/2024" in `en-US`).
+     * @return string
+     */
+    public function toLocaleString(?string $locale = null, ?DateStyle $dateStyle = null): string
+    {
+        return $this->spec->toLocaleString($locale, self::localeStyleOptions(dateStyle: $dateStyle));
     }
 
     /**

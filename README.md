@@ -8,7 +8,7 @@ Temporal is the modern replacement for JavaScript's `Date`, providing a precise,
 
 - PHP 8.4+ (64-bit recommended)
 - Composer
-- `ext-intl` (required for `toLocaleString()` on spec-layer `Instant`, `ZonedDateTime`, and `Duration`)
+- `ext-intl` (required for calendar support and for [localized formatting](#localized-formatting))
 
 > **32-bit platforms.** The library targets 64-bit PHP. It is not a hard requirement, but on 32-bit builds the native date primitives (`gmmktime()` and friends) only cover years ~1901–2038, so calculations near Temporal's extreme year range may misbehave. Running on 32-bit is not recommended.
 
@@ -39,6 +39,7 @@ Notable differences:
 - **`fromFields()` takes named arguments, not a property bag.** Each parameter has its own type (`int<1, 12>` for `month`, `Calendar` for `calendar`, etc.) so PHPStan/Psalm can validate call sites fully. Only five classes expose `fromFields()` — the ones whose constructors cannot express every field combination (`PlainDate`, `PlainDateTime`, `PlainYearMonth`, `PlainMonthDay`, `ZonedDateTime`). For `PlainTime`, `Instant`, and `Duration`, the constructor already covers every field.
 - **Option strings replaced by backed enums.** `Overflow::Reject` instead of `'reject'`, `Calendar::Gregory` instead of `'gregory'`, etc.
 - **Time zones and calendars are first-class.** `ZonedDateTime::fromFields()` takes `timeZone` as a required positional parameter; all calendar fields accept the `Calendar` enum rather than an identifier string.
+- **`toLocaleString()` takes styles, not an ECMA-402 options bag.** The porcelain signature is `toLocaleString(?string $locale, ?DateStyle, ?TimeStyle)` with each class exposing only the styles it can honour, so the option combinations ECMA-402 rejects with a `TypeError` are unrepresentable rather than caught at runtime. Component-level options (`weekday`, `month`, `hour12`, …) remain available on the spec layer, which accepts the full options array.
 - **No `valueOf()` on spec-layer types.** The TC39 spec defines `valueOf()` to throw `TypeError` so that `<`, `>`, `+`, etc. fail loudly rather than silently coercing. PHP has no equivalent hook — relational operators on objects walk declared properties, arithmetic operators raise `TypeError` from the engine itself, and there is no language path that calls `valueOf()`. A throw-only method that the runtime never invokes is just dead surface, so the spec layer does not expose it. Use `compare()` (or, for `Instant` / `ZonedDateTime`, the underlying `epochNanoseconds`) when you need ordering. Test262 fixtures that target `valueOf()` are emitted as incomplete by the transpiler.
 - **`Duration` field values are exact integers, not float64-narrowed.** TC39's spec performs all internal arithmetic in BigInt and then materializes Duration fields into JS `Number` (= float64), which loses precision past 2⁵³. PHP's `int` is 64-bit, so we keep the exact integer representation: a 584-year microsecond delta lands as `microseconds = 18_446_744_073_709_551, nanoseconds = 616` (reconstructible to the original nanosecond span exactly), where JS would store `microseconds = 18_446_744_073_709_552, nanoseconds = 616` — off by 1 µs because `18_446_744_073_709_551` rounds up to the next float64-representable integer. Practical impact: any Duration produced from sub-second arithmetic across a multi-century span is more accurate than its JS counterpart by up to 1 ULP at the largestUnit. Test262 fixtures that pin down the JS-narrowing behavior verbatim (`PlainDateTime/prototype/{since,until}/float64-representable-integer*`) are emitted as incomplete by the transpiler.
 
@@ -116,6 +117,9 @@ $hebrew->monthCode;  // 'M06'
 // Serialization
 echo $date;                // '2024-03-15'
 echo json_encode($date);  // '"2024-03-15"'
+
+// Localized display text (see "Localized formatting" below)
+$date->toLocaleString('de-DE', DateStyle::Long);  // '15. März 2024'
 ```
 
 ### `PlainTime`
@@ -400,6 +404,73 @@ $buddhist->eraYear; // 2567
 
 Available calendars: `Iso8601`, `Buddhist`, `Chinese`, `Coptic`, `Dangi`, `EthiopicAmeteAlem`, `Ethiopic`, `Gregory`, `Hebrew`, `Indian`, `IslamicCivil`, `IslamicTabular`, `IslamicUmalqura`, `Japanese`, `Persian`, `Roc`.
 
+### Localized formatting
+
+`toString()` produces ISO 8601 — stable, parseable, and not what you show a person. `toLocaleString()` produces display text, formatted by ICU against the requested locale's CLDR data:
+
+```php
+use Temporal\PlainDate;
+use Temporal\DateStyle;
+use Temporal\TimeStyle;
+
+$date = new PlainDate(2024, 3, 15);
+
+$date->toLocaleString();                            // ICU's default locale
+$date->toLocaleString('en-US');                     // '3/15/2024'
+$date->toLocaleString('en-US', DateStyle::Full);    // 'Friday, March 15, 2024'
+$date->toLocaleString('de-DE', DateStyle::Long);    // '15. März 2024'
+$date->toLocaleString('ja-JP', DateStyle::Full);    // '2024年3月15日金曜日'
+```
+
+`DateStyle` and `TimeStyle` replace ECMA-402's `dateStyle` / `timeStyle` option strings, and each class accepts only the ones that apply to it. ECMA-402 throws a `TypeError` when you ask for a `timeStyle` on a date-only value; here the same mistake does not typecheck:
+
+```php
+$date->toLocaleString('en-US', DateStyle::Long);                      // PlainDate: date styles only
+$time->toLocaleString('en-US', TimeStyle::Short);                     // PlainTime: time styles only
+$dt->toLocaleString('en-US', DateStyle::Long, TimeStyle::Medium);     // 'March 15, 2024 at 9:30:45 AM'
+$dt->toLocaleString('en-US', DateStyle::Long);                        // date alone
+$dt->toLocaleString('en-US', timeStyle: TimeStyle::Short);            // time alone
+```
+
+A `ZonedDateTime` renders in its own zone, which cannot be overridden — matching TC39:
+
+```php
+$zdt = ZonedDateTime::parse('2024-03-15T09:30:45+01:00[Europe/Berlin]');
+
+$zdt->toLocaleString('en-US');                                     // '3/15/2024, 9:30:45 AM GMT+1'
+$zdt->toLocaleString('en-US', DateStyle::Full, TimeStyle::Full);
+// 'Friday, March 15, 2024 at 9:30:45 AM Central European Standard Time'
+```
+
+An `Instant` has no civil calendar of its own, so it takes the zone to render in. The default is UTC — deterministic rather than machine-dependent — and is usually worth setting explicitly:
+
+```php
+$instant = Instant::parse('2024-03-15T09:30:45Z');
+
+$instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short);                 // '...at 9:30 AM' (UTC)
+$instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short, 'Asia/Tokyo');   // '...at 6:30 PM'
+```
+
+The calendar a value carries is applied automatically — no need to name it twice:
+
+```php
+$date->withCalendar(Calendar::Hebrew)->toLocaleString('en-US', DateStyle::Long);    // '5 Adar II 5784'
+$date->withCalendar(Calendar::Japanese)->toLocaleString('en-US', DateStyle::Long);  // 'March 15, 6 Reiwa'
+```
+
+`PlainYearMonth` and `PlainMonthDay` show only the fields they hold, using the locale's own pattern for that reduced field set rather than a truncated full date:
+
+```php
+new PlainYearMonth(2024, 3)->toLocaleString('en-US', DateStyle::Long);  // 'March 2024'
+new PlainMonthDay(12, 25)->toLocaleString('de-DE', DateStyle::Long);    // '25. Dezember'
+new PlainMonthDay(12, 25)->toLocaleString('ja-JP', DateStyle::Long);    // '12月25日'
+```
+
+Two caveats:
+
+- **Output is not stable across ICU versions.** CLDR data changes; `en-US` switched to a narrow no-break space before `AM`/`PM` in ICU 72, for instance. Never parse it, never assert on it byte-for-byte outside a pinned environment, never store it.
+- **`Duration` has no `toLocaleString()`.** PHP's `intl` exposes no binding for ICU's measure formatting, so there is no locale data available to render "1 year, 6 months" faithfully. The spec layer's `Temporal\Spec\Duration::toLocaleString()` returns the ISO 8601 string; the porcelain layer does not offer a method that would look localized without being so.
+
 ### Enums
 
 All option strings are replaced by backed enums:
@@ -416,6 +487,8 @@ All option strings are replaced by backed enums:
 | `TimeZoneDisplay` | `Auto`, `Never`, `Critical` |
 | `OffsetDisplay` | `Auto`, `Never` |
 | `TransitionDirection` | `Next`, `Previous` |
+| `DateStyle` | `Full`, `Long`, `Medium`, `Short` |
+| `TimeStyle` | `Full`, `Long`, `Medium`, `Short` |
 
 ### Spec-layer interop
 

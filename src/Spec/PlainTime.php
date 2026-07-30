@@ -1272,6 +1272,13 @@ final class PlainTime implements Stringable
     }
 
     #[\Override]
+    protected function localeCalendarId(): null
+    {
+        // PlainTime carries no calendar: a wall-clock time is calendar-agnostic.
+        return null;
+    }
+
+    #[\Override]
     protected function toLocaleTimestamp(): int
     {
         // Use Unix epoch date (1970-01-01) with the given time

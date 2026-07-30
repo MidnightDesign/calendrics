@@ -7,6 +7,7 @@ namespace Temporal;
 use Temporal\Spec\Internal\DateTimeFields;
 use Temporal\Trait\HasEpochProperties;
 use Temporal\Trait\HasEpochSpec;
+use Temporal\Trait\HasLocalizedString;
 
 /**
  * A fixed point in time with nanosecond precision.
@@ -19,6 +20,7 @@ use Temporal\Trait\HasEpochSpec;
 final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
 {
     use HasEpochProperties;
+    use HasLocalizedString;
 
     /** The underlying spec-layer instance. */
     private readonly Spec\Instant $spec;
@@ -239,6 +241,39 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
         }
 
         return $this->spec->toString($opts);
+    }
+
+    /**
+     * Returns this instant rendered for human readers in the given locale.
+     *
+     * Formatting is delegated to ICU via `ext-intl`, so the result follows the
+     * locale's CLDR data and can change with the ICU version. It is display
+     * text: use {@see self::toString()} whenever the string will be parsed
+     * again.
+     *
+     * An Instant is a point on the timeline with no civil calendar of its own,
+     * so a zone has to be chosen before it can be written down. `$timeZone`
+     * defaults to UTC — deterministic rather than machine-dependent — and is
+     * usually worth setting explicitly.
+     *
+     * @param string|null    $locale    BCP 47 locale tag (e.g. "de-DE"), or null for ICU's default locale.
+     * @param DateStyle|null $dateStyle How much of the date to spell out, or null.
+     * @param TimeStyle|null $timeStyle How much of the time to show, or null.
+     * @param string|null    $timeZone  IANA identifier or "±HH:MM" offset to render in; null means UTC.
+     * @return string
+     */
+    public function toLocaleString(
+        ?string $locale = null,
+        ?DateStyle $dateStyle = null,
+        ?TimeStyle $timeStyle = null,
+        ?string $timeZone = null,
+    ): string {
+        $opts = self::localeStyleOptions($dateStyle, $timeStyle);
+        if ($timeZone !== null) {
+            $opts['timeZone'] = $timeZone;
+        }
+
+        return $this->spec->toLocaleString($locale, $opts);
     }
 
     /**

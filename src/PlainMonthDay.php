@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Temporal;
 
 use Temporal\Spec\PlainMonthDay as SpecPlainMonthDay;
+use Temporal\Trait\HasLocalizedString;
 
 /**
  * A calendar month-day without a year, time, or time zone.
@@ -15,6 +16,8 @@ use Temporal\Spec\PlainMonthDay as SpecPlainMonthDay;
  */
 final class PlainMonthDay implements \Stringable, \JsonSerializable
 {
+    use HasLocalizedString;
+
     // -------------------------------------------------------------------------
     // Virtual (get-only) properties — delegated to the spec instance
     // -------------------------------------------------------------------------
@@ -200,6 +203,25 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
     public function toString(CalendarDisplay $calendarName = CalendarDisplay::Auto): string
     {
         return $this->spec->toString(['calendarName' => $calendarName->value]);
+    }
+
+    /**
+     * Returns this month-day rendered for human readers in the given locale.
+     *
+     * Only the month and day are shown. The style selects a field set rather
+     * than a fixed pattern, so the locale's own month-day pattern is used —
+     * `DateStyle::Long` gives "December 25" in `en-US` and "25. Dezember" in
+     * `de-DE`, never a full date with a filler year. A non-ISO {@see Calendar}
+     * carried by this value is honoured automatically.
+     *
+     * @param string|null    $locale    BCP 47 locale tag (e.g. "de-DE"), or null for ICU's default locale.
+     * @param DateStyle|null $dateStyle How much of the month-day to spell out, or null for the locale's
+     *                                  all-numeric default (e.g. "12/25" in `en-US`).
+     * @return string
+     */
+    public function toLocaleString(?string $locale = null, ?DateStyle $dateStyle = null): string
+    {
+        return $this->spec->toLocaleString($locale, self::localeStyleOptions(dateStyle: $dateStyle));
     }
 
     /**

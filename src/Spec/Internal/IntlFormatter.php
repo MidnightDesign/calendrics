@@ -11,8 +11,8 @@ use Temporal\Exception\TypeError;
  * toLocaleString() across all Temporal spec classes.
  *
  * The public surface is: buildIntlFormatter() (central entry point), resolveLocale(),
- * validateStyleConflicts(), and stripPatternComponents(). The private helpers
- * applyHourCycle() and buildPatternFromComponents() support buildIntlFormatter() internally.
+ * and validateStyleConflicts(). The private helpers applyHourCycle() and
+ * buildPatternFromComponents() support buildIntlFormatter() internally.
  *
  * @internal
  */
@@ -182,37 +182,19 @@ final class IntlFormatter
                 ? $styleMap[$timeStyle] ?? \IntlDateFormatter::SHORT
                 : \IntlDateFormatter::NONE;
 
-            // For PlainYearMonth/PlainMonthDay, get the style pattern then strip
-            // year or day components to avoid displaying them.
-            if ($dateStyle !== null && ($defaultComponents === 'yearmonth' || $defaultComponents === 'monthday')) {
-                $tmpFormatter = new \IntlDateFormatter(
-                    $locale,
-                    $dateType,
-                    \IntlDateFormatter::NONE,
-                    $timeZone,
-                    $calendarObj,
-                );
-                if ($calendarObj !== null) {
-                    $tmpFormatter->setCalendar($calendarObj);
-                }
-                $pattern = $tmpFormatter->getPattern();
-                if ($pattern === false) {
-                    $pattern = '';
-                }
-                if ($defaultComponents === 'monthday') {
-                    // Strip year-related patterns (y, G, U, r) and surrounding punctuation
-                    $pattern = self::stripPatternComponents($pattern, 'year');
-                } else {
-                    // yearmonth: strip day-related patterns (d)
-                    $pattern = self::stripPatternComponents($pattern, 'day');
-                }
+            // PlainYearMonth/PlainMonthDay: ask the pattern generator for the
+            // style's field set reduced to the fields the type actually carries.
+            $skeleton = $dateStyle === null ? null : self::reducedStyleSkeleton($defaultComponents, $dateStyle);
+            if ($skeleton !== null) {
+                $generator = new \IntlDatePatternGenerator($locale);
+                $pattern = $generator->getBestPattern($skeleton);
                 $formatter = new \IntlDateFormatter(
                     $locale,
                     \IntlDateFormatter::NONE,
                     \IntlDateFormatter::NONE,
                     $timeZone,
                     $calendarObj,
-                    $pattern,
+                    $pattern === false ? null : $pattern,
                 );
                 if ($calendarObj !== null) {
                     $formatter->setCalendar($calendarObj);
@@ -286,34 +268,38 @@ final class IntlFormatter
     }
 
     /**
-     * Strips year or day components from an ICU date pattern.
+     * Returns the ICU skeleton that stands in for `dateStyle` on a partial date type.
      *
-     * For 'year': removes y, Y, u, U, r, G (era often pairs with year) pattern chars
-     * and surrounding separators/whitespace.
-     * For 'day': removes d, D pattern chars and surrounding separators.
+     * ECMA-402 formats PlainYearMonth and PlainMonthDay with the field set the
+     * style implies minus the fields the type does not carry: a year-month has no
+     * day (and so no meaningful weekday), a month-day has no year or era. Handing
+     * the reduced skeleton to ICU's pattern generator yields a locale-idiomatic
+     * pattern ("d. MMMM" for de-DE, "M月d日" for ja-JP) and keeps the era for
+     * calendars that need one — neither of which survives editing a full-date
+     * pattern by hand.
      *
-     * Quoted literals (inside single quotes) are preserved.
+     * `full` and `long` coincide once the day and weekday are gone, exactly as
+     * they do in ECMA-402. An unrecognized style falls back to `medium`, matching
+     * the IntlDateFormatter style mapping.
      *
-     * @param 'year'|'day' $which
+     * Returns null for the types that format from a complete date and therefore
+     * need no reduction.
      */
-    public static function stripPatternComponents(string $pattern, string $which): string
+    private static function reducedStyleSkeleton(string $defaultComponents, string $dateStyle): ?string
     {
-        if ($which === 'year') {
-            // Remove year-related fields: y, Y, u, U, r and era G
-            $result = (string) preg_replace('/[yYuUrG]+/', replacement: '', subject: $pattern);
-        } else {
-            // Remove day-related fields: d, D
-            $result = (string) preg_replace('/[dD]+/', replacement: '', subject: $pattern);
-        }
-
-        // Clean up leftover separators: double separators, leading/trailing punctuation
-        $result = (string) preg_replace('/\s*[,\/\-\.]\s*(?=[,\/\-\.\s]|$)/', replacement: '', subject: $result);
-        $result = (string) preg_replace('/^[\s,\/\-\.]+/', replacement: '', subject: $result);
-        $result = (string) preg_replace('/[\s,\/\-\.]+$/', replacement: '', subject: $result);
-        // Collapse multiple spaces
-        $result = (string) preg_replace('/\s{2,}/', replacement: ' ', subject: $result);
-
-        return trim($result);
+        return match ($defaultComponents) {
+            'yearmonth' => match ($dateStyle) {
+                'full', 'long' => 'yMMMM',
+                'short' => 'yyM',
+                default => 'yMMM',
+            },
+            'monthday' => match ($dateStyle) {
+                'full', 'long' => 'MMMMd',
+                'short' => 'Md',
+                default => 'MMMd',
+            },
+            default => null,
+        };
     }
 
     /**

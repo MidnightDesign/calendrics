@@ -33,6 +33,45 @@ trait TemporalSerde
      */
     abstract protected function toLocaleTimestamp(): int;
 
+    /**
+     * Returns the calendar identifier this value carries, or null for types
+     * that have none (PlainTime), used to default toLocaleString()'s
+     * `calendar` option.
+     */
+    abstract protected function localeCalendarId(): ?string;
+
+    /**
+     * Applies the value's own calendar as toLocaleString()'s `calendar` default.
+     *
+     * ECMA-402 resolves the `calendar` option from the value being formatted
+     * when the caller does not supply one, so a Hebrew-calendar PlainDate
+     * renders Hebrew month names without the caller repeating itself. An
+     * explicit option still wins.
+     *
+     * ISO 8601 is deliberately left unset: ICU's default Gregorian calendar
+     * agrees with it on every representable date, whereas requesting
+     * `ca-iso8601` explicitly drops the era designator and re-derives week
+     * numbering.
+     *
+     * @param array<string, mixed> $opts
+     * @return array<string, mixed>
+     */
+    private function withDefaultLocaleCalendar(array $opts): array
+    {
+        if (($opts['calendar'] ?? null) !== null) {
+            return $opts;
+        }
+
+        $calendarId = $this->localeCalendarId();
+        if ($calendarId === null || $calendarId === 'iso8601') {
+            return $opts;
+        }
+
+        $opts['calendar'] = $calendarId;
+
+        return $opts;
+    }
+
     #[\Override]
     public function __toString(): string
     {
@@ -86,6 +125,8 @@ trait TemporalSerde
         $timeZone = 'UTC';
 
         $defaultComponents = $this->localeDefaultComponents();
+
+        $opts = $this->withDefaultLocaleCalendar($opts);
 
         // Pass locale into opts for pattern generator
         $opts['_locale'] = $locale;
