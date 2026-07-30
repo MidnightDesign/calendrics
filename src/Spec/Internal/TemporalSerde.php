@@ -100,12 +100,7 @@ trait TemporalSerde
 
         $defaultComponents = $this->localeDefaultComponents();
 
-        $calendarId = $this->localeCalendarId();
-        if ($calendarId !== null) {
-            // PlainYearMonth/PlainMonthDay carry no ISO exemption — see validateCalendar().
-            $isoExempt = $defaultComponents !== 'yearmonth' && $defaultComponents !== 'monthday';
-            IntlFormatter::validateCalendar($calendarId, $locale, $opts, $isoExempt);
-        }
+        IntlFormatter::validateCalendar($this->localeCalendarId(), $locale, $opts, $defaultComponents);
 
         // Pass locale into opts for pattern generator
         $opts['_locale'] = $locale;

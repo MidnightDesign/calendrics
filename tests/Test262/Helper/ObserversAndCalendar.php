@@ -185,6 +185,9 @@ trait ObserversAndCalendar
         // 'und' asks for every calendar rather than the ones common in some region;
         // getKeywordValuesForLocale() is only false for a keyword ICU does not know.
         $values = \IntlCalendar::getKeywordValuesForLocale('calendar', locale: 'und', onlyCommon: false);
+        // The runtime returns false for a keyword ICU does not know; PHPStan's stub
+        // types the return non-false, so the guard reads as always-false to it.
+        // @phpstan-ignore identical.alwaysFalse
         if ($values === false) {
             return [];
         }

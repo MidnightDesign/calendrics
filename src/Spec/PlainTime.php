@@ -1272,7 +1272,7 @@ final class PlainTime implements Stringable
     }
 
     #[\Override]
-    protected function localeCalendarId(): ?string
+    protected function localeCalendarId(): null
     {
         return null;
     }

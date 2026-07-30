@@ -111,14 +111,27 @@ final class IntlFormatter
      * `PlainDate`, `PlainDateTime` and `ZonedDateTime` additionally accept the ISO 8601
      * calendar against any formatter, because an ISO date is unambiguous and can be
      * projected into the formatter's calendar. `PlainYearMonth` and `PlainMonthDay` grant
-     * no such exemption: a bare year-month or month-day has no meaning outside the
-     * calendar it was expressed in.
+     * no such exemption — recognized here by their $defaultComponents mode: a bare
+     * year-month or month-day has no meaning outside the calendar it was expressed in.
+     *
+     * A null $calendarId means the type carries no calendar (PlainTime), which any
+     * formatter can render.
      *
      * @param array<string, mixed> $opts
+     * @param string $defaultComponents The value's component mode, as passed to buildIntlFormatter().
      * @throws RangeError if the value's calendar is incompatible with the formatter's.
      */
-    public static function validateCalendar(string $calendarId, string $locale, array $opts, bool $isoExempt): void
-    {
+    public static function validateCalendar(
+        ?string $calendarId,
+        string $locale,
+        array $opts,
+        string $defaultComponents,
+    ): void {
+        if ($calendarId === null) {
+            return;
+        }
+
+        $isoExempt = $defaultComponents !== 'yearmonth' && $defaultComponents !== 'monthday';
         if ($isoExempt && $calendarId === 'iso8601') {
             return;
         }
@@ -396,7 +409,10 @@ final class IntlFormatter
      * Wraps {@see \IntlCalendar::createInstance()} behind an explicit ?\IntlCalendar
      * return type so callers' null handling type-checks consistently across analyzers
      * (PHPStan's bundled stub types the factory as non-null; the runtime and the PHP
-     * manual declare it ?\IntlCalendar).
+     * manual declare it ?\IntlCalendar — hence the ignore below, which keeps the
+     * nullable contract callers rely on).
+     *
+     * @phpstan-ignore return.unusedType
      */
     private static function intlCalendarFor(?string $timeZone, string $locale): ?\IntlCalendar
     {

@@ -1051,7 +1051,7 @@ final class ZonedDateTime implements Stringable
         }
 
         $locale = IntlFormatter::resolveLocale($locales);
-        IntlFormatter::validateCalendar($this->calendarId, $locale, $opts, isoExempt: true);
+        IntlFormatter::validateCalendar($this->calendarId, $locale, $opts, defaultComponents: 'datetime');
 
         $timeZone = $this->timeZoneId;
         $opts['_locale'] = $locale;
@@ -4062,7 +4062,7 @@ final class ZonedDateTime implements Stringable
     }
 
     #[\Override]
-    protected function localeCalendarId(): ?string
+    protected function localeCalendarId(): string
     {
         return $this->calendarId;
     }
