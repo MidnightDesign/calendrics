@@ -47,13 +47,13 @@ final class JsSet
     /** Removes a member; returns whether it was present, as JS `Set.prototype.delete` does. */
     public function delete(mixed $value): bool
     {
-        foreach ($this->values as $index => $member) {
-            if ($member === $value) {
-                array_splice($this->values, $index, length: 1);
-                return true;
-            }
+        $index = array_search($value, $this->values, strict: true);
+        if ($index === false) {
+            return false;
         }
-        return false;
+
+        array_splice($this->values, $index, length: 1);
+        return true;
     }
 
     public function has(mixed $value): bool

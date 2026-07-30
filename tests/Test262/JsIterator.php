@@ -18,7 +18,9 @@ final class JsIterator
     private int $position = 0;
 
     /** @param list<mixed> $values */
-    public function __construct(private readonly array $values) {}
+    public function __construct(
+        private readonly array $values,
+    ) {}
 
     /** Mirrors JS `Iterator.prototype.next()`: yields the next IteratorResult. */
     public function next(): JsIteratorResult
