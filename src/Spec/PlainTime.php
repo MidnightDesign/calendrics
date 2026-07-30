@@ -1272,10 +1272,11 @@ final class PlainTime implements Stringable
     }
 
     #[\Override]
-    protected function localeCalendarId(): null
+    protected function localeDefaultCalendarId(): string
     {
-        // PlainTime carries no calendar: a wall-clock time is calendar-agnostic.
-        return null;
+        // A wall-clock time carries no calendar; none of its fields are
+        // calendar-dependent, so there is nothing to project.
+        return 'iso8601';
     }
 
     #[\Override]

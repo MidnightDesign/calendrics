@@ -34,11 +34,15 @@ trait TemporalSerde
     abstract protected function toLocaleTimestamp(): int;
 
     /**
-     * Returns the calendar identifier this value carries, or null for types
-     * that have none (PlainTime), used to default toLocaleString()'s
-     * `calendar` option.
+     * Returns the calendar identifier toLocaleString() should default its
+     * `calendar` option from.
+     *
+     * Calendar-bearing types return their own. PlainTime returns 'iso8601':
+     * every field it has is calendar-independent, and 'iso8601' is the
+     * identifier {@see self::withDefaultLocaleCalendar()} reads as "nothing
+     * calendar-specific to project".
      */
-    abstract protected function localeCalendarId(): ?string;
+    abstract protected function localeDefaultCalendarId(): string;
 
     /**
      * Applies the value's own calendar as toLocaleString()'s `calendar` default.
@@ -62,8 +66,8 @@ trait TemporalSerde
             return $opts;
         }
 
-        $calendarId = $this->localeCalendarId();
-        if ($calendarId === null || $calendarId === 'iso8601') {
+        $calendarId = $this->localeDefaultCalendarId();
+        if ($calendarId === 'iso8601') {
             return $opts;
         }
 

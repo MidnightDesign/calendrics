@@ -72,10 +72,10 @@ final class LocalizedFormattingTest extends TemporalTestCase
     public static function plainDateStyleProvider(): array
     {
         return [
-            [DateStyle::Full, 'Friday, March 15, 2024', 'Freitag, 15. März 2024'],
-            [DateStyle::Long, 'March 15, 2024', '15. März 2024'],
-            [DateStyle::Medium, 'Mar 15, 2024', '15.03.2024'],
-            [DateStyle::Short, '3/15/24', '15.03.24'],
+            [DateStyle::Full,   'Friday, March 15, 2024', 'Freitag, 15. März 2024'],
+            [DateStyle::Long,   'March 15, 2024',         '15. März 2024'],
+            [DateStyle::Medium, 'Mar 15, 2024',           '15.03.2024'],
+            [DateStyle::Short,  '3/15/24',                '15.03.24'],
         ];
     }
 
@@ -151,10 +151,10 @@ final class LocalizedFormattingTest extends TemporalTestCase
     public static function plainTimeStyleProvider(): array
     {
         return [
-            [TimeStyle::Full, '9:30:45 AM Coordinated Universal Time', '09:30:45 Koordinierte Weltzeit'],
-            [TimeStyle::Long, '9:30:45 AM UTC', '09:30:45 UTC'],
-            [TimeStyle::Medium, '9:30:45 AM', '09:30:45'],
-            [TimeStyle::Short, '9:30 AM', '09:30'],
+            [TimeStyle::Full,   '9:30:45 AM Coordinated Universal Time', '09:30:45 Koordinierte Weltzeit'],
+            [TimeStyle::Long,   '9:30:45 AM UTC',                        '09:30:45 UTC'],
+            [TimeStyle::Medium, '9:30:45 AM',                            '09:30:45'],
+            [TimeStyle::Short,  '9:30 AM',                               '09:30'],
         ];
     }
 
@@ -190,10 +190,9 @@ final class LocalizedFormattingTest extends TemporalTestCase
     {
         $dt = new PlainDateTime(2024, 3, 15, 9, 30, 45);
 
-        static::assertLocalizedSame(
-            'March 15, 2024 at 9:30:45 AM',
-            $dt->toLocaleString('en-US', DateStyle::Long, TimeStyle::Medium),
-        );
+        $formatted = $dt->toLocaleString('en-US', DateStyle::Long, TimeStyle::Medium);
+
+        static::assertLocalizedSame('March 15, 2024 at 9:30:45 AM', $formatted);
     }
 
     public function testPlainDateTimeWithOnlyADateStyleDropsTheTime(): void
@@ -247,14 +246,11 @@ final class LocalizedFormattingTest extends TemporalTestCase
         $berlin = ZonedDateTime::parse('2024-03-15T09:30:45+01:00[Europe/Berlin]');
         $tokyo = $berlin->withTimeZone('Asia/Tokyo');
 
-        static::assertLocalizedSame(
-            'March 15, 2024 at 9:30 AM',
-            $berlin->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short),
-        );
-        static::assertLocalizedSame(
-            'March 15, 2024 at 5:30 PM',
-            $tokyo->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short),
-        );
+        $inBerlin = $berlin->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short);
+        $inTokyo = $tokyo->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short);
+
+        static::assertLocalizedSame('March 15, 2024 at 9:30 AM', $inBerlin);
+        static::assertLocalizedSame('March 15, 2024 at 5:30 PM', $inTokyo);
     }
 
     public function testZonedDateTimeUsesItsOwnCalendar(): void
@@ -272,34 +268,29 @@ final class LocalizedFormattingTest extends TemporalTestCase
     {
         $instant = Instant::parse('2024-03-15T09:30:45Z');
 
-        static::assertLocalizedSame(
-            'March 15, 2024 at 9:30 AM',
-            $instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short),
-        );
-        static::assertSame(
-            $instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short, 'UTC'),
-            $instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short),
-        );
+        $implicitZone = $instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short);
+        $explicitUtc = $instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short, 'UTC');
+
+        static::assertLocalizedSame('March 15, 2024 at 9:30 AM', $implicitZone);
+        static::assertSame($explicitUtc, $implicitZone);
     }
 
     public function testInstantRendersInTheRequestedZone(): void
     {
         $instant = Instant::parse('2024-03-15T09:30:45Z');
 
-        static::assertLocalizedSame(
-            'March 15, 2024 at 6:30 PM',
-            $instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short, 'Asia/Tokyo'),
-        );
+        $formatted = $instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short, 'Asia/Tokyo');
+
+        static::assertLocalizedSame('March 15, 2024 at 6:30 PM', $formatted);
     }
 
     public function testInstantAcceptsAFixedOffsetZone(): void
     {
         $instant = Instant::parse('2024-03-15T09:30:45Z');
 
-        static::assertLocalizedSame(
-            'March 15, 2024 at 4:30 AM',
-            $instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short, '-05:00'),
-        );
+        $formatted = $instant->toLocaleString('en-US', DateStyle::Long, TimeStyle::Short, '-05:00');
+
+        static::assertLocalizedSame('March 15, 2024 at 4:30 AM', $formatted);
     }
 
     public function testInstantDefaultsToBothParts(): void
@@ -324,10 +315,10 @@ final class LocalizedFormattingTest extends TemporalTestCase
     public static function plainYearMonthStyleProvider(): array
     {
         return [
-            [DateStyle::Full, 'March 2024', 'März 2024'],
-            [DateStyle::Long, 'March 2024', 'März 2024'],
-            [DateStyle::Medium, 'Mar 2024', 'März 2024'],
-            [DateStyle::Short, '3/24', '3/24'],
+            [DateStyle::Full,   'March 2024', 'März 2024'],
+            [DateStyle::Long,   'March 2024', 'März 2024'],
+            [DateStyle::Medium, 'Mar 2024',   'März 2024'],
+            [DateStyle::Short,  '3/24',       '3/24'],
         ];
     }
 
@@ -374,9 +365,9 @@ final class LocalizedFormattingTest extends TemporalTestCase
     public static function plainMonthDayStyleProvider(): array
     {
         return [
-            [DateStyle::Full, 'December 25', '25. Dezember'],
-            [DateStyle::Long, 'December 25', '25. Dezember'],
-            [DateStyle::Short, '12/25', '25.12.'],
+            [DateStyle::Full,  'December 25', '25. Dezember'],
+            [DateStyle::Long,  'December 25', '25. Dezember'],
+            [DateStyle::Short, '12/25',       '25.12.'],
         ];
     }
 
@@ -455,6 +446,6 @@ final class LocalizedFormattingTest extends TemporalTestCase
      */
     private static function foldSpaces(string $value): string
     {
-        return str_replace(["\u{202F}", "\u{00A0}", "\u{2009}", "\u{2007}"], ' ', $value);
+        return str_replace(search: ["\u{202F}", "\u{00A0}", "\u{2009}", "\u{2007}"], replace: ' ', subject: $value);
     }
 }
