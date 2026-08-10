@@ -1278,13 +1278,17 @@ final class PlainTime implements Stringable
     }
 
     #[\Override]
-    protected function toLocaleTimestamp(): int
+    protected function toLocaleTimestamp(): int|float
     {
         // Use Unix epoch date (1970-01-01) with the given time
         $dt = new \DateTime(
             sprintf('1970-01-01T%02d:%02d:%02d', $this->hour, $this->minute, $this->second),
             new \DateTimeZone('UTC'),
         );
-        return $dt->getTimestamp();
+        $subNs = ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond;
+        if ($subNs === 0) {
+            return $dt->getTimestamp();
+        }
+        return (float) $dt->getTimestamp() + ((float) $subNs / 1e9);
     }
 }

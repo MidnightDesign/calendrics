@@ -147,6 +147,67 @@ final class Js
         return ((int) $ts * 1000) + $ms;
     }
 
+    /**
+     * Implements JS Array.prototype.find(callback).
+     *
+     * Returns the first element for which the callback is truthy, or null
+     * (standing in for JS `undefined`) when none matches.
+     *
+     * @param iterable<mixed> $items
+     * @param callable(mixed): mixed $callback
+     * @psalm-api used by dynamically-required test262 scripts in tests/Test262/scripts/
+     */
+    public static function arrayFind(iterable $items, callable $callback): mixed
+    {
+        /** @var mixed $item */
+        foreach ($items as $item) {
+            if ((bool) $callback($item)) {
+                return $item;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Implements JS Array.prototype.some(callback).
+     *
+     * @param iterable<mixed> $items
+     * @param callable(mixed): mixed $callback
+     * @psalm-api used by dynamically-required test262 scripts in tests/Test262/scripts/
+     */
+    public static function arraySome(iterable $items, callable $callback): bool
+    {
+        /** @var mixed $item */
+        foreach ($items as $item) {
+            if ((bool) $callback($item)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Reads one field of a destructured JS function parameter — the PHP lowering
+     * of `({ field }) => …` arrow parameters. Handles the shapes such a parameter
+     * can arrive as: plain arrays, ArrayAccess values ({@see IntlFormatPart}),
+     * and stdClass-style objects (objectMode scripts).
+     *
+     * @psalm-api used by dynamically-required test262 scripts in tests/Test262/scripts/
+     */
+    public static function destructure(mixed $value, string $field): mixed
+    {
+        if (is_array($value)) {
+            return $value[$field] ?? null;
+        }
+        if ($value instanceof \ArrayAccess) {
+            return $value->offsetExists($field) ? $value->offsetGet($field) : null;
+        }
+        if (is_object($value)) {
+            return get_object_vars($value)[$field] ?? null;
+        }
+        throw new \TypeError('Js::destructure(): cannot destructure a non-object value.');
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------

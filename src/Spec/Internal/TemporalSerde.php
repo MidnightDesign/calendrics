@@ -39,8 +39,12 @@ trait TemporalSerde
     /**
      * Converts this temporal value to a Unix timestamp (seconds) suitable for
      * IntlDateFormatter::format().
+     *
+     * Types with sub-second fields (PlainTime, PlainDateTime) return a float whose
+     * fractional part carries them, so fractionalSecondDigits formatting works;
+     * date-only types return whole seconds.
      */
-    abstract protected function toLocaleTimestamp(): int;
+    abstract protected function toLocaleTimestamp(): int|float;
 
     #[\Override]
     public function __toString(): string

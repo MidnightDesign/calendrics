@@ -10,4 +10,5 @@ use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $instant = new \Temporal\Spec\Instant(0);
 $instantResult = $instant->toLocaleString('en', ['era' => 'narrow']);
-Assert::incomplete('untranslatable new expression');
+$dateResult = new \Temporal\Tests\Test262\JsDate(0)->toLocaleString(['en'], ['era' => 'narrow']);
+Assert::sameValue($instantResult, $dateResult, 'toLocaleString on an Instant with era option should return the same results as toLocaleString on the same Date with the same options');

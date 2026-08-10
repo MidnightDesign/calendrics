@@ -8,4 +8,7 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-Assert::incomplete('untranslatable new expression');
+$date = new \Temporal\Tests\Test262\JsDate(0);
+$plainDateTime = new \Temporal\Spec\PlainDateTime(1970, 1, 1);
+$options = ['dateStyle' => 'full', 'timeZone' => 'UTC'];
+Assert::sameValue($date->toLocaleString('ja', $options), $plainDateTime->toLocaleString('ja', $options), '');

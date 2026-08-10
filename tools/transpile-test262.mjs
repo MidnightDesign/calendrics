@@ -2055,6 +2055,24 @@ class Emitter {
       return `array_map(fn(${params}) => ${body}, ${arr})`;
     }
 
+    // arr.find(cb) / arr.some(cb) → Js::arrayFind / Js::arraySome with a PHP
+    // closure. Only arrow callbacks are supported (the only form in the corpus);
+    // anything else falls out as incomplete.
+    if (callee.type === 'MemberExpression' && !callee.computed
+        && (callee.property.name === 'find' || callee.property.name === 'some')) {
+      const cb = node.arguments[0];
+      if (!cb || cb.type !== 'ArrowFunctionExpression') {
+        this.emitIncomplete(`untranslatable: Array.prototype.${callee.property.name}()`);
+        return null;
+      }
+      const arr = this.transpileExpr(callee.object);
+      if (arr === null) return null;
+      const cbPhp = this.transpileExpr(cb);
+      if (cbPhp === null) return null;
+      const helper = callee.property.name === 'find' ? 'arrayFind' : 'arraySome';
+      return `\\Temporal\\Tests\\Test262\\Js::${helper}(${arr}, ${cbPhp})`;
+    }
+
     // TemporalHelpers.ISO.method() chains: translate known methods to TemporalHelpers::isoMethod().
     // All seven ISO string-array helpers used in the corpus are listed here.
     if (callee.type === 'MemberExpression' && !callee.computed
@@ -2302,6 +2320,15 @@ class Emitter {
       // which is unconditionally true, so the argument's value is discarded.
       if (name === 'Object' && method === 'isExtensible') {
         return 'true';
+      }
+
+      // Object.create(null) → an empty options bag. A null-prototype object with
+      // no own properties is indistinguishable from {} to the spec layer (both
+      // read as "no options provided").
+      if (name === 'Object' && method === 'create'
+          && node.arguments.length === 1
+          && node.arguments[0].type === 'Literal' && node.arguments[0].value === null) {
+        return this.objectMode ? '(object) []' : '[]';
       }
 
       const jsGlobals = ['Object', 'Reflect', 'Symbol', 'Proxy', 'Array', 'JSON', 'Date'];
@@ -2657,13 +2684,65 @@ class Emitter {
     if (deepTarget && (deepTarget.type === 'staticMethod' || deepTarget.type === 'instanceMethod')) {
       return `throw new \\TypeError('PHP: cannot use method as constructor')`;
     }
+    // new Intl.DateTimeFormat(locales?, options?) → the harness's IntlDateTimeFormat
+    // shim, which formats through the same ext-intl plumbing the spec layer uses.
+    // Other Intl constructors (DurationFormat, …) have no ext-intl equivalent.
+    if (callee.type === 'MemberExpression' && !callee.computed
+        && callee.object.type === 'Identifier' && callee.object.name === 'Intl'
+        && callee.property.type === 'Identifier') {
+      if (callee.property.name === 'DateTimeFormat') {
+        const args = this.transpileArgs(node.arguments);
+        if (args === null) return null;
+        return `new \\Temporal\\Tests\\Test262\\IntlDateTimeFormat(${args})`;
+      }
+      this.emitIncomplete(`untranslatable: Intl.${callee.property.name} has no harness shim`);
+      return null;
+    }
+    // new Date(epochMs) → the harness's legacy-Date shim. Non-numeric constructions
+    // (date strings, field lists) don't appear in the corpus; JsDate's int|float
+    // parameter type rejects them loudly if one ever does.
+    if (callee.type === 'Identifier' && callee.name === 'Date') {
+      const args = this.transpileArgs(node.arguments);
+      if (args === null) return null;
+      return `new \\Temporal\\Tests\\Test262\\JsDate(${args})`;
+    }
     this.emitIncomplete(`untranslatable new expression`);
     return null;
   }
 
   transpileArrow(node) {
     // () => expr  or  (arg) => expr  or  arg => expr
-    const params = node.params.map(p => this.transpilePattern(p)).join(', ');
+    //
+    // Destructured object parameters — `({ type }) => expr` — bind each shorthand
+    // field from a synthetic `$__dpN` parameter via Js::destructure(), which
+    // handles the shapes the value can arrive as (array, ArrayAccess, stdClass).
+    // Patterns with defaults, nesting, or computed keys stay untranslatable.
+    const destructurePrologue = [];
+    const boundNames = new Set();
+    const paramParts = [];
+    for (const [idx, p] of node.params.entries()) {
+      if (p.type === 'ObjectPattern') {
+        const simple = p.properties.every(pr => pr.type === 'Property' && !pr.computed
+          && pr.key?.type === 'Identifier' && pr.value?.type === 'Identifier');
+        if (!simple) {
+          this.emitIncomplete('untranslatable: function parameter ObjectPattern destructuring');
+          return null;
+        }
+        const tmp = `__dp${idx}`;
+        paramParts.push(`$${tmp}`);
+        boundNames.add(tmp);
+        for (const pr of p.properties) {
+          destructurePrologue.push(
+            `$${pr.value.name} = \\Temporal\\Tests\\Test262\\Js::destructure($${tmp}, '${pr.key.name}');`,
+          );
+          boundNames.add(pr.value.name);
+        }
+      } else {
+        paramParts.push(this.transpilePattern(p));
+        if (p.type === 'Identifier') boundNames.add(p.name);
+      }
+    }
+    const params = paramParts.join(', ');
     if (node.body.type === 'BlockStatement') {
       // Arrow with block body — inline the body statements
       const inner = [];
@@ -2685,27 +2764,33 @@ class Emitter {
         return null;
       }
       // Collect outer variables referenced in the closure body (exclude params and $__/$this).
-      const paramNames = new Set(node.params.map(p => p.type === 'Identifier' ? p.name : null).filter(Boolean));
+      const bodyLines = [...destructurePrologue, ...inner];
       const usedVars = new Set();
-      for (const line of inner) {
+      for (const line of bodyLines) {
         for (const m of line.matchAll(/\$([a-zA-Z_]\w*)/g)) {
           const v = m[1];
-          if (v !== '__' && v !== 'this' && !paramNames.has(v)) usedVars.add(v);
+          if (v !== '__' && v !== 'this' && !boundNames.has(v)) usedVars.add(v);
         }
       }
       const useClause = usedVars.size > 0 ? `use (${[...usedVars].map(v => `&$${v}`).join(', ')}) ` : '';
-      return `function (${params}) ${useClause}{ ${inner.join(' ')} }`;
+      return `function (${params}) ${useClause}{ ${bodyLines.join(' ')} }`;
     }
     // Concise body — collect outer variable references and capture by
     // reference so that JS-style late-binding semantics are preserved when
     // the outer variable is reassigned after the closure is created.
     const body = this.transpileExpr(node.body);
     if (body === null) return null;
-    const paramNames = new Set(node.params.map(p => p.type === 'Identifier' ? p.name : null).filter(Boolean));
     const usedVars = new Set();
-    for (const m of body.matchAll(/\$([a-zA-Z_]\w*)/g)) {
-      const v = m[1];
-      if (v !== '__' && v !== 'this' && v !== '__m' && !paramNames.has(v)) usedVars.add(v);
+    const scanTargets = [...destructurePrologue, body];
+    for (const target of scanTargets) {
+      for (const m of target.matchAll(/\$([a-zA-Z_]\w*)/g)) {
+        const v = m[1];
+        if (v !== '__' && v !== 'this' && v !== '__m' && !boundNames.has(v)) usedVars.add(v);
+      }
+    }
+    if (destructurePrologue.length > 0) {
+      const useClause = usedVars.size > 0 ? `use (${[...usedVars].map(v => `&$${v}`).join(', ')}) ` : '';
+      return `function (${params}) ${useClause}{ ${destructurePrologue.join(' ')} return ${body}; }`;
     }
     if (usedVars.size > 0) {
       const useClause = `use (${[...usedVars].map(v => `&$${v}`).join(', ')}) `;
@@ -4353,6 +4438,10 @@ function isIntlDateTimeFormatResolvedOptions(node) {
   if (callee.property?.type !== 'Identifier' || callee.property.name !== 'resolvedOptions') return false;
   const recv = callee.object;
   if (recv?.type !== 'NewExpression') return false;
+  // Only the zero-argument form maps to TemporalHelpers::defaultLocaleCalendar();
+  // a DateTimeFormat constructed with explicit locales/options lowers through the
+  // IntlDateTimeFormat harness shim, whose resolvedOptions() honors the arguments.
+  if (recv.arguments.length > 0) return false;
   const ctor = recv.callee;
   return ctor?.type === 'MemberExpression' && !ctor.computed
     && ctor.object?.type === 'Identifier' && ctor.object.name === 'Intl'

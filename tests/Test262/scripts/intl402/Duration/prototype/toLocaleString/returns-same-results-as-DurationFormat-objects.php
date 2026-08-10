@@ -14,6 +14,6 @@ $locales = [JsUndefined::singleton(), 'en', 'de', 'th-u-nu-thai', ['ar-u-nu-arab
 $options = [JsUndefined::singleton(), (object) ['style' => 'long']];
 foreach ($locales as $locale) {
 foreach ($options as $opts) {
-Assert::incomplete('untranslatable new expression');
+Assert::incomplete('untranslatable: Intl.DurationFormat has no harness shim');
 }
 }

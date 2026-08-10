@@ -8,8 +8,29 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-$findPart = function ($parts, $expectedType) {
-return $parts->find(function ($__unknown__ = null) use (&$type, &$expectedType) { return $type === $expectedType; })->value;
+$findPart = function ($parts, $expectedType) use (&$__dp0) {
+return \Temporal\Tests\Test262\Js::arrayFind($parts, function ($__dp0) use (&$expectedType) { $type = \Temporal\Tests\Test262\Js::destructure($__dp0, 'type'); return $type === $expectedType; })->value;
 };
 $time = \Temporal\Spec\PlainTime::from('1976-11-18T15:23:30');
-Assert::incomplete('untranslatable new expression');
+$dtfNY = new \Temporal\Tests\Test262\IntlDateTimeFormat('en-US', (object) ['timeZone' => 'America/New_York']);
+Assert::sameValue($time->toLocaleString('en-US', (object) ['timeZone' => 'America/New_York']), $dtfNY->format($time), '');
+$partsNY = $dtfNY->formatToParts($time);
+$hourPartNY = $findPart($partsNY, 'hour');
+$minutePartNY = $findPart($partsNY, 'minute');
+$secondPartNY = $findPart($partsNY, 'second');
+$resultNY = $time->toLocaleString('en-US', (object) ['timeZone' => 'America/New_York']);
+Assert::assertTrue(\Temporal\Tests\Test262\Js::arraySome($partsNY, fn($part) => $part->type === 'dayPeriod'), 'en-US locale has a 12-hour format');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultNY, $hourPartNY), 'en-US locale string has an hour part');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultNY, $minutePartNY), 'en-US locale string has a minute part');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultNY, $secondPartNY), 'en-US locale string has a second part');
+$dtfVienna = new \Temporal\Tests\Test262\IntlDateTimeFormat('de-AT', (object) ['timeZone' => 'Europe/Vienna']);
+Assert::sameValue($time->toLocaleString('de-AT', (object) ['timeZone' => 'Europe/Vienna']), $dtfVienna->format($time), '');
+$partsVienna = $dtfVienna->formatToParts($time);
+$hourPartVienna = $findPart($partsVienna, 'hour');
+$minutePartVienna = $findPart($partsVienna, 'minute');
+$secondPartVienna = $findPart($partsVienna, 'second');
+$resultVienna = $time->toLocaleString('de-AT', (object) ['timeZone' => 'Europe/Vienna']);
+Assert::assertTrue(!\Temporal\Tests\Test262\Js::arraySome($partsVienna, fn($part) => $part->type === 'dayPeriod'), 'de-AT locale has a 24-hour format');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultVienna, $hourPartVienna), 'de-AT locale string has an hour part');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultVienna, $minutePartVienna), 'de-AT locale string has a minute part');
+Assert::assertTrue(\Temporal\Tests\Test262\Js::includes($resultVienna, $secondPartVienna), 'de-AT locale string has a second part');

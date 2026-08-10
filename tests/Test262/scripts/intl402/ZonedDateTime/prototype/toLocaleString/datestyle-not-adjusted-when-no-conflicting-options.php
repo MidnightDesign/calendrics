@@ -8,4 +8,6 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-Assert::incomplete('untranslatable new expression');
+$date = new \Temporal\Tests\Test262\JsDate(0);
+$zonedDateTime = new \Temporal\Spec\ZonedDateTime(0, 'UTC');
+Assert::sameValue($date->toLocaleString('ja', ['dateStyle' => 'full', 'timeZone' => 'UTC']), $zonedDateTime->toLocaleString('ja', ['dateStyle' => 'full']), '');

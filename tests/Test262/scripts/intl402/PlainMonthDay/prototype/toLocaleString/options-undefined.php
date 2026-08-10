@@ -8,4 +8,12 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-Assert::incomplete('untranslatable new expression');
+$defaultFormatter = new \Temporal\Tests\Test262\IntlDateTimeFormat('en', []);
+$__destruct__ = $defaultFormatter->resolvedOptions();
+$calendar = $__destruct__->calendar;
+$monthday = new \Temporal\Spec\PlainMonthDay(5, 2, $calendar);
+$expected = $defaultFormatter->format($monthday);
+$actualExplicit = $monthday->toLocaleString('en');
+Assert::sameValue($actualExplicit, $expected, 'default locale is determined by Intl.DateTimeFormat');
+$actualImplicit = $monthday->toLocaleString('en');
+Assert::sameValue($actualImplicit, $expected, 'default locale is determined by Intl.DateTimeFormat');

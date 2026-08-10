@@ -9,4 +9,10 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $epochMs = 1_735_213_600_321;
-Assert::incomplete('untranslatable new expression');
+$legacyDate = new \Temporal\Tests\Test262\JsDate($epochMs);
+$plainYearMonth = new \Temporal\Spec\PlainYearMonth(2024, 12);
+foreach ([(object) ['year' => 'numeric'], (object) ['month' => 'long']] as $options) {
+$plainYearMonthResult = $plainYearMonth->toLocaleString('en-u-ca-iso8601', $options);
+$legacyDateResult = $legacyDate->toLocaleString('en-u-ca-iso8601', $options);
+Assert::sameValue($plainYearMonthResult, $legacyDateResult, "Instant.toLocaleString should format lone option " . (json_encode($options)) . "");
+}

@@ -542,10 +542,15 @@ final class IntlFormatter
                 || ($opts['month'] ?? null) !== null
                 || ($opts['day'] ?? null) !== null
             );
+        // Per ECMA-402 ToDateTimeOptions, dayPeriod and fractionalSecondDigits count
+        // as time components for the needDefaults check (era and timeZoneName do not
+        // appear in either list, so alone they still get defaults added).
         $hasTimePart =
             ($opts['hour'] ?? null) !== null
             || ($opts['minute'] ?? null) !== null
-            || ($opts['second'] ?? null) !== null;
+            || ($opts['second'] ?? null) !== null
+            || ($opts['dayPeriod'] ?? null) !== null
+            || ($opts['fractionalSecondDigits'] ?? null) !== null;
         if (!$hasDatePart && !$hasTimePart) {
             // Add defaults based on mode
             if (
