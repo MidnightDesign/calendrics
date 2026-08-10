@@ -66,19 +66,6 @@ final class CalendarFactory
     }
 
     /**
-     * All supported canonical calendar IDs in alphabetical order — the shape
-     * ECMA-402 `Intl.supportedValuesOf("calendar")` returns.
-     *
-     * @return list<string>
-     */
-    public static function supportedCalendars(): array
-    {
-        $ids = self::KNOWN_CALENDARS;
-        sort($ids);
-        return $ids;
-    }
-
-    /**
      * Canonicalizes a calendar identifier: lowercases, resolves aliases.
      *
      * @throws RangeError if the calendar ID is unknown.

@@ -1272,6 +1272,12 @@ final class PlainTime implements Stringable
     }
 
     #[\Override]
+    protected function localeCalendarId(): null
+    {
+        return null;
+    }
+
+    #[\Override]
     protected function toLocaleTimestamp(): int|float
     {
         // Use Unix epoch date (1970-01-01) with the given time

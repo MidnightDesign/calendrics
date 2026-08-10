@@ -250,6 +250,7 @@ final class PlainDate implements Stringable
             );
         }
         /** @psalm-suppress InvalidPropertyAssignmentValue — $dayInt <= $daysInMonth <= 31 */
+        // @mago-ignore analysis:invalid-property-assignment-value
         $this->isoDay = $dayInt;
         // TC39 range: Apr 19 −271821 … Sep 13 +275760.
         $epochDays = CalendarMath::toJulianDay($this->isoYear, $this->isoMonth, $this->isoDay) - 2_440_588;
@@ -1750,11 +1751,6 @@ final class PlainDate implements Stringable
         return 'date';
     }
 
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
     #[\Override]
     protected function localeIsDateOnly(): bool
     {
@@ -1765,6 +1761,12 @@ final class PlainDate implements Stringable
     protected function localeIsTimeOnly(): bool
     {
         return false;
+    }
+
+    #[\Override]
+    protected function localeCalendarId(): string
+    {
+        return $this->calendarId;
     }
 
     #[\Override]

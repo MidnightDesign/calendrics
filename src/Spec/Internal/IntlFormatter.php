@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace Temporal\Spec\Internal;
 
+use Temporal\Exception\RangeError;
 use Temporal\Exception\TypeError;
+use Temporal\Spec\Internal\Calendar\CalendarFactory;
 
 /**
  * Owns the IntlDateFormatter construction and locale/pattern helpers used by
  * toLocaleString() across all Temporal spec classes.
  *
  * The public surface is: buildIntlFormatter() (central entry point), resolveLocale(),
- * validateStyleConflicts(), and stripPatternComponents(). The private helpers
- * applyHourCycle() and buildPatternFromComponents() support buildIntlFormatter() internally.
+ * resolveCalendar(), validateCalendar(), validateStyleConflicts(), and
+ * stripPatternComponents(). The private helpers applyHourCycle() and
+ * buildPatternFromComponents() support buildIntlFormatter() internally.
  *
  * @internal
  */
@@ -31,6 +34,18 @@ final class IntlFormatter
         'dayPeriod',
         'fractionalSecondDigits',
         'timeZoneName',
+    ];
+
+    /**
+     * Map from ICU calendar type (as reported by IntlCalendar::getType()) to the
+     * TC39/BCP 47 calendar identifier. Types not listed here are already spelled
+     * the same in both vocabularies (hebrew, chinese, japanese, …).
+     *
+     * @var array<string, string>
+     */
+    private const ICU_TO_CALENDAR = [
+        'gregorian' => 'gregory',
+        'ethiopic-amete-alem' => 'ethioaa',
     ];
 
     /**
@@ -59,61 +74,78 @@ final class IntlFormatter
     }
 
     /**
-     * Resolves the calendar a DateTimeFormat for the given locale and options would use.
+     * Resolves the calendar an IntlDateFormatter built from $locale and $opts will use,
+     * expressed as a TC39 calendar identifier.
      *
-     * Mirrors ECMA-402 CreateDateTimeFormat's [[Calendar]] resolution: an explicit
-     * `calendar` option wins, then a `ca` keyword in the locale itself (either
-     * `-u-ca-…` or `@calendar=…` form), then the locale's default calendar per ICU.
-     * The result is a canonical BCP-47 calendar key, so callers can compare it
-     * against a Temporal object's `calendarId`.
+     * Mirrors ECMA-402's `dateTimeFormat.[[Calendar]]`: the explicit `calendar` option wins,
+     * otherwise ICU resolves the calendar from the locale — either from its `-u-ca-` /
+     * `@calendar=` keyword or from the region's default (e.g. `th-TH` → `buddhist`).
      *
      * @param array<string, mixed> $opts
+     * @throws RangeError if the `calendar` option is not a recognized calendar identifier.
      */
-    public static function resolvedCalendar(string $locale, array $opts): string
+    public static function resolveCalendar(string $locale, array $opts): string
     {
         /** @var mixed $calendarOpt */
         $calendarOpt = $opts['calendar'] ?? null;
         if (is_string($calendarOpt) && $calendarOpt !== '') {
-            return self::icuCalendarToBcp47(strtolower($calendarOpt));
+            return CalendarFactory::canonicalize($calendarOpt);
         }
 
-        // IntlCalendar::createInstance honors a ca keyword in the locale (both
-        // `en-u-ca-hebrew` and `en@calendar=hebrew`) and otherwise falls back to
-        // the locale's default calendar, so a single ICU query covers the
-        // remaining resolution steps.
-        $calendar = self::intlCalendarForLocale($locale);
-        $icuType = $calendar === null ? 'gregorian' : $calendar->getType();
-        return self::icuCalendarToBcp47($icuType);
+        $calendar = self::intlCalendarFor(timeZone: null, locale: $locale);
+        // Every locale resolves to some calendar; ICU falls back to gregorian when the
+        // locale is unknown, and only fails outright if it cannot allocate one at all.
+        $icuType = $calendar?->getType() ?? 'gregorian';
+
+        return self::ICU_TO_CALENDAR[$icuType] ?? $icuType;
     }
 
     /**
-     * Returns the ICU calendar instance for a locale, or null if ICU cannot create one.
+     * Enforces ECMA-402's calendar-compatibility rule for toLocaleString().
      *
-     * Wraps {@see \IntlCalendar::createInstance()} behind an explicit ?\IntlCalendar
-     * return type: PHPStan's bundled stub types the factory as non-null, but the
-     * runtime and the PHP manual declare it nullable (invalid timezone or ICU OOM).
+     * A Temporal value may only be formatted by a formatter whose resolved calendar
+     * matches the value's own calendar; formatting a Hebrew-calendar date with a
+     * Gregorian formatter would silently reinterpret its fields, so the spec throws
+     * instead.
+     *
+     * `PlainDate`, `PlainDateTime` and `ZonedDateTime` additionally accept the ISO 8601
+     * calendar against any formatter, because an ISO date is unambiguous and can be
+     * projected into the formatter's calendar. `PlainYearMonth` and `PlainMonthDay` grant
+     * no such exemption — recognized here by their $defaultComponents mode: a bare
+     * year-month or month-day has no meaning outside the calendar it was expressed in.
+     *
+     * A null $calendarId means the type carries no calendar (PlainTime), which any
+     * formatter can render.
+     *
+     * @param array<string, mixed> $opts
+     * @param string $defaultComponents The value's component mode, as passed to buildIntlFormatter().
+     * @throws RangeError if the value's calendar is incompatible with the formatter's.
      */
-    // PHPStan's stub makes the nullable return look dead (see docblock above);
-    // the ignore is scoped to exactly that too-wide-return report.
-    // @phpstan-ignore return.unusedType
-    private static function intlCalendarForLocale(string $locale): ?\IntlCalendar
-    {
-        return \IntlCalendar::createInstance(null, $locale);
-    }
+    public static function validateCalendar(
+        ?string $calendarId,
+        string $locale,
+        array $opts,
+        string $defaultComponents,
+    ): void {
+        if ($calendarId === null) {
+            return;
+        }
 
-    /**
-     * Maps an ICU calendar type to its canonical BCP-47 unicode `ca` key.
-     *
-     * Most types are identical in both systems; only the historic ICU names differ.
-     */
-    private static function icuCalendarToBcp47(string $icuType): string
-    {
-        return match ($icuType) {
-            'gregorian' => 'gregory',
-            'ethiopic-amete-alem' => 'ethioaa',
-            'islamicc' => 'islamic-civil',
-            default => $icuType,
-        };
+        $isoExempt = $defaultComponents !== 'yearmonth' && $defaultComponents !== 'monthday';
+        if ($isoExempt && $calendarId === 'iso8601') {
+            return;
+        }
+
+        $resolved = self::resolveCalendar($locale, $opts);
+        if ($calendarId === $resolved) {
+            return;
+        }
+
+        throw new RangeError(sprintf(
+            'toLocaleString(): cannot format a value in the "%s" calendar with a formatter resolved to the "%s" calendar.',
+            $calendarId,
+            $resolved,
+        ));
     }
 
     /**
@@ -202,18 +234,15 @@ final class IntlFormatter
             $locale = self::applyHourCycle($locale, $hc);
         }
 
-        // Detect non-gregorian calendar from locale keywords (e.g. en-u-ca-islamic-tbla
-        // or en@calendar=islamic-tbla). IntlDateFormatter only respects non-gregorian calendars
-        // when an explicit IntlCalendar instance is passed.
-        $calendarObj = null;
-        $keywords = \Locale::getKeywords($locale);
-        if (
-            is_array($keywords)
-            && array_key_exists('calendar', $keywords)
-            && $keywords['calendar'] !== 'gregory'
-            && $keywords['calendar'] !== 'gregorian'
-        ) {
-            $calendarObj = \IntlCalendar::createInstance($timeZone, $locale);
+        // IntlDateFormatter only respects a non-gregorian calendar when an explicit
+        // IntlCalendar instance is passed, so resolve the locale's calendar first and
+        // pass one whenever it is not gregorian. The calendar may come from a keyword
+        // (en-u-ca-islamic-tbla, en@calendar=islamic-tbla — including the one appended
+        // above for the `calendar` option) or from the locale's own default, as with
+        // th-TH → buddhist, which carries no keyword at all.
+        $calendarObj = self::intlCalendarFor($timeZone, $locale);
+        if ($calendarObj?->getType() === 'gregorian') {
+            $calendarObj = null;
         }
 
         $styleMap = [
@@ -375,6 +404,22 @@ final class IntlFormatter
     }
 
     /**
+     * Returns the ICU calendar a locale resolves to, or null if ICU cannot create one.
+     *
+     * Wraps {@see \IntlCalendar::createInstance()} behind an explicit ?\IntlCalendar
+     * return type so callers' null handling type-checks consistently across analyzers
+     * (PHPStan's bundled stub types the factory as non-null; the runtime and the PHP
+     * manual declare it ?\IntlCalendar — hence the ignore below, which keeps the
+     * nullable contract callers rely on).
+     *
+     * @phpstan-ignore return.unusedType
+     */
+    private static function intlCalendarFor(?string $timeZone, string $locale): ?\IntlCalendar
+    {
+        return \IntlCalendar::createInstance($timeZone, $locale);
+    }
+
+    /**
      * Appends a -u-hc-{hourCycle} extension to a BCP 47 locale string.
      */
     private static function applyHourCycle(string $locale, string $hourCycle): string
@@ -465,7 +510,7 @@ final class IntlFormatter
             /** @var mixed $fsd */
             $fsd = $opts['fractionalSecondDigits'];
             $digits = is_int($fsd) ? $fsd : (int) (is_string($fsd) ? $fsd : 0);
-            $parts[] = str_repeat('S', $digits);
+            $parts[] = str_repeat('S', times: max(0, $digits));
         }
         if (($opts['dayPeriod'] ?? null) !== null) {
             $parts[] = match ($opts['dayPeriod']) {

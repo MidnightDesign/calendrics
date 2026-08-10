@@ -1442,16 +1442,6 @@ final class PlainYearMonth implements Stringable
         return 'yearmonth';
     }
 
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    protected function localeCalendarIsoExempt(): bool
-    {
-        return false;
-    }
-
     #[\Override]
     protected function localeIsDateOnly(): bool
     {
@@ -1462,6 +1452,12 @@ final class PlainYearMonth implements Stringable
     protected function localeIsTimeOnly(): bool
     {
         return false;
+    }
+
+    #[\Override]
+    protected function localeCalendarId(): string
+    {
+        return $this->calendarId;
     }
 
     #[\Override]

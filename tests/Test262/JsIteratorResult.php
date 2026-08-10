@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Temporal\Tests\Test262;
 
 /**
- * JS iterator-protocol result record: `{ value, done }`.
+ * PHP equivalent of a JavaScript IteratorResult — the `{ value, done }` record
+ * returned by {@see JsIterator::next()}.
  *
- * @psalm-api used by dynamically-required test262 scripts in tests/Test262/scripts/
+ * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
  */
 final class JsIteratorResult
 {
