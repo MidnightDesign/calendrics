@@ -2706,14 +2706,6 @@ class Emitter {
       if (args === null) return null;
       return `new \\Temporal\\Tests\\Test262\\JsDate(${args})`;
     }
-    // new Set(iterable) → the harness's JsSet shim (insertion-ordered, has/add/
-    // delete/values). The `[...new Set([...])]` dedup idiom is handled separately
-    // by trySpreadSetDedup and never reaches this constructor path.
-    if (callee.type === 'Identifier' && callee.name === 'Set') {
-      const args = this.transpileArgs(node.arguments);
-      if (args === null) return null;
-      return `new \\Temporal\\Tests\\Test262\\JsSet(${args})`;
-    }
     this.emitIncomplete(`untranslatable new expression`);
     return null;
   }

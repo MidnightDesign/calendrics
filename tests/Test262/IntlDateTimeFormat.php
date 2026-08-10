@@ -143,7 +143,7 @@ final class IntlDateTimeFormat
     public function resolvedOptions(): object
     {
         $locale = IntlFormatter::resolveLocale($this->locales);
-        $calendar = IntlFormatter::resolvedCalendar($locale, $this->options);
+        $calendar = IntlFormatter::resolveCalendar($locale, $this->options);
         /** @var mixed $tzOpt */
         $tzOpt = $this->options['timeZone'] ?? null;
         return (object) [
