@@ -142,4 +142,57 @@ trait ObserversAndCalendar
     {
         return \IntlCalendar::createInstance();
     }
+
+    /**
+     * Returns the value of `Intl.supportedValuesOf("calendar")` — every calendar the
+     * runtime can format with, as BCP-47 unicode `ca` keys, sorted ascending.
+     *
+     * Derived from ICU's own keyword-value list rather than from this library's
+     * calendar registry, so the fixtures that pick "some calendar other than the
+     * locale's" are not silently narrowed to whatever we already support.
+     *
+     * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
+     *
+     * @return list<string>
+     */
+    public static function supportedCalendars(): array
+    {
+        $calendars = [];
+        foreach (self::icuCalendarTypes() as $icuType) {
+            // ICU calendar type → BCP-47 unicode `ca` key (the few that differ).
+            $calendars[] = match ($icuType) {
+                'gregorian' => 'gregory',
+                'ethiopic-amete-alem' => 'ethioaa',
+                default => $icuType,
+            };
+        }
+        sort($calendars);
+
+        return $calendars;
+    }
+
+    /**
+     * Returns every calendar type ICU knows, in ICU's own vocabulary.
+     *
+     * Wrapped behind an explicit `list<string>` return type for the same reason as
+     * {@see self::defaultIntlCalendar()}: it keeps the iterator's element type out of
+     * the caller, where the analyzers disagree about it.
+     *
+     * @return list<string>
+     */
+    private static function icuCalendarTypes(): array
+    {
+        // 'und' asks for every calendar rather than the ones common in some region;
+        // getKeywordValuesForLocale() is only false for a keyword ICU does not know.
+        $values = \IntlCalendar::getKeywordValuesForLocale('calendar', locale: 'und', onlyCommon: false);
+        // The runtime returns false for a keyword ICU does not know; PHPStan's stub
+        // types the return non-false, so the guard reads as always-false to it.
+        // @phpstan-ignore identical.alwaysFalse
+        if ($values === false) {
+            return [];
+        }
+
+        /** @var list<string> */
+        return array_values(iterator_to_array($values));
+    }
 }

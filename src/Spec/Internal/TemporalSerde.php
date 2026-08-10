@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Temporal\Spec\Internal;
 
+use Temporal\Exception\TypeError;
+
 /** @internal */
 trait TemporalSerde
 {
@@ -26,6 +28,13 @@ trait TemporalSerde
      * in which case the toLocaleString dateStyle option must be rejected.
      */
     abstract protected function localeIsTimeOnly(): bool;
+
+    /**
+     * Returns this value's calendar identifier for the toLocaleString()
+     * calendar-compatibility check, or null for types that carry no calendar
+     * (PlainTime), which are formattable by any formatter.
+     */
+    abstract protected function localeCalendarId(): ?string;
 
     /**
      * Converts this temporal value to a Unix timestamp (seconds) suitable for
@@ -51,10 +60,14 @@ trait TemporalSerde
      * For date-only types (PlainDate, PlainYearMonth, PlainMonthDay), timeStyle is forbidden.
      * For time-only types (PlainTime), dateStyle is forbidden.
      * Style options (dateStyle/timeStyle) cannot be combined with individual component options.
+     * The value's calendar must be compatible with the formatter's — see
+     * {@see IntlFormatter::validateCalendar()}.
      *
      * @param string|array<array-key, mixed>|null $locales
      * @param array<array-key, mixed>|object|null $options
      * @psalm-api
+     * @throws TypeError if a style option is not applicable to this type.
+     * @throws \Temporal\Exception\RangeError if this value's calendar is incompatible with the formatter's.
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
     {
@@ -72,11 +85,11 @@ trait TemporalSerde
 
         // PlainDate, PlainYearMonth, PlainMonthDay: timeStyle is forbidden.
         if ($hasTimeStyle && $isDateOnly) {
-            throw new \TypeError('toLocaleString(): timeStyle option is not allowed for this type.');
+            throw new TypeError('toLocaleString(): timeStyle option is not allowed for this type.');
         }
         // PlainTime: dateStyle is forbidden.
         if ($hasDateStyle && $isTimeOnly) {
-            throw new \TypeError('toLocaleString(): dateStyle option is not allowed for this type.');
+            throw new TypeError('toLocaleString(): dateStyle option is not allowed for this type.');
         }
 
         $locale = IntlFormatter::resolveLocale($locales);
@@ -86,6 +99,8 @@ trait TemporalSerde
         $timeZone = 'UTC';
 
         $defaultComponents = $this->localeDefaultComponents();
+
+        IntlFormatter::validateCalendar($this->localeCalendarId(), $locale, $opts, $defaultComponents);
 
         // Pass locale into opts for pattern generator
         $opts['_locale'] = $locale;

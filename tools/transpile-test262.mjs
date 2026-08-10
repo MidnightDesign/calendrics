@@ -2263,6 +2263,18 @@ class Emitter {
       return '\\DateTimeZone::listIdentifiers()';
     }
 
+    // Intl.supportedValuesOf('calendar') → the same list derived from ICU's keyword
+    // values. The toLocaleString calendar-mismatch fixtures use it to pick a calendar
+    // that is neither ISO nor the locale's, so the list must not be narrowed to the
+    // calendars this library implements — see TemporalHelpers::supportedCalendars().
+    if (callee.type === 'MemberExpression' && !callee.computed
+        && callee.object.type === 'Identifier' && callee.object.name === 'Intl'
+        && callee.property.name === 'supportedValuesOf'
+        && node.arguments.length === 1
+        && node.arguments[0].type === 'Literal' && node.arguments[0].value === 'calendar') {
+      return 'TemporalHelpers::supportedCalendars()';
+    }
+
     // Calls on JS built-in globals that have no PHP equivalent
     if (callee.type === 'MemberExpression' && !callee.computed
         && callee.object.type === 'Identifier') {
@@ -2593,6 +2605,14 @@ class Emitter {
     // that the proxy's get trap is not called, which passes trivially in PHP)
     if (callee.type === 'Identifier' && callee.name === 'Proxy') {
       return 'null';
+    }
+    // new Set(iterable) → JsSet, which models the members, insertion order and the
+    // add/delete/has/size/values surface the fixtures use. The `[...new Set(...)]`
+    // dedup idiom is lowered to Js::unique() before reaching here.
+    if (callee.type === 'Identifier' && callee.name === 'Set') {
+      const args = this.transpileArgs(node.arguments);
+      if (args === null) return null;
+      return `new \\Temporal\\Tests\\Test262\\JsSet(${args})`;
     }
     // new X(…) where X is a Temporal class alias (from const { X } = Temporal;)
     if (callee.type === 'Identifier' && this.temporalClassAliases.has(callee.name)) {

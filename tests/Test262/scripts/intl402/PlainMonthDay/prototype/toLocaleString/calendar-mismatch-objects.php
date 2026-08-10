@@ -14,4 +14,11 @@ Assert::notSameValue($localeCalendar, 'iso8601', 'no locale has the ISO calendar
 $sameCalendarInstance = \Temporal\Spec\PlainMonthDay::from((object) JsUndefined::strip(['monthCode' => 'M01', 'day' => 1, 'calendar' => $localeCalendar]));
 $result = $sameCalendarInstance->toLocaleString();
 Assert::sameValue(is_string($result), true, 'toLocaleString() succeeds when instance has the same calendar as locale');
-Assert::incomplete('untranslatable new expression');
+$calendars = new \Temporal\Tests\Test262\JsSet(TemporalHelpers::supportedCalendars());
+$calendars->delete('iso8601');
+$calendars->delete($localeCalendar);
+$differentCalendar = $calendars->values()->next()->value;
+$differentCalendarInstance = \Temporal\Spec\PlainMonthDay::from((object) JsUndefined::strip(['monthCode' => 'M01', 'day' => 1, 'calendar' => $differentCalendar]));
+Assert::throws(\RangeException::class, function () use (&$differentCalendarInstance) { return $differentCalendarInstance->toLocaleString(); }, 'calendar mismatch');
+$isoInstance = \Temporal\Spec\PlainMonthDay::from((object) ['monthCode' => 'M01', 'day' => 1, 'calendar' => 'iso8601']);
+Assert::throws(\RangeException::class, function () use (&$isoInstance) { return $isoInstance->toLocaleString(); }, 'calendar mismatch even when instance has the ISO calendar');

@@ -138,6 +138,7 @@ final class PlainMonthDay implements Stringable
             );
         }
         /** @psalm-suppress InvalidPropertyAssignmentValue — $dayInt <= $daysInMonth <= 31 */
+        // @mago-ignore analysis:invalid-property-assignment-value
         $this->isoDay = $dayInt;
 
         // TC39 range: the resulting date (referenceISOYear-month-day) must be within the
@@ -1334,6 +1335,12 @@ final class PlainMonthDay implements Stringable
     protected function localeIsTimeOnly(): bool
     {
         return false;
+    }
+
+    #[\Override]
+    protected function localeCalendarId(): string
+    {
+        return $this->calendarId;
     }
 
     #[\Override]

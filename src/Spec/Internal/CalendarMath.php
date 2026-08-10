@@ -466,29 +466,27 @@ final class CalendarMath
     }
 
     /**
-     * ISO 8601 day of week using Sakamoto's algorithm.
+     * ISO 8601 day of week, derived from the Julian Day Number.
      *
      * Returns 1 = Monday … 7 = Sunday.
+     *
+     * JDN 0 is a Monday, so the weekday is the JDN modulo 7. The modulo is taken
+     * Euclidean rather than with PHP's `%`, whose result carries the sign of the
+     * dividend: JDNs go negative around ISO year -4713, well inside Temporal's
+     * ±273,972-year range, and a truncated remainder would map those days onto
+     * negative weekday numbers.
+     *
+     * Sharing {@see self::toJulianDay()} keeps the proleptic-Gregorian leap-year
+     * math in one place; a Sakamoto-style formula would have to repeat it, and
+     * repeats it wrongly for negative years unless every division floors too.
      *
      * @return int<1, 7>
      */
     public static function isoWeekday(int $year, int $month, int $day): int
     {
-        /** @var array<int, int> $t */
-        static $t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-        if ($month < 3) {
-            $year--;
-        }
-        $dow =
-            (
-                $year + intdiv(num1: $year, num2: 4) - intdiv(num1: $year, num2: 100)
-                + intdiv(num1: $year, num2: 400)
-                + $t[$month - 1]
-                + $day
-            )
-            % 7;
-        /** @var int<1, 7> Sakamoto maps 0→7, rest 1–6 unchanged */
-        return $dow === 0 ? 7 : $dow;
+        $jdn = self::toJulianDay($year, $month, $day);
+        /** @var int<1, 7> */
+        return ((($jdn % 7) + 7) % 7) + 1;
     }
 
     /**

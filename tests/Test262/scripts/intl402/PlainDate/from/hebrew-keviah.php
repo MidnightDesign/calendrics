@@ -17,4 +17,8 @@ $daysInYear = $startOfYear->daysInYear;
 Assert::sameValue(array_key_exists($daysInYear, $yearSymbol), true, '');
 return "" . ($daySymbol($startOfYear)) . "" . ($yearSymbol[$daysInYear]) . "" . ($daySymbol($firstDayOfPesach)) . "";
 };
-Assert::incomplete('untranslatable new expression');
+$validKeviahSymbols = new \Temporal\Tests\Test262\JsSet(['2D3', '2C5', '2D5', '2C7', '3R5', '3R7', '5R7', '5C1', '5D1', '5C3', '7D1', '7C3', '7D3', '7C5']);
+for ($year = 3700; $year <= 5800; ++$year) {
+$sym = $KeviahSymbol($year);
+Assert::sameValue($validKeviahSymbols->has($sym), true, "{$year} -> {$sym}");
+}
