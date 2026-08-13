@@ -8,7 +8,7 @@ Temporal is the modern replacement for JavaScript's `Date`, providing a precise,
 
 - PHP 8.4+ (64-bit recommended)
 - Composer
-- `ext-intl` (required for `toLocaleString()` on spec-layer `Instant`, `ZonedDateTime`, and `Duration`)
+- `ext-intl` (required for non-ISO calendars, for `Temporal\DateTimeFormat`, and for spec-layer `toLocaleString()`)
 
 > **32-bit platforms.** The library targets 64-bit PHP. It is not a hard requirement, but on 32-bit builds the native date primitives (`gmmktime()` and friends) only cover years ~1901–2038, so calculations near Temporal's extreme year range may misbehave. Running on 32-bit is not recommended.
 
@@ -400,6 +400,51 @@ $buddhist->eraYear; // 2567
 
 Available calendars: `Iso8601`, `Buddhist`, `Chinese`, `Coptic`, `Dangi`, `EthiopicAmeteAlem`, `Ethiopic`, `Gregory`, `Hebrew`, `Indian`, `IslamicCivil`, `IslamicTabular`, `IslamicUmalqura`, `Japanese`, `Persian`, `Roc`.
 
+### Locale-aware formatting
+
+`DateTimeFormat` renders any porcelain value in a locale. It is the porcelain counterpart to the spec layer's `toLocaleString()`: same ECMA-402 behavior, but the option bag of magic strings is replaced by backed enums, so call sites are checked statically.
+
+```php
+use Temporal\DateTimeFormat;
+use Temporal\DateStyle;
+use Temporal\TimeStyle;
+use Temporal\PlainDate;
+
+$format = DateTimeFormat::styled('de-AT', date: DateStyle::Full, time: TimeStyle::Short);
+
+$format->format(PlainDate::parse('2024-03-15'));  // 'Freitag, 15. März 2024'
+$format->format(Now::zonedDateTime());            // same formatter, any value
+```
+
+Instances are immutable and hold no ICU state, so build one at config time and reuse it.
+
+ECMA-402 forbids combining the `dateStyle`/`timeStyle` presets with individual component options. Rather than accepting both and throwing, the two live on separate constructors — the invalid combination cannot be written:
+
+```php
+use Temporal\MonthWidth;
+use Temporal\NumericWidth;
+use Temporal\TextWidth;
+use Temporal\TimeZoneNameStyle;
+
+DateTimeFormat::components(
+    'en-US',
+    weekday: TextWidth::Long,
+    month: MonthWidth::Short,
+    day: NumericWidth::Numeric,
+    hour: NumericWidth::TwoDigit,
+    minute: NumericWidth::TwoDigit,
+    timeZoneName: TimeZoneNameStyle::LongOffset,
+)->format(Now::zonedDateTime());  // 'Friday, Mar 15, 03:23 PM GMT+01:00'
+```
+
+Which options apply depends on the value, mirroring TC39:
+
+- `PlainDate`, `PlainYearMonth` and `PlainMonthDay` reject a time preset; `PlainTime` rejects a date preset. Both throw `Temporal\Exception\TypeError`.
+- `ZonedDateTime` carries its own zone, so passing `timeZone` throws `Temporal\Exception\TypeError`. Use `timeZone` to project an `Instant` into a civil zone; on the `Plain*` types it is ignored, because they denote no instant to project.
+- A value in a non-ISO calendar can only be rendered by a formatter resolving to that same calendar — otherwise its fields would be silently reinterpreted. The mismatch throws `Temporal\Exception\RangeError`; pass `calendar:` to make the formatter's calendar explicit.
+
+`Duration` is deliberately not formattable here: locale-aware duration rendering is `Intl.DurationFormat` territory, which `ext-intl` does not expose.
+
 ### Enums
 
 All option strings are replaced by backed enums:
@@ -416,6 +461,12 @@ All option strings are replaced by backed enums:
 | `TimeZoneDisplay` | `Auto`, `Never`, `Critical` |
 | `OffsetDisplay` | `Auto`, `Never` |
 | `TransitionDirection` | `Next`, `Previous` |
+| `DateStyle` / `TimeStyle` | `Full`, `Long`, `Medium`, `Short` |
+| `TextWidth` | `Narrow`, `Short`, `Long` |
+| `NumericWidth` | `Numeric`, `TwoDigit` |
+| `MonthWidth` | `Numeric`, `TwoDigit`, `Narrow`, `Short`, `Long` |
+| `TimeZoneNameStyle` | `Short`, `Long`, `ShortOffset`, `LongOffset`, `ShortGeneric`, `LongGeneric` |
+| `HourCycle` | `H11`, `H12`, `H23`, `H24` |
 
 ### Spec-layer interop
 
