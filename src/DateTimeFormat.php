@@ -86,16 +86,13 @@ final readonly class DateTimeFormat
         ?HourCycle $hourCycle = null,
         ?string $timeZone = null,
     ): self {
-        return new self(
-            self::compact([
-                'dateStyle' => $date?->value,
-                'timeStyle' => $time?->value,
-                'calendar' => $calendar?->value,
-                'hourCycle' => $hourCycle?->value,
-                'timeZone' => $timeZone,
-            ]),
-            $locale,
-        );
+        return new self(self::compact([
+            'dateStyle' => $date?->value,
+            'timeStyle' => $time?->value,
+            'calendar' => $calendar?->value,
+            'hourCycle' => $hourCycle?->value,
+            'timeZone' => $timeZone,
+        ]), $locale);
     }
 
     /**
@@ -140,30 +137,25 @@ final readonly class DateTimeFormat
         ?string $timeZone = null,
     ): self {
         if ($fractionalSecondDigits !== null && ($fractionalSecondDigits < 1 || $fractionalSecondDigits > 3)) {
-            throw new InvalidArgument(
-                "fractionalSecondDigits must be between 1 and 3, got {$fractionalSecondDigits}.",
-            );
+            throw new InvalidArgument("fractionalSecondDigits must be between 1 and 3, got {$fractionalSecondDigits}.");
         }
 
-        return new self(
-            self::compact([
-                'weekday' => $weekday?->value,
-                'era' => $era?->value,
-                'year' => $year?->value,
-                'month' => $month?->value,
-                'day' => $day?->value,
-                'hour' => $hour?->value,
-                'minute' => $minute?->value,
-                'second' => $second?->value,
-                'fractionalSecondDigits' => $fractionalSecondDigits,
-                'dayPeriod' => $dayPeriod?->value,
-                'timeZoneName' => $timeZoneName?->value,
-                'calendar' => $calendar?->value,
-                'hourCycle' => $hourCycle?->value,
-                'timeZone' => $timeZone,
-            ]),
-            $locale,
-        );
+        return new self(self::compact([
+            'weekday' => $weekday?->value,
+            'era' => $era?->value,
+            'year' => $year?->value,
+            'month' => $month?->value,
+            'day' => $day?->value,
+            'hour' => $hour?->value,
+            'minute' => $minute?->value,
+            'second' => $second?->value,
+            'fractionalSecondDigits' => $fractionalSecondDigits,
+            'dayPeriod' => $dayPeriod?->value,
+            'timeZoneName' => $timeZoneName?->value,
+            'calendar' => $calendar?->value,
+            'hourCycle' => $hourCycle?->value,
+            'timeZone' => $timeZone,
+        ]), $locale);
     }
 
     /**
@@ -173,9 +165,8 @@ final readonly class DateTimeFormat
      * @throws \Temporal\Exception\TypeError if an option does not apply to $value's type.
      * @throws \Temporal\Exception\RangeError if $value's calendar is not the one the formatter resolves to.
      */
-    public function format(
-        PlainDate|PlainDateTime|PlainTime|PlainYearMonth|PlainMonthDay|Instant|ZonedDateTime $value,
-    ): string {
+    public function format(PlainDate|PlainDateTime|PlainTime|PlainYearMonth|PlainMonthDay|Instant|ZonedDateTime $value): string
+    {
         return $value->toSpec()->toLocaleString($this->locale, $this->options);
     }
 
