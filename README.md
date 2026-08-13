@@ -410,10 +410,14 @@ use Temporal\DateStyle;
 use Temporal\TimeStyle;
 use Temporal\PlainDate;
 
-$format = DateTimeFormat::styled('de-AT', date: DateStyle::Full, time: TimeStyle::Short);
+$long = DateTimeFormat::styled('de-AT', date: DateStyle::Full);
 
-$format->format(PlainDate::parse('2024-03-15'));  // 'Freitag, 15. März 2024'
-$format->format(Now::zonedDateTime());            // same formatter, any value
+$long->format(PlainDate::parse('2024-03-15'));  // a full German date
+$long->format(Now::zonedDateTime());            // same formatter, any value
+
+// A time preset makes it a date-and-time formatter — no longer applicable to PlainDate
+$stamp = DateTimeFormat::styled('de-AT', date: DateStyle::Medium, time: TimeStyle::Short);
+$stamp->format(Now::zonedDateTime());
 ```
 
 Instances are immutable and hold no ICU state, so build one at config time and reuse it.
@@ -434,7 +438,7 @@ DateTimeFormat::components(
     hour: NumericWidth::TwoDigit,
     minute: NumericWidth::TwoDigit,
     timeZoneName: TimeZoneNameStyle::LongOffset,
-)->format(Now::zonedDateTime());  // 'Friday, Mar 15, 03:23 PM GMT+01:00'
+)->format(Now::zonedDateTime());
 ```
 
 Which options apply depends on the value, mirroring TC39:

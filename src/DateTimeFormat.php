@@ -15,11 +15,16 @@ use Temporal\Exception\InvalidArgument;
  * rather than at runtime:
  *
  * ```php
- * $format = DateTimeFormat::styled('de-AT', date: DateStyle::Full, time: TimeStyle::Short);
+ * $long = DateTimeFormat::styled('de-AT', date: DateStyle::Full);
  *
- * $format->format(PlainDate::parse('2024-03-15'));  // 'Freitag, 15. März 2024'
- * $format->format(Now::zonedDateTime());            // reuses the same formatter
+ * $long->format(PlainDate::parse('2024-03-15'));  // a full German date
+ * $long->format(Now::zonedDateTime());            // reuses the same formatter
  * ```
+ *
+ * A formatter only carries options its subject accepts: the one above adds no
+ * time preset, so it renders both a {@see PlainDate} and a {@see ZonedDateTime}.
+ * Adding `time:` would make it a date-and-time formatter, and passing it a
+ * {@see PlainDate} would then throw — see the per-type rules below.
  *
  * ECMA-402 forbids mixing the `dateStyle`/`timeStyle` presets with individual
  * component options. Rather than accepting both and throwing, this class splits
