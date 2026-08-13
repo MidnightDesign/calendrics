@@ -192,6 +192,32 @@ final class Options
     }
 
     /**
+     * Normalises a singular or plural Temporal unit name to its canonical plural form.
+     *
+     * RangeError message is owned here and embeds the offending value. See the
+     * class-level note on message text.
+     *
+     * @return 'years'|'months'|'weeks'|'days'|'hours'|'minutes'|'seconds'|'milliseconds'|'microseconds'|'nanoseconds'
+     * @throws RangeError for unknown unit names.
+     */
+    public static function normalizeUnit(string $unit): string
+    {
+        return match ($unit) {
+            'year', 'years' => 'years',
+            'month', 'months' => 'months',
+            'week', 'weeks' => 'weeks',
+            'day', 'days' => 'days',
+            'hour', 'hours' => 'hours',
+            'minute', 'minutes' => 'minutes',
+            'second', 'seconds' => 'seconds',
+            'millisecond', 'milliseconds' => 'milliseconds',
+            'microsecond', 'microseconds' => 'microseconds',
+            'nanosecond', 'nanoseconds' => 'nanoseconds',
+            default => throw new RangeError("Unknown duration unit: \"{$unit}\"."),
+        };
+    }
+
+    /**
      * Performs the universal part of TC39 ToTemporalRoundingIncrement on an already-
      * read `roundingIncrement` value: ToIntegerWithTruncation followed by the
      * "finite and ≥ 1" validation, returning the truncated integer.
