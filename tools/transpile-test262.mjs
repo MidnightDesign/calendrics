@@ -598,6 +598,14 @@ class Emitter {
     // its BigInt value. Threaded into tryEvalBigInt so later expressions like
     // `Number((nanos / Xn) % Yn)` constant-fold. Populated in transpileVarDecl.
     this.bigIntScalarVars = new Map();
+    // The subset of bigIntScalarVars whose value exceeds int64 and therefore has no
+    // PHP variable behind it (see transpileVarDecl). Every use must fold to the exact
+    // compile-time value; transpileIdentifier bails on any that reaches it unfolded.
+    this.bigIntUnrepresentableVars = new Set();
+    // Array-literal variables whose every element folds to a compile-time BigInt.
+    // Maps JS var name → the list of those values, so transpileForOf can unroll a loop
+    // over a table int64 cannot hold. See tryUnrollBigIntTableForOf.
+    this.bigIntArrayValues = new Map();
   }
 
   emit(line) {
@@ -898,6 +906,14 @@ class Emitter {
         if (hasBigIntLiteral(decl.init)) {
           this.bigIntArrayVars.add(decl.id.name);
         }
+        // Tables whose every element folds to an exact BigInt (e.g. the epoch-limit
+        // fixtures' `[nsMax + 1n, nsMin - 1n, 2n ** 128n, -(2n ** 128n)]`). Recording
+        // the values lets transpileForOf unroll the loop instead of bailing on the
+        // over-int64 elements the emitted array cannot hold.
+        const elementValues = decl.init.elements.map(e => tryEvalBigInt(e, this.bigIntScalarVars));
+        if (elementValues.length > 0 && elementValues.every(v => v !== null)) {
+          this.bigIntArrayValues.set(decl.id.name, elementValues);
+        }
         // Track tables that ALSO contain a plain Number literal: such a sibling,
         // when asserted to throw, proves the tested slot rejects the Number type,
         // so lowering a BigInt (→ Number) to plain int is safe (see transpileForOf).
@@ -973,20 +989,28 @@ class Emitter {
         // a BigInt source (a BigInt literal or BigInt(...) call) — e.g.
         // `const nanos = BigInt(Number.MAX_SAFE_INTEGER) + 2n`. Record its compile-time
         // BigInt value so later expressions like `Number((nanos / Xn) % Yn)` fold.
-        // Gate on hasBigIntLiteral || BigInt(...) so plain integer consts (handled by
+        // Gate on hasBigIntLiteral || BigInt(...) || a read of an already-tracked BigInt
+        // const (`var nsMin = -nsMax;`) so plain integer consts (handled by
         // constNumericVars / normal emit) are not swept in.
         //
-        // ONLY track values that fit int64: the variable is emitted as a real PHP int
-        // and may be referenced by downstream code that is NOT folded (e.g.
-        // `const min = -nsMax; new ZonedDateTime(min, …)`). An overflowing value cannot
-        // be emitted as a PHP int, and recording it without an emit would leave the PHP
-        // variable undefined at those downstream sites — so leave overflowing consts to
-        // the existing overflow-bail path.
-        if (decl.init && (hasBigIntLiteral(decl.init) || referencesBigIntCall(decl.init))) {
+        // A value that fits int64 also gets a real PHP variable, so unfolded uses still
+        // work. One that does not fit is tracked value-only: nothing is emitted, the name
+        // joins bigIntUnrepresentableVars, and every use must fold to the compile-time
+        // value (over-int64 epoch constructions lower to the (epochSec, subNs) parts
+        // factories; template interpolations lower to the exact decimal string). Uses
+        // that reach transpileIdentifier unfolded bail there rather than referencing an
+        // undefined PHP variable.
+        if (decl.init && (hasBigIntLiteral(decl.init) || referencesBigIntCall(decl.init)
+            || expressionRefsAny(decl.init, new Set(this.bigIntScalarVars.keys())))) {
           const bigVal = tryEvalBigInt(decl.init, this.bigIntScalarVars);
-          if (bigVal !== null && !overflowsInt64(bigVal)) {
+          if (bigVal !== null) {
             this.bigIntScalarVars.set(decl.id.name, bigVal);
-            this.emit(`$${decl.id.name} = ${phpInt(bigVal.toString())};`);
+            if (overflowsInt64(bigVal)) {
+              this.bigIntUnrepresentableVars.add(decl.id.name);
+              this.emit(`// Folded (BigInt ${bigVal} exceeds int64): ${decl.id.name}`);
+            } else {
+              this.emit(`$${decl.id.name} = ${phpInt(bigVal.toString())};`);
+            }
             continue;
           }
         }
@@ -1329,6 +1353,56 @@ class Emitter {
     if (php !== null) this.emit(`${php};`);
   }
 
+  /**
+   * Unrolls `for (const x of <table>)` where every element of the table folds to an
+   * exact BigInt and at least one exceeds int64 — the shape the epoch-limit fixtures
+   * use to enumerate out-of-range epoch nanoseconds. A PHP array cannot hold those
+   * values, so the loop is replayed once per element with the loop variable bound to
+   * the element's compile-time value, letting the over-int64 lowerings
+   * ({@see emitOverInt64Ctor}, template interpolation) see each one.
+   *
+   * All-or-nothing: if any iteration's body turns out untranslatable, nothing is
+   * emitted and the caller's normal (bail) handling takes over.
+   *
+   * Returns true when the loop was unrolled.
+   */
+  tryUnrollBigIntTableForOf(node) {
+    const table = node.right.type === 'Identifier'
+      ? this.bigIntArrayValues.get(node.right.name)
+      : null;
+    if (!table || !table.some(overflowsInt64)) return false;
+
+    const loopVar = node.left.declarations?.[0]?.id ?? node.left;
+    if (loopVar.type !== 'Identifier') return false;
+
+    const savedScalar = this.bigIntScalarVars.get(loopVar.name);
+    const savedUnrepresentable = this.bigIntUnrepresentableVars.has(loopVar.name);
+    const savedLines = this.lines;
+    const unrolled = [];
+    let failed = false;
+    for (const value of table) {
+      this.bigIntScalarVars.set(loopVar.name, value);
+      this.bigIntUnrepresentableVars[overflowsInt64(value) ? 'add' : 'delete'](loopVar.name);
+      this.lines = [];
+      this.transpileStatement(node.body);
+      if (this.incomplete) {
+        this.incomplete = false;
+        failed = true;
+        break;
+      }
+      unrolled.push(...this.lines);
+    }
+    this.lines = savedLines;
+    if (savedScalar === undefined) this.bigIntScalarVars.delete(loopVar.name);
+    else this.bigIntScalarVars.set(loopVar.name, savedScalar);
+    this.bigIntUnrepresentableVars[savedUnrepresentable ? 'add' : 'delete'](loopVar.name);
+    if (failed) return false;
+
+    this.emit(`// Unrolled (${table.length} over-int64 BigInt values): ${loopVar.name}`);
+    for (const line of unrolled) this.emit(line);
+    return true;
+  }
+
   // Decide whether a for-of over a wrong-type data table containing a BigInt
   // literal can be lowered to a plain PHP foreach. Such a loop relies on the JS
   // Number-vs-BigInt type distinction, which PHP has no equivalent for — `Nn`
@@ -1433,6 +1507,8 @@ class Emitter {
       // transpileMember() will translate them to TemporalHelpers::isoMonths() /
       // TemporalHelpers::notYetSupportedCalendars().
     }
+
+    if (this.tryUnrollBigIntTableForOf(node)) return;
 
     const bigIntTable = this.classifyBigIntTableForOf(node);
     if (bigIntTable === 'incomplete') {
@@ -1752,6 +1828,13 @@ class Emitter {
   }
 
   transpileIdentifier(node) {
+    // A const whose BigInt value exceeds int64 has no PHP variable behind it — the
+    // value only survives where a caller folds it (see transpileVarDecl). Reaching
+    // here means no caller did, so bail instead of emitting an undefined variable.
+    if (this.bigIntUnrepresentableVars.has(node.name)) {
+      this.emitIncomplete(`cannot represent value of '${node.name}' in PHP (BigInt overflow)`);
+      return null;
+    }
     switch (node.name) {
       // Default: PHP null. The JsUndefined sentinel only appears when transpileArray
       // sees `undefined` in element position (parametric test-data tables) or when
@@ -1797,6 +1880,17 @@ class Emitter {
           const innerPhp = this.transpileExpr(exprNode.argument);
           if (innerPhp === null) return null;
           result += `" . (gettype(${innerPhp})) . "`;
+          continue;
+        }
+        // An over-int64 BigInt constant has no PHP value, but JS interpolates it as its
+        // decimal digits — which is all these description strings ever need.
+        if (expressionRefsAny(exprNode, this.bigIntUnrepresentableVars)) {
+          const bigVal = tryEvalBigInt(exprNode, this.bigIntScalarVars);
+          if (bigVal === null) {
+            this.emitIncomplete('untranslatable: unfoldable BigInt in template literal');
+            return null;
+          }
+          result += bigVal.toString();
           continue;
         }
         const exprPhp = this.transpileExpr(exprNode);
@@ -2461,6 +2555,15 @@ class Emitter {
       if (!IMPLEMENTED.has(key)) {
         this.emitIncomplete(incompleteReasonFor(className, method));
         return null;
+      }
+      // Instant.fromEpochNanoseconds(<over-int64 BigInt>) — same true-parts lowering the
+      // Instant / ZonedDateTime constructors get, so the ±8.64e21 boundary fixtures can
+      // express their arguments at all.
+      if (key === 'Instant::fromEpochNanoseconds' && node.arguments.length === 1) {
+        const epNsBig = tryEvalBigInt(node.arguments[0], this.bigIntScalarVars);
+        if (epNsBig !== null && overflowsInt64(epNsBig)) {
+          return emitOverInt64Ctor('Instant', epNsBig, '');
+        }
       }
       // JS auto-coerces objects to strings; PHP does not. If an objectVars variable
       // is passed to a string-accepting method, the test relies on JS-specific behaviour.

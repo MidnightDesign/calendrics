@@ -6,8 +6,11 @@ FROM php:8.4-cli
 
 # Copy Node.js runtime for the test262 transpiler
 COPY --from=node:24-slim /usr/local/bin/node /usr/local/bin/node
-# Copy acorn package (used by tools/transpile-test262.mjs)
-COPY --from=node-builder /usr/local/lib/node_modules/acorn /usr/local/lib/node_modules/acorn
+# Copy acorn package (used by tools/transpile-test262.mjs). It lands in the root
+# node_modules rather than the global one: Node's ESM resolver ignores the global
+# directory and instead walks node_modules up from the importing file, and /app is
+# a bind mount, so /node_modules is the nearest directory the image can populate.
+COPY --from=node-builder /usr/local/lib/node_modules/acorn /node_modules/acorn
 
 RUN apt-get update && apt-get install -y git rsync unzip libzip-dev libicu-dev \
     && docker-php-ext-install zip intl \

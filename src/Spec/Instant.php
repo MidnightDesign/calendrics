@@ -157,11 +157,8 @@ final class Instant implements Stringable
      * paths, arithmetic, rounding, and the toInstant()/toZonedDateTimeISO()
      * converters so every over-int64 instant carries its true value.
      *
-     * The test262 transpiler renders over-int64 BigInt epoch-seconds (only ever
-     * produced for deliberately out-of-range fixtures, since every valid instant's
-     * epochSec ≤ 8.64e12 fits int64) as PHP float literals, so $epochSec/$subNs
-     * accept int|float. A finite over-int64 float epoch-second is always outside the
-     * spec range and therefore throws RangeError — never a TypeError.
+     * $epochSec/$subNs accept int|float and are narrowed by
+     * {@see EpochValue::narrowParts()}, which documents where float parts come from.
      *
      * @internal
      * @psalm-internal Temporal\Spec
@@ -175,27 +172,11 @@ final class Instant implements Stringable
         // to which the test262 transpiler maps the JS-spec RangeError. Normalization,
         // the range check, and the over-int64 sentinel are shared with the
         // constructor via normalizeEpochParts().
-        $maxSec = EpochLimits::MAX_EPOCH_SECONDS;
-        if (is_float($epochSec)) {
-            // A finite over-int64 float epochSec cannot be in the ±8.64e12 s spec
-            // range, so it is unconditionally out of range. (float)PHP_INT_MAX rounds
-            // up past PHP_INT_MAX, so compare against the spec bound directly.
-            if (!is_finite($epochSec) || $epochSec > (float) $maxSec || $epochSec < -(float) $maxSec) {
-                throw new RangeError('Instant result is outside the representable nanosecond range.');
-            }
-            $epochSec = (int) $epochSec;
+        $parts = EpochValue::narrowParts($epochSec, $subNs);
+        if ($parts === null) {
+            throw new RangeError('Instant result is outside the representable nanosecond range.');
         }
-        if (is_float($subNs)) {
-            if (
-                !is_finite($subNs)
-                || floor($subNs) !== $subNs
-                || $subNs > (float) PHP_INT_MAX
-                || $subNs < (float) PHP_INT_MIN
-            ) {
-                throw new RangeError('Instant result is outside the representable nanosecond range.');
-            }
-            $subNs = (int) $subNs;
-        }
+        [$epochSec, $subNs] = $parts;
 
         $epoch = self::normalizeEpochParts($epochSec, $subNs);
         $self = new self($epoch->epochNanoseconds);

@@ -9,4 +9,8 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 use Temporal\Tests\Test262\TemporalHelpers;
-Assert::incomplete('cannot represent value of \'limit\' in PHP (BigInt overflow)');
+// Folded (BigInt 8640000000000000000000 exceeds int64): limit
+Assert::throws(\RangeException::class, fn() => \Temporal\Spec\Instant::fromEpochParts(-8640000000001, 999999999), '');
+Assert::throws(\RangeException::class, fn() => \Temporal\Spec\Instant::fromEpochParts(8640000000000, 1), '');
+TemporalHelpers::assertInstantsEqual(\Temporal\Spec\Instant::fromEpochParts(-8640000000000, 0), \Temporal\Spec\Instant::from('-271821-04-20T00:00:00Z'));
+TemporalHelpers::assertInstantsEqual(\Temporal\Spec\Instant::fromEpochParts(8640000000000, 0), \Temporal\Spec\Instant::from('+275760-09-13T00:00:00Z'));

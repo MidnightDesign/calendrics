@@ -8,4 +8,8 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-Assert::incomplete('cannot represent value of \'nsMaxInstant\' in PHP (BigInt overflow)');
+// Folded (BigInt 8640000000000000000000 exceeds int64): nsMaxInstant
+// Folded (BigInt 8640000000000000000000 exceeds int64): epochNs
+$zdt = \Temporal\Spec\ZonedDateTime::fromInstantParts(8640000000000, 0, '+23:59');
+$roundTo = (object) ['smallestUnit' => 'minutes', 'roundingIncrement' => 10, 'roundingMode' => 'ceil'];
+Assert::throws(\RangeException::class, function () use (&$zdt, &$roundTo) { return $zdt->round($roundTo); }, '');

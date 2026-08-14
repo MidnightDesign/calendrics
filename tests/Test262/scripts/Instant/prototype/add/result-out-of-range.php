@@ -9,4 +9,11 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $fields = ['hours', 'minutes', 'seconds', 'milliseconds', 'microseconds', 'nanoseconds'];
-Assert::incomplete('cannot represent value of \'latest\' in PHP (BigInt overflow)');
+$latest = \Temporal\Spec\Instant::fromEpochParts(8640000000000, 0);
+foreach ($fields as $field) {
+Assert::throws(\RangeException::class, function () use (&$latest, &$field) { return $latest->add([$field => 1]); }, "adding {$field} with result out of range (positive)");
+}
+$earliest = \Temporal\Spec\Instant::fromEpochParts(-8640000000000, 0);
+foreach ($fields as $field) {
+Assert::throws(\RangeException::class, function () use (&$earliest, &$field) { return $earliest->add(JsUndefined::strip([$field => -1])); }, "adding {$field} with result out of range (negative)");
+}
