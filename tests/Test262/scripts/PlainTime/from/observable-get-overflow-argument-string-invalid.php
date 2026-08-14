@@ -9,5 +9,5 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 use Temporal\Tests\Test262\TemporalHelpers;
-$actual = [];
+$actual = new \Temporal\Tests\Test262\ObserverTrace();
 Assert::incomplete('untranslatable object property');

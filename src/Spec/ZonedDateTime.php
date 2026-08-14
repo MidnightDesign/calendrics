@@ -514,11 +514,51 @@ final class ZonedDateTime implements Stringable
      * @throws RangeError for invalid strings or property bags.
      * @psalm-api
      */
-    public static function from(string|array|object $item, array|object|null $options = null): self
+    public static function from(string|array|object $item, mixed $options = null): self
+    {
+        // Each branch of ToTemporalZonedDateTime reaches GetOptionsObject at a different
+        // point, and the difference is observable on an options bag with accessors:
+        // a string is PARSED first (so a malformed one is a RangeError before any option
+        // is read), and a property bag is READ first (PrepareCalendarFields precedes
+        // GetOptionsObject). Only the already-a-ZonedDateTime case reads options straight
+        // away, having no fields to prepare.
+        if ($item instanceof self) {
+            self::validateFromOptions($options);
+            return new self($item->epochNanoseconds, $item->timeZoneId, $item->calendarId);
+        }
+        if (is_string($item)) {
+            // parseZdtString reaches GetOptionsObject only once the string has parsed.
+            return self::parseZdtString($item, $options);
+        }
+
+        $bag = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, ['offset', 'timeZone'], 'ZonedDateTime');
+        $opts = self::validateFromOptions($options);
+
+        $overflow = array_key_exists('overflow', $opts) && is_string($opts['overflow'])
+            ? $opts['overflow']
+            : 'constrain';
+        $disambiguation = array_key_exists('disambiguation', $opts) && is_string($opts['disambiguation'])
+            ? $opts['disambiguation']
+            : 'compatible';
+        $offsetOption = array_key_exists('offset', $opts) && is_string($opts['offset']) ? $opts['offset'] : 'reject';
+
+        return self::fromPropertyBag($bag, $overflow, $disambiguation, $offsetOption);
+    }
+
+    /**
+     * GetOptionsObject for from(): reads the three recognized options once, in the
+     * spec's alphabetical order, and validates each keyword.
+     *
+     * Returns the snapshot with each keyword replaced by its coerced string, so callers
+     * resolve values from it without touching the original bag — or re-running ToString
+     * on a value that supplies it through an accessor — a second time.
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function validateFromOptions(mixed $options): array
     {
         $opts = Options::normalizeOptions($options, ['disambiguation', 'offset', 'overflow']);
 
-        // Validate 'disambiguation' option if present.
         if (array_key_exists('disambiguation', $opts)) {
             $dv = Options::coerceEnumOption($opts['disambiguation'], 'disambiguation');
             if (!in_array(needle: $dv, haystack: ['compatible', 'earlier', 'later', 'reject'], strict: true)) {
@@ -526,15 +566,13 @@ final class ZonedDateTime implements Stringable
                     "Invalid disambiguation value \"{$dv}\"; must be 'compatible', 'earlier', 'later', or 'reject'.",
                 );
             }
+            $opts = array_merge($opts, ['disambiguation' => $dv]);
         }
 
-        // Validate 'overflow' option.
-        $overflow = 'constrain';
         if (array_key_exists('overflow', $opts)) {
-            $overflow = Options::overflowOption($opts['overflow']);
+            $opts = array_merge($opts, ['overflow' => Options::overflowOption($opts['overflow'])]);
         }
 
-        // Validate 'offset' option if present.
         if (array_key_exists('offset', $opts)) {
             /** @var mixed $offOpt */
             $offOpt = $opts['offset'];
@@ -545,25 +583,11 @@ final class ZonedDateTime implements Stringable
                         "Invalid offset option \"{$offOpt}\"; must be 'use', 'ignore', 'prefer', or 'reject'.",
                     );
                 }
+                $opts = array_merge($opts, ['offset' => $offOpt]);
             }
         }
 
-        if ($item instanceof self) {
-            return new self($item->epochNanoseconds, $item->timeZoneId, $item->calendarId);
-        }
-        if (is_string($item)) {
-            return self::parseZdtString($item, $options);
-        }
-        $disambiguation = 'compatible';
-        if (array_key_exists('disambiguation', $opts) && is_string($opts['disambiguation'])) {
-            $disambiguation = $opts['disambiguation'];
-        }
-        $offsetOption = 'reject';
-        if (array_key_exists('offset', $opts) && is_string($opts['offset'])) {
-            $offsetOption = $opts['offset'];
-        }
-        $bag = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, ['offset', 'timeZone'], 'ZonedDateTime');
-        return self::fromPropertyBag($bag, $overflow, $disambiguation, $offsetOption);
+        return $opts;
     }
 
     /**
@@ -878,7 +902,7 @@ final class ZonedDateTime implements Stringable
      * @psalm-api
      */
     #[\Override]
-    public function toString(array|object|null $options = null): string
+    public function toString(mixed $options = null): string
     {
         $options = Options::normalizeOptions($options, [
             'calendarName',
@@ -1119,7 +1143,7 @@ final class ZonedDateTime implements Stringable
      * @param array<array-key, mixed>|object|null $options Options array; supports 'overflow' ('constrain'|'reject').
      * @psalm-api
      */
-    public function add(string|array|object $duration, array|object|null $options = null): self
+    public function add(string|array|object $duration, mixed $options = null): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return $this->addDurationZdt(1, $dur, $options);
@@ -1132,7 +1156,7 @@ final class ZonedDateTime implements Stringable
      * @param array<array-key, mixed>|object|null $options Options array; supports 'overflow' ('constrain'|'reject').
      * @psalm-api
      */
-    public function subtract(string|array|object $duration, array|object|null $options = null): self
+    public function subtract(string|array|object $duration, mixed $options = null): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return $this->addDurationZdt(-1, $dur, $options);
@@ -1147,7 +1171,7 @@ final class ZonedDateTime implements Stringable
      * @param array<array-key, mixed>|object|null $options Options array with largestUnit, smallestUnit, roundingMode, roundingIncrement.
      * @psalm-api
      */
-    public function since(string|array|object $other, array|object|null $options = null): Duration
+    public function since(string|array|object $other, mixed $options = null): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -1167,7 +1191,7 @@ final class ZonedDateTime implements Stringable
      * @param array<array-key, mixed>|object|null $options Options array with largestUnit, smallestUnit, roundingMode, roundingIncrement.
      * @psalm-api
      */
-    public function until(string|array|object $other, array|object|null $options = null): Duration
+    public function until(string|array|object $other, mixed $options = null): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -1316,7 +1340,7 @@ final class ZonedDateTime implements Stringable
      * @param array<array-key, mixed>|object|null       $options Options bag: ['overflow' => ..., 'disambiguation' => ...]
      * @psalm-api
      */
-    public function with(array|object $fields, array|object|null $options = null): self
+    public function with(array|object $fields, mixed $options = null): self
     {
         // Reject Temporal objects (IsPartialTemporalObject step 2).
         if (
@@ -1366,25 +1390,26 @@ final class ZonedDateTime implements Stringable
             throw new TypeError('ZonedDateTime::with() requires at least one recognized property.');
         }
 
-        $overflow = self::resolveOverflowOption($options);
-        $disambiguation = self::extractDisambiguation($options);
+        // GetOptionsObject reads every recognized option once, in the spec's
+        // alphabetical order. The resolvers below take that snapshot rather than the
+        // raw bag, so an accessor fires exactly once and in that order.
+        $opts = Options::normalizeOptions($options, ['disambiguation', 'offset', 'overflow']);
+        $overflow = self::resolveOverflowOption($opts);
+        $disambiguation = self::extractDisambiguation($opts);
 
         // Extract the 'offset' option (default is 'prefer' for with()).
         $offsetOption = 'prefer';
-        if ($options !== null) {
-            $optArr = Options::bagSnapshot($options, ['offset']);
-            if (array_key_exists('offset', $optArr)) {
-                /** @var mixed $offOpt */
-                $offOpt = $optArr['offset'];
-                if ($offOpt !== null) {
-                    $offOpt = Options::coerceEnumOption($offOpt, 'offset');
-                    if (!in_array($offOpt, ['prefer', 'use', 'ignore', 'reject'], strict: true)) {
-                        throw new RangeError(
-                            "Invalid offset option \"{$offOpt}\": must be 'prefer', 'use', 'ignore', or 'reject'.",
-                        );
-                    }
-                    $offsetOption = $offOpt;
+        if (array_key_exists('offset', $opts)) {
+            /** @var mixed $offOpt */
+            $offOpt = $opts['offset'];
+            if ($offOpt !== null) {
+                $offOpt = Options::coerceEnumOption($offOpt, 'offset');
+                if (!in_array($offOpt, ['prefer', 'use', 'ignore', 'reject'], strict: true)) {
+                    throw new RangeError(
+                        "Invalid offset option \"{$offOpt}\": must be 'prefer', 'use', 'ignore', or 'reject'.",
+                    );
                 }
+                $offsetOption = $offOpt;
             }
         }
 
@@ -2037,35 +2062,11 @@ final class ZonedDateTime implements Stringable
     /**
      * Parses a ZonedDateTime ISO string (with required bracket timezone annotation).
      *
-     * @param array<array-key, mixed>|object|null $options Options from from() (may contain 'offset' key).
+     * @param mixed $options Options from from() (may contain 'offset' key).
      * @throws RangeError if the string is invalid.
      */
-    private static function parseZdtString(string $text, array|object|null $options = null): self
+    private static function parseZdtString(string $text, mixed $options = null): self
     {
-        $opts = Options::normalizeOptions($options, ['disambiguation', 'offset']);
-
-        // Resolve the 'offset' option (default: 'reject').
-        $offsetOption = 'reject';
-        if (array_key_exists('offset', $opts)) {
-            /** @var mixed $ov */
-            $ov = $opts['offset'];
-            if (
-                is_string($ov) && in_array(needle: $ov, haystack: ['use', 'ignore', 'prefer', 'reject'], strict: true)
-            ) {
-                $offsetOption = $ov;
-            }
-        }
-
-        // Resolve the 'disambiguation' option (default: 'compatible').
-        $disambiguation = 'compatible';
-        if (array_key_exists('disambiguation', $opts)) {
-            /** @var mixed $dv */
-            $dv = $opts['disambiguation'];
-            if (is_string($dv) && in_array($dv, ['compatible', 'earlier', 'later', 'reject'], strict: true)) {
-                $disambiguation = $dv;
-            }
-        }
-
         // Reject more than 9 fractional-second digits.
         if (preg_match('/[.,]\d{10,}/', $text) === 1) {
             throw new RangeError(
@@ -2195,6 +2196,17 @@ final class ZonedDateTime implements Stringable
         ));
 
         $wallSec = $wallDt->getTimestamp();
+
+        // GetOptionsObject runs only now: ToTemporalZonedDateTime parses the string
+        // first, so a malformed one is a RangeError before an options accessor is ever
+        // touched. The keywords are validated here and resolved leniently below, where
+        // an out-of-range value has already been rejected.
+        $opts = self::validateFromOptions($options);
+        $offsetOption = array_key_exists('offset', $opts) && is_string($opts['offset']) ? $opts['offset'] : 'reject';
+        $disambiguation = array_key_exists('disambiguation', $opts) && is_string($opts['disambiguation'])
+            ? $opts['disambiguation']
+            : 'compatible';
+
         // When offset='use' or 'ignore', the epoch is derived directly from the stated offset
         // (or the timezone offset), so the wall-clock time need not be within the spec range.
         // For 'prefer' and 'reject', we need the wall-clock-derived UTC to be valid, so check.

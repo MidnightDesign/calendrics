@@ -14,12 +14,12 @@ $base = (object) ['era' => 'ad', 'month' => 5, 'calendar' => 'gregory'];
 foreach ([INF, -INF] as $inf) {
 Assert::throws(\RangeException::class, function () use (&$base, &$inf, &$other) { return \Temporal\Spec\PlainYearMonth::compare((object) JsUndefined::strip(array_merge((array) $base, ['eraYear' => $inf])), $other); }, "eraYear property cannot be {$inf}");
 Assert::throws(\RangeException::class, function () use (&$other, &$base, &$inf) { return \Temporal\Spec\PlainYearMonth::compare($other, (object) JsUndefined::strip(array_merge((array) $base, ['eraYear' => $inf]))); }, "eraYear property cannot be {$inf}");
-$calls1 = [];
+$calls1 = new \Temporal\Tests\Test262\ObserverTrace();
 $obj1 = TemporalHelpers::toPrimitiveObserver($calls1, $inf, 'eraYear');
 Assert::throws(\RangeException::class, function () use (&$base, &$obj1, &$other) { return \Temporal\Spec\PlainYearMonth::compare((object) JsUndefined::strip(array_merge((array) $base, ['eraYear' => $obj1])), $other); }, '');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(calls1, ["get eraYear.valueOf", "call eraYear.valueOf"], "it fails after fetching the primitive value");
-$calls2 = [];
+Assert::compareObserverTrace($calls1, ['get eraYear.valueOf', 'call eraYear.valueOf'], 'it fails after fetching the primitive value');
+$calls2 = new \Temporal\Tests\Test262\ObserverTrace();
 $obj2 = TemporalHelpers::toPrimitiveObserver($calls2, $inf, 'eraYear');
 Assert::throws(\RangeException::class, function () use (&$other, &$base, &$obj2) { return \Temporal\Spec\PlainYearMonth::compare($other, (object) JsUndefined::strip(array_merge((array) $base, ['eraYear' => $obj2]))); }, '');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(calls2, ["get eraYear.valueOf", "call eraYear.valueOf"], "it fails after fetching the primitive value");
+Assert::compareObserverTrace($calls2, ['get eraYear.valueOf', 'call eraYear.valueOf'], 'it fails after fetching the primitive value');
 }

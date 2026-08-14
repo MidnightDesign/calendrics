@@ -9,4 +9,11 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 use Temporal\Tests\Test262\TemporalHelpers;
-Assert::incomplete('untranslatable: function parameter ObjectPattern destructuring');
+$createOptionsObserver = function ($__dp0 = []) use (&$actual) {
+$unit = \Temporal\Tests\Test262\Js::destructure($__dp0, 'unit') ?? 'nanoseconds';
+$roundingMode = \Temporal\Tests\Test262\Js::destructure($__dp0, 'roundingMode') ?? 'halfExpand';
+$roundingIncrement = \Temporal\Tests\Test262\Js::destructure($__dp0, 'roundingIncrement') ?? 1;
+$relativeTo = \Temporal\Tests\Test262\Js::destructure($__dp0, 'relativeTo') ?? null;
+return TemporalHelpers::propertyBagObserver($actual, (object) JsUndefined::strip(['unit' => $unit, 'roundingMode' => $roundingMode, 'roundingIncrement' => $roundingIncrement, 'relativeTo' => $relativeTo]), 'options');
+};
+Assert::incomplete('untranslatable: Object.defineProperty');

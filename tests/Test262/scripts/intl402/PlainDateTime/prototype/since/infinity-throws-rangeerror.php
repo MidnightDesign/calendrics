@@ -13,8 +13,8 @@ $instance = new \Temporal\Spec\PlainDateTime(2000, 5, 2, 15, 0, 0, 0, 0, 0, 'gre
 $base = ['era' => 'ad', 'month' => 5, 'day' => 2, 'hour' => 15, 'calendar' => 'gregory'];
 foreach ([INF, -INF] as $inf) {
 Assert::throws(\RangeException::class, function () use (&$instance, &$base, &$inf) { return $instance->since(JsUndefined::strip(array_merge($base, ['eraYear' => $inf]))); }, "eraYear property cannot be {$inf}");
-$calls = [];
+$calls = new \Temporal\Tests\Test262\ObserverTrace();
 $obj = TemporalHelpers::toPrimitiveObserver($calls, $inf, 'eraYear');
 Assert::throws(\RangeException::class, function () use (&$instance, &$base, &$obj) { return $instance->since(JsUndefined::strip(array_merge($base, ['eraYear' => $obj]))); }, '');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(calls, ["get eraYear.valueOf", "call eraYear.valueOf"], "it fails after fetching the primitive value");
+Assert::compareObserverTrace($calls, ['get eraYear.valueOf', 'call eraYear.valueOf'], 'it fails after fetching the primitive value');
 }

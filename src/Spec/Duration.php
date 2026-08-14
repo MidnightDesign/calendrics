@@ -553,7 +553,7 @@ final class Duration implements Stringable
      * @throws RangeError if options are invalid or rounding causes overflow.
      * @throws \TypeError if $options is an explicit null or a non-array, non-object scalar.
      */
-    public function toString(array|object|null $options = []): string
+    public function toString(mixed $options = []): string
     {
         // GetOptionsObject: explicit null / non-object primitive / Symbol => TypeError.
         // An omitted options argument arrives as the empty-array default.

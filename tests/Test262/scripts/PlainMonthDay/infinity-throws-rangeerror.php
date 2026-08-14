@@ -16,8 +16,8 @@ $O = function ($primitiveValue, $propertyName) use (&$calls) { return function (
 $tests = [['infinite month', [$O(INF, 'month'), $O(1, 'day'), fn() => 'iso8601', $O(1, 'year')], ['get month.valueOf', 'call month.valueOf']], ['infinite day', [$O(2, 'month'), $O(INF, 'day'), fn() => 'iso8601', $O(1, 'year')], ['get month.valueOf', 'call month.valueOf', 'get day.valueOf', 'call day.valueOf']], ['infinite year', [$O(2, 'month'), $O(1, 'day'), fn() => 'iso8601', $O(INF, 'year')], ['get month.valueOf', 'call month.valueOf', 'get day.valueOf', 'call day.valueOf', 'get year.valueOf', 'call year.valueOf']]];
 foreach ($tests as $__entry__) {
 [$description, $args, $expected] = array_pad($__entry__, 3, null);
-$actual = [];
+$actual = new \Temporal\Tests\Test262\ObserverTrace();
 $args_ = array_map(fn($o) => $o($actual), $args);
 Assert::throws(\RangeException::class, function () use (&$args_) { return new \Temporal\Spec\PlainMonthDay(...$args_); }, $description);
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(actual, expected, `${description} order of operations`);
+Assert::compareObserverTrace($actual, $expected, "{$description} order of operations");
 }

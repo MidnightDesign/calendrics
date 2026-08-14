@@ -19,8 +19,8 @@ Assert::throws(\RangeException::class, function () use (&$yearmonth, &$duration)
 Assert::throws(\RangeException::class, function () use (&$yearmonth, &$duration) { return $yearmonth->add($duration, ['overflow' => 2]); }, 'bigint');
 Assert::throws(\RangeException::class, function () use (&$yearmonth, &$duration) { return $yearmonth->add($duration, JsUndefined::strip(['overflow' => []])); }, 'plain object');
 $expected = ['get overflow.toString', 'call overflow.toString'];
-$actual = [];
+$actual = new \Temporal\Tests\Test262\ObserverTrace();
 $observer = TemporalHelpers::toPrimitiveObserver($actual, 'constrain', 'overflow');
 $result = $yearmonth->add($duration, JsUndefined::strip(['overflow' => $observer]));
 TemporalHelpers::assertPlainYearMonth($result, 2001, 6, 'M06', 'object with toString');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(actual, expected, "order of operations");
+Assert::compareObserverTrace($actual, $expected, 'order of operations');

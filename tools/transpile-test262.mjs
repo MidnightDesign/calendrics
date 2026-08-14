@@ -549,12 +549,22 @@ class Emitter {
     // Maps JS variable name → Temporal class name (e.g. 'Instant' → 'Instant').
     this.temporalClassAliases = new Map();
     // Set to true by processFile() when the script imports any TemporalHelpers
-    // observer (toPrimitiveObserver / propertyBagObserver). Our PHP helpers are
-    // passthroughs that do not record property-access order, so any statement
-    // consuming the JS "calls" array (assert.compareArray, .splice, .length=N)
-    // is skipped at emit time. In observer-using fixtures these statements are
-    // universally tracking artifacts, never independent assertions.
+    // observer (toPrimitiveObserver / propertyBagObserver). Gates the emit-time
+    // rules for the JS-only argument-coercion patterns those fixtures pair with
+    // the observers (see transpileExprStmt).
     this.observersInUse = false;
+    // Names of the arrays the observers record their trace into — argument 0 of a
+    // toPrimitiveObserver / propertyBagObserver call. The trace is real in PHP, so
+    // `compareArray(tracker, expected)` becomes a genuine order-of-operations
+    // assertion and `tracker.splice(0)` / `tracker.length = 0` a genuine reset.
+    // Only a compareArray whose first argument is one of these names is rewritten;
+    // any other compareArray in an observer fixture stays an ordinary array check.
+    this.observerTrackers = new Set();
+    // Set when a statement is skipped in observer mode, cleared when a tracker is
+    // reset. A trace assertion covering a call PHP never makes would compare an empty
+    // tracker against the JS reads, so it is skipped until the next reset — unlike the
+    // assertions around it, which still describe calls that did happen.
+    this.observerTraceStale = false;
     // Maps `const X = [...]` Identifier names to the literal element count.
     // Lets the observer-mode skip rule recognize `new Ctor(...X)` patterns where
     // X was statically constructed with too few elements (e.g. PlainMonthDay's
@@ -564,6 +574,10 @@ class Emitter {
     // Array-literal variables whose elements include a BigInt literal — a for-of
     // over one is not faithfully translatable (PHP has no BigInt type).
     this.bigIntArrayVars = new Set();
+    // Array-literal variables carrying a `{ toString: () => <non-String> }` entry.
+    // PHP's engine-enforced `__toString(): string` makes such a value a valid string,
+    // so a throw assertion over it cannot be reproduced and the entry is skipped.
+    this.nonStringPrimitiveArrayVars = new Set();
     // Array-literal variables whose elements include a plain Number literal — used
     // to decide when a BigInt-containing wrong-type table can be safely lowered.
     this.numberLiteralArrayVars = new Set();
@@ -639,6 +653,10 @@ class Emitter {
    * incomplete tests). Keeps the generated PHP traceable to the source JS.
    */
   emitSkipComment(node, reason) {
+    // A dropped statement in an observer fixture is usually a call the trace was
+    // meant to cover, so anything asserted about the tracker before its next reset
+    // would be comparing against reads that never happened.
+    if (this.observersInUse) this.observerTraceStale = true;
     if (!node || typeof node.start !== 'number' || typeof node.end !== 'number') {
       this.emit(`// JS-only (${reason}): statement omitted`);
       return;
@@ -895,6 +913,14 @@ class Emitter {
           this.instanceVarClasses.set(decl.id.name, ctorTarget.class);
         }
       }
+      // An observer tracker's `const actual = []` becomes the ObserverTrace the
+      // observers record into — an object, so every observer shares the one the
+      // fixture later asserts on.
+      if (decl.id.type === 'Identifier' && decl.init?.type === 'ArrayExpression'
+          && decl.init.elements.length === 0 && this.observerTrackers.has(decl.id.name)) {
+        this.emit(`$${decl.id.name} = new \\Temporal\\Tests\\Test262\\ObserverTrace();`);
+        continue;
+      }
       // Track variables initialized from array literals — used in observer mode
       // to detect `new TemporalCtor(...arr)` "missing args" assertions where `arr`
       // was statically constructed with fewer elements than the constructor needs.
@@ -919,6 +945,12 @@ class Emitter {
         // so lowering a BigInt (→ Number) to plain int is safe (see transpileForOf).
         if (hasNumberLiteral(decl.init)) {
           this.numberLiteralArrayVars.add(decl.id.name);
+        }
+        // Track tables carrying a `{ toString: () => <non-String> }` entry, whose
+        // TypeError PHP cannot reproduce (see transpileObject / JsNonStringPrimitive).
+        // A for-of asserting a throw over such a table skips those entries.
+        if (decl.init.elements.some(hasNonStringToPrimitive)) {
+          this.nonStringPrimitiveArrayVars.add(decl.id.name);
         }
       }
       // Detect inline JS-only ToPrimitive observers: `const X = { valueOf() {} }`
@@ -1072,19 +1104,9 @@ class Emitter {
       this.emitIncomplete('untranslatable: anonymous FunctionDeclaration');
       return;
     }
-    const params = node.params.map(p => this.transpilePattern(p)).join(', ');
-    // If any parameter is an ObjectPattern (destructured object), the body cannot
-    // faithfully execute: the transpiler can't extract the destructured fields, so
-    // the body will reference outer-scope captures instead of local defaults.
-    // Emitting incomplete preserves the prior "ArgumentCountError → incomplete" behaviour.
-    if (node.params.some(p => {
-      // AssignmentPattern wrapping an ObjectPattern: `{a = 1} = {}`
-      const inner = (p.type === 'AssignmentPattern') ? p.left : p;
-      return inner.type === 'ObjectPattern';
-    })) {
-      this.emitIncomplete('untranslatable: function parameter ObjectPattern destructuring');
-      return;
-    }
+    const destructured = this.destructureParams(node.params);
+    if (destructured === null) return;
+    const { params, prologue, boundNames: paramNames } = destructured;
     // If the function body uses BigInt arithmetic (or an overflowing BigInt literal),
     // the computation may overflow PHP int64 or diverge from JS BigInt semantics.
     // A plain, non-overflowing BigInt literal passed straight through (e.g.
@@ -1110,9 +1132,12 @@ class Emitter {
       return;
     }
     if (savedIncomplete) return; // already incomplete; nothing to emit
+    // Bind destructured parameters ahead of the body, so the names it references are
+    // locals rather than same-named captures from the enclosing scope.
+    inner.unshift(...prologue);
     // Track variables defined within the body to exclude from the use clause.
     // This prevents spurious capture of foreach loop variables and local assignments.
-    const localVars = new Set(node.params.map(p => p.type === 'Identifier' ? p.name : null).filter(Boolean));
+    const localVars = new Set(paramNames);
     for (const line of inner) {
       // Regular assignment: $var = ...
       for (const m of line.matchAll(/\$([a-zA-Z_]\w*)\s*=/g)) localVars.add(m[1]);
@@ -1246,26 +1271,56 @@ class Emitter {
       this.emitSkipComment(node, 'references JS-only ToPrimitive tracker variable');
       return;
     }
-    // In observer-using fixtures, drop statements that are JS-only artifacts.
-    // Our PHP passthrough observers don't record property-access order, and our
-    // typed signatures pre-validate where JS uses ToObject/ToPrimitive coercion,
-    // so several JS-spec patterns either trivially fail or throw a different
-    // PHP-native error class.
+    // In observer-using fixtures, handle the statements that consume the trace, and
+    // drop the JS-only coercion patterns those fixtures pair with the observers: our
+    // typed signatures pre-validate where JS uses ToObject/ToPrimitive coercion, so
+    // several JS-spec patterns either trivially fail or throw a different PHP-native
+    // error class.
     if (this.observersInUse) {
       const e = node.expression;
-      // assert.compareArray(*, ...) — call-order tracking, always empty in PHP.
+      const isTracker = n => n?.type === 'Identifier' && this.observerTrackers.has(n.name);
+      // assert.compareArray(tracker, expected) — the order-of-operations assertion.
+      // Routed through compareObserverTrace, which drops the ToNumber events PHP
+      // cannot produce before comparing (see Assert::compareObserverTrace).
+      if (e.type === 'CallExpression' && isMember(e.callee, 'assert', 'compareArray')
+          && isTracker(e.arguments[0])) {
+        if (this.observerTraceStale) {
+          this.emitSkipComment(node, 'trace covers a call skipped above, so the tracker is empty here');
+          return;
+        }
+        const args = this.transpileArgs(e.arguments);
+        if (args === null) return;
+        this.emit(`Assert::compareObserverTrace(${args});`);
+        return;
+      }
+      // tracker.splice(...) / tracker.length = N — clear the trace between phases.
+      if (e.type === 'CallExpression'
+          && e.callee.type === 'MemberExpression' && !e.callee.computed
+          && e.callee.property?.type === 'Identifier' && e.callee.property.name === 'splice'
+          && isTracker(e.callee.object)) {
+        this.emit(`$${e.callee.object.name}->clear();`);
+        this.observerTraceStale = false;
+        return;
+      }
+      if (e.type === 'AssignmentExpression'
+          && e.left.type === 'MemberExpression' && !e.left.computed
+          && e.left.property?.type === 'Identifier' && e.left.property.name === 'length'
+          && isTracker(e.left.object)) {
+        this.emit(`$${e.left.object.name}->clear();`);
+        this.observerTraceStale = false;
+        return;
+      }
+      // The same shapes against a non-tracker array remain JS-only artifacts.
       if (e.type === 'CallExpression' && isMember(e.callee, 'assert', 'compareArray')) {
         this.emitSkipComment(node, 'observer call-order check, tracker is empty in PHP');
         return;
       }
-      // X.splice(...) — clear-the-tracking-array calls.
       if (e.type === 'CallExpression'
           && e.callee.type === 'MemberExpression' && !e.callee.computed
           && e.callee.property?.type === 'Identifier' && e.callee.property.name === 'splice') {
         this.emitSkipComment(node, 'observer tracker reset (no-op in PHP)');
         return;
       }
-      // X.length = N — alternate clear pattern.
       if (e.type === 'AssignmentExpression'
           && e.left.type === 'MemberExpression' && !e.left.computed
           && e.left.property?.type === 'Identifier' && e.left.property.name === 'length') {
@@ -1714,6 +1769,15 @@ class Emitter {
     const opened = this.lines.length > before;
     if (nullSkipForOf) {
       this.emit(`if (${pat} === null) { continue; }`);
+    }
+    // A `{ toString: () => <non-String> }` entry only belongs in a wrong-type table
+    // under JS semantics; in PHP it is an ordinary stringifiable value, so skip it
+    // rather than assert a rejection the language cannot produce.
+    const tableHasNonStringPrimitive =
+      (node.right.type === 'ArrayExpression' && node.right.elements.some(hasNonStringToPrimitive))
+      || (node.right.type === 'Identifier' && this.nonStringPrimitiveArrayVars.has(node.right.name));
+    if (tableHasNonStringPrimitive && subtreeHasAssertThrows(node.body)) {
+      this.emit(`if (${pat} instanceof \\Temporal\\Tests\\Test262\\JsNonStringPrimitive) { continue; }`);
     }
     this.transpileStatement(node.body);
     if (opened) this.lines.push('}'); // always close what was opened
@@ -2224,6 +2288,13 @@ class Emitter {
         const restArgs = this.transpileArgs(rest);
         if (restArgs === null) return null;
         return `TemporalHelpers::${method}(${classRef}, ${restArgs})`;
+      }
+      // The observers record their property-access trace into the array passed as
+      // argument 0. Remember its name so the compareArray / reset statements that
+      // consume it downstream are recognized as trace handling rather than dropped.
+      if (method === 'toPrimitiveObserver' || method === 'propertyBagObserver') {
+        const tracker = node.arguments[0];
+        if (tracker?.type === 'Identifier') this.observerTrackers.add(tracker.name);
       }
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
@@ -2813,6 +2884,68 @@ class Emitter {
     return null;
   }
 
+  /**
+   * Lowers a parameter list that may destructure object arguments.
+   *
+   * `({ a, b = 2 } = {}) => …` becomes a synthetic `$__dpN` parameter plus a prologue
+   * that binds each name through Js::destructure(), which handles the shapes the
+   * argument can arrive as (array, ArrayAccess, stdClass). A default on the pattern
+   * itself becomes the parameter's default; a default on a field becomes a
+   * null-coalesce, matching how array destructuring is lowered elsewhere here — PHP
+   * cannot tell an absent key from an explicit null, and the corpus never relies on
+   * the difference.
+   *
+   * Nested patterns, rest elements, and computed keys stay untranslatable.
+   *
+   * @returns {{params: string, prologue: string[], boundNames: Set<string>}|null}
+   */
+  destructureParams(params) {
+    const prologue = [];
+    const boundNames = new Set();
+    const paramParts = [];
+    for (const [idx, param] of params.entries()) {
+      // `{…} = {}` — a default for the whole pattern.
+      const hasPatternDefault = param.type === 'AssignmentPattern' && param.left?.type === 'ObjectPattern';
+      const p = hasPatternDefault ? param.left : param;
+      if (p.type !== 'ObjectPattern') {
+        paramParts.push(this.transpilePattern(param));
+        if (param.type === 'Identifier') boundNames.add(param.name);
+        continue;
+      }
+      const fields = p.properties.every(pr => pr.type === 'Property' && !pr.computed
+        && pr.key?.type === 'Identifier'
+        && (pr.value?.type === 'Identifier'
+          || (pr.value?.type === 'AssignmentPattern' && pr.value.left?.type === 'Identifier')));
+      if (!fields) {
+        this.emitIncomplete('untranslatable: function parameter ObjectPattern destructuring');
+        return null;
+      }
+      // Only `= {}` is supported as the pattern default: any other default would have
+      // to be destructured too, and the corpus never does that.
+      if (hasPatternDefault
+          && !(param.right?.type === 'ObjectExpression' && param.right.properties.length === 0)) {
+        this.emitIncomplete('untranslatable: function parameter ObjectPattern destructuring');
+        return null;
+      }
+      const tmp = `__dp${idx}`;
+      paramParts.push(hasPatternDefault ? `$${tmp} = []` : `$${tmp}`);
+      boundNames.add(tmp);
+      for (const pr of p.properties) {
+        const withDefault = pr.value.type === 'AssignmentPattern';
+        const name = withDefault ? pr.value.left.name : pr.value.name;
+        let read = `\\Temporal\\Tests\\Test262\\Js::destructure($${tmp}, '${pr.key.name}')`;
+        if (withDefault) {
+          const fallback = this.transpileExpr(pr.value.right);
+          if (fallback === null) return null;
+          read += ` ?? ${fallback}`;
+        }
+        prologue.push(`$${name} = ${read};`);
+        boundNames.add(name);
+      }
+    }
+    return { params: paramParts.join(', '), prologue, boundNames };
+  }
+
   transpileArrow(node) {
     // () => expr  or  (arg) => expr  or  arg => expr
     //
@@ -2820,32 +2953,9 @@ class Emitter {
     // field from a synthetic `$__dpN` parameter via Js::destructure(), which
     // handles the shapes the value can arrive as (array, ArrayAccess, stdClass).
     // Patterns with defaults, nesting, or computed keys stay untranslatable.
-    const destructurePrologue = [];
-    const boundNames = new Set();
-    const paramParts = [];
-    for (const [idx, p] of node.params.entries()) {
-      if (p.type === 'ObjectPattern') {
-        const simple = p.properties.every(pr => pr.type === 'Property' && !pr.computed
-          && pr.key?.type === 'Identifier' && pr.value?.type === 'Identifier');
-        if (!simple) {
-          this.emitIncomplete('untranslatable: function parameter ObjectPattern destructuring');
-          return null;
-        }
-        const tmp = `__dp${idx}`;
-        paramParts.push(`$${tmp}`);
-        boundNames.add(tmp);
-        for (const pr of p.properties) {
-          destructurePrologue.push(
-            `$${pr.value.name} = \\Temporal\\Tests\\Test262\\Js::destructure($${tmp}, '${pr.key.name}');`,
-          );
-          boundNames.add(pr.value.name);
-        }
-      } else {
-        paramParts.push(this.transpilePattern(p));
-        if (p.type === 'Identifier') boundNames.add(p.name);
-      }
-    }
-    const params = paramParts.join(', ');
+    const destructured = this.destructureParams(node.params);
+    if (destructured === null) return null;
+    const { prologue: destructurePrologue, boundNames, params } = destructured;
     if (node.body.type === 'BlockStatement') {
       // Arrow with block body — inline the body statements
       const inner = [];
@@ -3099,16 +3209,23 @@ class Emitter {
     // hit `is_array`, masking the array-side empty-bag path.
     // Spread elements { ...base, key: val } → array_merge($base, ['key' => $val]).
     // Special case (checked first): `{ toString: () => EXPR }` and equivalents are
-    // lowered to a PHP \Stringable. These objects are wrong-type values that get
-    // interpolated into assertion description strings; an array would warn on
-    // stringification. As a \Stringable the value is still not a string (type checks
-    // still throw), but interpolation yields its toString value. Independent of
-    // objectMode — the concern is stringification, not bag-vs-object access.
+    // lowered to a PHP \Stringable, so that interpolating the value into an assertion
+    // description yields its toString value instead of warning the way an array would.
+    // Independent of objectMode — the concern is stringification, not bag-vs-object
+    // access.
+    //
+    // What EXPR returns decides which PHP value is faithful. A String return makes the
+    // JS object satisfy ToPrimitiveAndRequireString, which is exactly what a PHP
+    // \Stringable does. A non-String return does NOT: TC39 rejects it with a TypeError
+    // that PHP cannot reproduce, because `__toString(): string` is engine-enforced.
+    // Those become JsNonStringPrimitive, which the wrong-type loops skip.
     const toStringRet = singleToStringReturnExpr(node);
     if (toStringRet !== null) {
       const ret = this.transpileExpr(toStringRet);
       if (ret !== null) {
-        return 'new class implements \\Stringable { #[\\Override] public function __toString(): string { return (string) (' + ret + '); } }';
+        return returnsStringValue(toStringRet)
+          ? 'new class implements \\Stringable { #[\\Override] public function __toString(): string { return (string) (' + ret + '); } }'
+          : `new \\Temporal\\Tests\\Test262\\JsNonStringPrimitive(${ret})`;
       }
     }
 
@@ -3769,6 +3886,33 @@ function hasMethodShorthand(node) {
  * Anything more complex (extra properties, computed/renamed key, params, a non-trivial
  * body) returns null so the caller falls through to ordinary object handling.
  */
+/** True for a `{ toString: () => <non-String> }` object literal. */
+function hasNonStringToPrimitive(node) {
+  const ret = singleToStringReturnExpr(node);
+  return ret !== null && !returnsStringValue(ret);
+}
+
+/**
+ * Returns true when EXPR — the return value of a fixture's `toString` shorthand —
+ * is statically known to be a JS String. Only the shapes the corpus actually uses
+ * are recognized; anything unrecognized is treated as non-String, which routes the
+ * value to JsNonStringPrimitive and skips it in wrong-type loops rather than
+ * asserting a rejection PHP cannot produce.
+ */
+function returnsStringValue(node) {
+  if (node?.type === 'Literal') return typeof node.value === 'string';
+  if (node?.type === 'TemplateLiteral') return true;
+  // `"a" + x` is a String whenever either side is; JS `+` stringifies the rest.
+  if (node?.type === 'BinaryExpression' && node.operator === '+') {
+    return returnsStringValue(node.left) || returnsStringValue(node.right);
+  }
+  if (node?.type === 'CallExpression'
+      && node.callee?.type === 'Identifier' && node.callee.name === 'String') {
+    return true;
+  }
+  return false;
+}
+
 function singleToStringReturnExpr(node) {
   if (node?.type !== 'ObjectExpression' || node.properties.length !== 1) return null;
   const prop = node.properties[0];
@@ -4855,9 +4999,31 @@ function processFile(jsPath, dataDir, scriptsDir) {
   const observersInUse = /TemporalHelpers\.(toPrimitiveObserver|propertyBagObserver)\b/.test(stripped)
     || /\b(valueOf|toString)\s*\(\s*\)\s*\{/.test(stripped);
 
+  // Tracker names, collected before emitting: a fixture declares `const actual = []`
+  // above the observer call that names it, so the declaration has to know it is a
+  // trace in order to emit an ObserverTrace instead of an array literal.
+  //
+  // The name at the observer call site is not always the declared one — some fixtures
+  // thread the trace through a curried factory, where the call site sees a parameter
+  // (`(calls) => TemporalHelpers.toPrimitiveObserver(calls, …)`). So in a fixture that
+  // uses observers at all, every empty-array declaration is a trace too: an empty
+  // literal is how these fixtures spell "somewhere to collect events", and a genuinely
+  // empty array with another purpose does not appear in the corpus.
+  const observerTrackers = new Set(
+    [...stripped.matchAll(
+      /TemporalHelpers\.(?:toPrimitiveObserver|propertyBagObserver)\s*\(\s*([A-Za-z_$][\w$]*)\s*,/g,
+    )].map(m => m[1]),
+  );
+  if (observerTrackers.size > 0) {
+    for (const m of stripped.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\[\s*\]/g)) {
+      observerTrackers.add(m[1]);
+    }
+  }
+
   const renderPass = (objectMode) => {
     const emitter = new Emitter(stripped, objectMode);
     emitter.observersInUse = observersInUse;
+    emitter.observerTrackers = new Set(observerTrackers);
     if (unsupportedIncludes.length > 0) {
       emitter.emitIncomplete(`needs TemporalHelpers (includes: ${includes.join(', ')})`);
     } else if (parseError !== null) {

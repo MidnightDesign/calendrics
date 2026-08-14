@@ -18,8 +18,8 @@ Assert::throws(\RangeException::class, function () use (&$datetime) { return $da
 Assert::throws(\RangeException::class, function () use (&$datetime) { return $datetime->with((object) ['second' => 41], (object) ['overflow' => 2]); }, 'bigint');
 Assert::throws(\RangeException::class, function () use (&$datetime) { return $datetime->with((object) ['second' => 41], (object) JsUndefined::strip(['overflow' => (object) []])); }, 'plain object');
 $expected = ['get overflow.toString', 'call overflow.toString'];
-$actual = [];
+$actual = new \Temporal\Tests\Test262\ObserverTrace();
 $observer = TemporalHelpers::toPrimitiveObserver($actual, 'constrain', 'overflow');
 $result = $datetime->with((object) ['second' => 41], (object) JsUndefined::strip(['overflow' => $observer]));
 Assert::sameValue($result->epochNanoseconds, 1_000_000_001_987_654_321, 'object with toString');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(actual, expected, "order of operations");
+Assert::compareObserverTrace($actual, $expected, 'order of operations');

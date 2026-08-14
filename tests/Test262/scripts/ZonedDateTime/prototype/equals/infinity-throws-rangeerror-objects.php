@@ -14,9 +14,9 @@ $base = (object) ['year' => 2000, 'month' => 5, 'day' => 2, 'hour' => 15, 'minut
 foreach ([INF, -INF] as $inf) {
 foreach (['year', 'month', 'day', 'hour', 'minute', 'second', 'millisecond', 'microsecond', 'nanosecond'] as $prop) {
 Assert::throws(\RangeException::class, function () use (&$instance, &$base, &$prop, &$inf) { return $instance->equals((object) JsUndefined::strip(array_merge((array) $base, [$prop => $inf]))); }, "{$prop} property cannot be {$inf}");
-$calls = [];
+$calls = new \Temporal\Tests\Test262\ObserverTrace();
 $obj = TemporalHelpers::toPrimitiveObserver($calls, $inf, $prop);
 Assert::throws(\RangeException::class, function () use (&$instance, &$base, &$prop, &$obj) { return $instance->equals((object) JsUndefined::strip(array_merge((array) $base, [$prop => $obj]))); }, '');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(calls, [`get ${prop}.valueOf`, `call ${prop}.valueOf`], "it fails after fetching the primitive value");
+Assert::compareObserverTrace($calls, ["get {$prop}.valueOf", "call {$prop}.valueOf"], 'it fails after fetching the primitive value');
 }
 }

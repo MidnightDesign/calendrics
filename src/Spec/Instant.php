@@ -495,14 +495,8 @@ final class Instant implements Stringable
      * @throws RangeError if options are invalid.
      * @throws TypeError if the timeZone option is a non-string.
      */
-    public function toString(array|object|null $options = null): string
+    public function toString(mixed $options = null): string
     {
-        // Read "timeZone" via the faithful TC39 Get(O, P) helper on the ORIGINAL
-        // bag (before normalizeOptions snapshots it) so that an accessor getter —
-        // used by test262's positive-probe `{ get timeZone(){ throw } }` — fires on
-        // read. normalizeOptions uses get_object_vars(), which never triggers __get.
-        // The resulting value is validated below exactly as before.
-        $timeZoneRaw = $options === null ? Options::ABSENT : Options::bagGet($options, 'timeZone');
         $options = Options::normalizeOptions($options, [
             'fractionalSecondDigits',
             'roundingMode',
@@ -546,8 +540,10 @@ final class Instant implements Stringable
         }
 
         // timeZone: must be a string; non-string (including null) → TypeError.
-        // $timeZoneRaw was read from the original bag above (firing any accessor
-        // getter); ABSENT means the property was not present.
+        // Read last, matching the order TC39 prescribes — the snapshot above fired any
+        // accessor getter in that same order.
+        /** @var mixed $timeZoneRaw */
+        $timeZoneRaw = array_key_exists('timeZone', $options) ? $options['timeZone'] : Options::ABSENT;
         $hasTimeZone = $timeZoneRaw !== Options::ABSENT;
         if ($hasTimeZone) {
             if (!is_string($timeZoneRaw)) {
@@ -1100,7 +1096,7 @@ final class Instant implements Stringable
      * @param array<array-key, mixed>|object|null $options
      * @psalm-api used by test262 scripts
      */
-    public function since(string|object $other, array|object|null $options = null): Duration
+    public function since(string|object $other, mixed $options = null): Duration
     {
         $otherInst = $other instanceof self ? $other : self::coerceToInstant($other);
         [$aSec, $aSubNs] = $this->epochParts();
@@ -1117,7 +1113,7 @@ final class Instant implements Stringable
      * @param array<array-key, mixed>|object|null $options
      * @psalm-api used by test262 scripts
      */
-    public function until(string|object $other, array|object|null $options = null): Duration
+    public function until(string|object $other, mixed $options = null): Duration
     {
         $otherInst = $other instanceof self ? $other : self::coerceToInstant($other);
         [$aSec, $aSubNs] = $otherInst->epochParts();

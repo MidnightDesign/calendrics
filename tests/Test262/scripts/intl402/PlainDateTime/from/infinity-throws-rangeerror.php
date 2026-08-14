@@ -13,9 +13,9 @@ $base = ['era' => 'ad', 'month' => 5, 'day' => 2, 'hour' => 15, 'calendar' => 'g
 foreach ([INF, -INF] as $inf) {
 foreach (['constrain', 'reject'] as $overflow) {
 Assert::throws(\RangeException::class, function () use (&$base, &$inf, &$overflow) { return \Temporal\Spec\PlainDateTime::from(JsUndefined::strip(array_merge($base, ['eraYear' => $inf])), JsUndefined::strip(['overflow' => $overflow])); }, "eraYear property cannot be {$inf} (overflow {$overflow}");
-$calls = [];
+$calls = new \Temporal\Tests\Test262\ObserverTrace();
 $obj = TemporalHelpers::toPrimitiveObserver($calls, $inf, 'eraYear');
 Assert::throws(\RangeException::class, function () use (&$base, &$obj, &$overflow) { return \Temporal\Spec\PlainDateTime::from(JsUndefined::strip(array_merge($base, ['eraYear' => $obj])), JsUndefined::strip(['overflow' => $overflow])); }, '');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(calls, ["get eraYear.valueOf", "call eraYear.valueOf"], "it fails after fetching the primitive value");
+Assert::compareObserverTrace($calls, ['get eraYear.valueOf', 'call eraYear.valueOf'], 'it fails after fetching the primitive value');
 }
 }

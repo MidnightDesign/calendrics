@@ -14,10 +14,10 @@ foreach ([INF, -INF] as $inf) {
 foreach (['year', 'month', 'day'] as $prop) {
 foreach (['constrain', 'reject'] as $overflow) {
 Assert::throws(\RangeException::class, function () use (&$base, &$prop, &$inf, &$overflow) { return \Temporal\Spec\PlainDate::from((object) JsUndefined::strip(array_merge((array) $base, [$prop => $inf])), (object) JsUndefined::strip(['overflow' => $overflow])); }, "{$prop} property cannot be {$inf} (overflow {$overflow}");
-$calls = [];
+$calls = new \Temporal\Tests\Test262\ObserverTrace();
 $obj = TemporalHelpers::toPrimitiveObserver($calls, $inf, $prop);
 Assert::throws(\RangeException::class, function () use (&$base, &$prop, &$obj, &$overflow) { return \Temporal\Spec\PlainDate::from((object) JsUndefined::strip(array_merge((array) $base, [$prop => $obj])), (object) JsUndefined::strip(['overflow' => $overflow])); }, '');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(calls, [`get ${prop}.valueOf`, `call ${prop}.valueOf`], "it fails after fetching the primitive value");
+Assert::compareObserverTrace($calls, ["get {$prop}.valueOf", "call {$prop}.valueOf"], 'it fails after fetching the primitive value');
 }
 }
 }

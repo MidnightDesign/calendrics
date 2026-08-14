@@ -529,21 +529,13 @@ final class PlainDateTime implements Stringable
             $year = CalendarMath::toFiniteInt($fields['year'], 'PlainDateTime::with() year');
         }
 
-        $month = $this->isoMonth;
         $hasMonth = array_key_exists('month', $fields);
         $hasMonthCode = array_key_exists('monthCode', $fields);
-        if ($hasMonthCode) {
-            // MonthCode::validate: non-string TYPE => TypeError, ill-formed STRING =>
-            // RangeError (type-then-syntax, before month suitability is resolved).
-            $month = CalendarMath::monthCodeToMonth(MonthCode::validate($fields['monthCode']));
-        }
-        if ($hasMonth) {
-            $newMonth = CalendarMath::toFiniteInt($fields['month'], 'PlainDateTime::with() month');
-            if ($hasMonthCode && $newMonth !== $month) {
-                throw new RangeError('Conflicting month and monthCode fields.');
-            }
-            $month = $newMonth;
-        }
+        // MonthCode::validate is field preparation: TYPE (non-stringifiable => TypeError)
+        // then SYNTAX (ill-formed => RangeError). Whether the code names a month this
+        // calendar has is CalendarDateFromFields, resolved after the options are read.
+        $monthCode = $hasMonthCode ? MonthCode::validate($fields['monthCode']) : null;
+        $newMonth = $hasMonth ? CalendarMath::toFiniteInt($fields['month'], 'PlainDateTime::with() month') : null;
 
         $day = $this->isoDay;
         if (array_key_exists('day', $fields)) {
@@ -553,9 +545,11 @@ final class PlainDateTime implements Stringable
         // Merge time fields.
         [$h, $min, $sec, $ms, $us, $ns] = $this->mergeTimeFields($fields);
 
-        // month < 1 and day < 1 are always invalid (cannot constrain below minimum).
-        if ($month < 1) {
-            throw new RangeError("Invalid month {$month}: must be at least 1.");
+        // `month` and `day` are read with ToPositiveIntegerWithTruncation, so a
+        // non-positive value is rejected during field preparation — before the options
+        // are read. (Below the minimum there is nothing to constrain to, either.)
+        if ($newMonth !== null && $newMonth < 1) {
+            throw new RangeError("Invalid month {$newMonth}: must be at least 1.");
         }
         if ($day < 1) {
             throw new RangeError("Invalid day {$day}: must be at least 1.");
@@ -564,6 +558,17 @@ final class PlainDateTime implements Stringable
         // GetOptionsObject + GetTemporalOverflowOption: explicit null / primitive /
         // Symbol => TypeError; omitted ([]) defaults to 'constrain'.
         $overflow = Options::overflowFromValue($options);
+
+        $month = $this->isoMonth;
+        if ($monthCode !== null) {
+            $month = CalendarMath::monthCodeToMonth($monthCode);
+        }
+        if ($newMonth !== null) {
+            if ($monthCode !== null && $newMonth !== $month) {
+                throw new RangeError('Conflicting month and monthCode fields.');
+            }
+            $month = $newMonth;
+        }
 
         if ($overflow === 'constrain') {
             /**
@@ -745,7 +750,7 @@ final class PlainDateTime implements Stringable
      * @param array<array-key, mixed>|object                 $options ['overflow' => 'constrain'|'reject']
      * @psalm-api
      */
-    public function add(string|array|object $duration, array|object $options = []): self
+    public function add(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return $this->addDuration(1, $dur, $options);
@@ -758,7 +763,7 @@ final class PlainDateTime implements Stringable
      * @param array<array-key, mixed>|object                 $options ['overflow' => 'constrain'|'reject']
      * @psalm-api
      */
-    public function subtract(string|array|object $duration, array|object $options = []): self
+    public function subtract(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return $this->addDuration(-1, $dur, $options);
@@ -773,7 +778,7 @@ final class PlainDateTime implements Stringable
      * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      * @psalm-api
      */
-    public function since(string|array|object $other, array|object|null $options = null): Duration
+    public function since(string|array|object $other, mixed $options = null): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -791,7 +796,7 @@ final class PlainDateTime implements Stringable
      * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      * @psalm-api
      */
-    public function until(string|array|object $other, array|object|null $options = null): Duration
+    public function until(string|array|object $other, mixed $options = null): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -960,7 +965,7 @@ final class PlainDateTime implements Stringable
      * @psalm-api
      */
     #[\Override]
-    public function toString(array|object|null $options = []): string
+    public function toString(mixed $options = []): string
     {
         // GetOptionsObject: PHP null (the spec layer's representation of an omitted/
         // `undefined` options argument) resolves to the empty-array default; a Symbol
@@ -1181,7 +1186,7 @@ final class PlainDateTime implements Stringable
      *                                  or the resulting instant is out of range.
      * @psalm-api
      */
-    public function toZonedDateTime(string $timeZone, array|object|null $options = []): ZonedDateTime
+    public function toZonedDateTime(string $timeZone, mixed $options = []): ZonedDateTime
     {
         // GetOptionsObject: PHP null (the spec layer's representation of an omitted/
         // `undefined` options argument) resolves to the empty-array default; a Symbol
