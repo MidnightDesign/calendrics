@@ -756,7 +756,22 @@ final class Duration implements Stringable
                     throw new TypeError('Duration::total() requires a non-undefined options argument.');
                 }
             }
-            $totalOf = Options::requireObject($totalOf, ['relativeTo', 'unit']);
+            // GetTemporalRelativeToOption (step 5) precedes GetTemporalUnitValuedOption
+            // (step 7), and it CONVERTS what it reads — so a property-bag relativeTo is
+            // walked field by field before `unit` is so much as looked at.
+            $bag = Options::asOptionsBag($totalOf);
+            /** @var mixed $relativeTo */
+            $relativeTo = RelativeTo::readOption($bag);
+            /** @var mixed $unitRaw */
+            $unitRaw = Options::bagGet($bag, 'unit');
+
+            $totalOf = is_array($bag) ? $bag : [];
+            if ($relativeTo !== Options::ABSENT) {
+                $totalOf = array_merge($totalOf, ['relativeTo' => $relativeTo]);
+            }
+            if ($unitRaw !== Options::ABSENT) {
+                $totalOf = array_merge($totalOf, ['unit' => $unitRaw]);
+            }
         }
 
         if (is_array($totalOf)) {

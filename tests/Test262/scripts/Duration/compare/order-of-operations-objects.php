@@ -9,4 +9,47 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 use Temporal\Tests\Test262\TemporalHelpers;
-Assert::incomplete('untranslatable: Object.defineProperty');
+// JS-only (checkTemporalObject() arms negative probes that are a no-op in PHP): function checkTemporalObject(object) { ["year", "month", "monthCode", "day", "hour", "minute", "second", "millisecond", "microsecond", "nanosecond"].forEach((p…
+$createOptionsObserver = function ($relativeTo) use (&$actual) {
+return TemporalHelpers::propertyBagObserver($actual, (object) JsUndefined::strip(['relativeTo' => $relativeTo]), 'options');
+};
+$createDurationPropertyBagObserver = function ($name, $y, $mon, $w, $d, $h, $min, $s, $ms, $µs, $ns) use (&$actual) {
+return TemporalHelpers::propertyBagObserver($actual, (object) JsUndefined::strip(['years' => $y, 'months' => $mon, 'weeks' => $w, 'days' => $d, 'hours' => $h, 'minutes' => $min, 'seconds' => $s, 'milliseconds' => $ms, 'microseconds' => $µs, 'nanoseconds' => $ns]), $name);
+};
+$expectedOpsForPrimitiveOptions = ['get one.days', 'get one.days.valueOf', 'call one.days.valueOf', 'get one.hours', 'get one.hours.valueOf', 'call one.hours.valueOf', 'get one.microseconds', 'get one.microseconds.valueOf', 'call one.microseconds.valueOf', 'get one.milliseconds', 'get one.milliseconds.valueOf', 'call one.milliseconds.valueOf', 'get one.minutes', 'get one.minutes.valueOf', 'call one.minutes.valueOf', 'get one.months', 'get one.months.valueOf', 'call one.months.valueOf', 'get one.nanoseconds', 'get one.nanoseconds.valueOf', 'call one.nanoseconds.valueOf', 'get one.seconds', 'get one.seconds.valueOf', 'call one.seconds.valueOf', 'get one.weeks', 'get one.weeks.valueOf', 'call one.weeks.valueOf', 'get one.years', 'get one.years.valueOf', 'call one.years.valueOf', 'get two.days', 'get two.days.valueOf', 'call two.days.valueOf', 'get two.hours', 'get two.hours.valueOf', 'call two.hours.valueOf', 'get two.microseconds', 'get two.microseconds.valueOf', 'call two.microseconds.valueOf', 'get two.milliseconds', 'get two.milliseconds.valueOf', 'call two.milliseconds.valueOf', 'get two.minutes', 'get two.minutes.valueOf', 'call two.minutes.valueOf', 'get two.months', 'get two.months.valueOf', 'call two.months.valueOf', 'get two.nanoseconds', 'get two.nanoseconds.valueOf', 'call two.nanoseconds.valueOf', 'get two.seconds', 'get two.seconds.valueOf', 'call two.seconds.valueOf', 'get two.weeks', 'get two.weeks.valueOf', 'call two.weeks.valueOf', 'get two.years', 'get two.years.valueOf', 'call two.years.valueOf'];
+$expected = array_merge($expectedOpsForPrimitiveOptions, ['get options.relativeTo']);
+$actual = new \Temporal\Tests\Test262\ObserverTrace();
+\Temporal\Spec\Duration::compare($createDurationPropertyBagObserver('one', 0, 0, 0, 7), $createDurationPropertyBagObserver('two', 0, 0, 0, 6), $createOptionsObserver());
+Assert::compareObserverTrace($actual, $expected, 'order of operations');
+$actual->clear();
+// JS-only (JS rejects non-object options via ToObject; PHP accepts null as "absent"): assert.throws(TypeError, () => Temporal.Duration.compare( createDurationPropertyBagObserver("one", 0, 0, 0, 7), createDurationPropertyBagObserver("two", 0, 0, …
+// JS-only (trace covers a call skipped above, so the tracker is empty here): assert.compareArray(actual, expectedOpsForPrimitiveOptions, "duration fields are read before TypeError is thrown for primitive options");
+$actual->clear();
+$pd = new \Temporal\Spec\PlainDate(2026, 3, 6);
+// JS-only (arms negative probes on a Temporal instance; PHP cannot arm one and never reads through one): checkTemporalObject(pd);
+\Temporal\Spec\Duration::compare($createDurationPropertyBagObserver('one', 0, 0, 0, 0, 7), $createDurationPropertyBagObserver('two', 0, 0, 0, 0, 6), $createOptionsObserver($pd));
+Assert::compareObserverTrace($actual, $expected, 'relativeTo PlainDate should not read property bag fields');
+$actual->clear();
+$zdt = new \Temporal\Spec\ZonedDateTime(1_772_751_600_000_000_000, 'UTC');
+// JS-only (arms negative probes on a Temporal instance; PHP cannot arm one and never reads through one): checkTemporalObject(zdt);
+\Temporal\Spec\Duration::compare($createDurationPropertyBagObserver('one', 0, 0, 0, 0, 7), $createDurationPropertyBagObserver('two', 0, 0, 0, 0, 6), $createOptionsObserver($zdt));
+Assert::compareObserverTrace($actual, $expected, 'relativeTo ZonedDateTime should not read property bag fields');
+$actual->clear();
+$baseExpectedOpsWithRelativeTo = array_merge($expected, ['get options.relativeTo.calendar', 'get options.relativeTo.day', 'get options.relativeTo.day.valueOf', 'call options.relativeTo.day.valueOf', 'get options.relativeTo.hour']);
+$expectedOpsForPlainRelativeTo = array_merge($baseExpectedOpsWithRelativeTo, ['get options.relativeTo.microsecond', 'get options.relativeTo.millisecond', 'get options.relativeTo.minute', 'get options.relativeTo.month', 'get options.relativeTo.month.valueOf', 'call options.relativeTo.month.valueOf', 'get options.relativeTo.monthCode', 'get options.relativeTo.monthCode.toString', 'call options.relativeTo.monthCode.toString', 'get options.relativeTo.nanosecond', 'get options.relativeTo.offset', 'get options.relativeTo.second', 'get options.relativeTo.timeZone', 'get options.relativeTo.year', 'get options.relativeTo.year.valueOf', 'call options.relativeTo.year.valueOf']);
+$plainRelativeTo = TemporalHelpers::propertyBagObserver($actual, (object) ['year' => 2001, 'month' => 5, 'monthCode' => 'M05', 'day' => 2, 'calendar' => 'iso8601'], 'options.relativeTo', ['calendar']);
+\Temporal\Spec\Duration::compare($createDurationPropertyBagObserver('one', 0, 0, 0, 7), $createDurationPropertyBagObserver('two', 0, 0, 0, 6), $createOptionsObserver($plainRelativeTo));
+Assert::compareObserverTrace($actual, $expectedOpsForPlainRelativeTo, 'order of operations with PlainDate relativeTo and no calendar units');
+$actual->clear();
+$expectedOpsForZonedRelativeTo = array_merge($baseExpectedOpsWithRelativeTo, ['get options.relativeTo.hour.valueOf', 'call options.relativeTo.hour.valueOf', 'get options.relativeTo.microsecond', 'get options.relativeTo.microsecond.valueOf', 'call options.relativeTo.microsecond.valueOf', 'get options.relativeTo.millisecond', 'get options.relativeTo.millisecond.valueOf', 'call options.relativeTo.millisecond.valueOf', 'get options.relativeTo.minute', 'get options.relativeTo.minute.valueOf', 'call options.relativeTo.minute.valueOf', 'get options.relativeTo.month', 'get options.relativeTo.month.valueOf', 'call options.relativeTo.month.valueOf', 'get options.relativeTo.monthCode', 'get options.relativeTo.monthCode.toString', 'call options.relativeTo.monthCode.toString', 'get options.relativeTo.nanosecond', 'get options.relativeTo.nanosecond.valueOf', 'call options.relativeTo.nanosecond.valueOf', 'get options.relativeTo.offset', 'get options.relativeTo.offset.toString', 'call options.relativeTo.offset.toString', 'get options.relativeTo.second', 'get options.relativeTo.second.valueOf', 'call options.relativeTo.second.valueOf', 'get options.relativeTo.timeZone', 'get options.relativeTo.year', 'get options.relativeTo.year.valueOf', 'call options.relativeTo.year.valueOf']);
+$zonedRelativeTo = TemporalHelpers::propertyBagObserver($actual, (object) ['year' => 2001, 'month' => 5, 'monthCode' => 'M05', 'day' => 2, 'hour' => 6, 'minute' => 54, 'second' => 32, 'millisecond' => 987, 'microsecond' => 654, 'nanosecond' => 321, 'offset' => '+00:00', 'calendar' => 'iso8601', 'timeZone' => 'UTC'], 'options.relativeTo', ['calendar', 'timeZone']);
+\Temporal\Spec\Duration::compare($createDurationPropertyBagObserver('one', 0, 0, 0, 7), $createDurationPropertyBagObserver('two', 0, 0, 0, 6), $createOptionsObserver($zonedRelativeTo));
+Assert::compareObserverTrace($actual, $expectedOpsForZonedRelativeTo, 'order of operations with ZonedDateTime relativeTo and no calendar units except days');
+$actual->clear();
+\Temporal\Spec\Duration::compare($createDurationPropertyBagObserver('one', 0, 0, 0, 0, 7), $createDurationPropertyBagObserver('two', 0, 0, 0, 0, 6), $createOptionsObserver($zonedRelativeTo));
+Assert::compareObserverTrace($actual, $expectedOpsForZonedRelativeTo, 'order of operations with ZonedDateTime relativeTo and only time units');
+$actual->clear();
+\Temporal\Spec\Duration::compare($createDurationPropertyBagObserver('one', 1, 1, 1), $createDurationPropertyBagObserver('two', 1, 1, 1, 1), $createOptionsObserver($zonedRelativeTo));
+Assert::compareObserverTrace($actual, $expectedOpsForZonedRelativeTo, 'order of operations with ZonedDateTime relativeTo and calendar units');
+$actual->clear();
+\PHPUnit\Framework\Assert::assertTrue(true, 'Script completed without throwing');

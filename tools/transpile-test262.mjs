@@ -565,6 +565,9 @@ class Emitter {
     // tracker against the JS reads, so it is skipped until the next reset — unlike the
     // assertions around it, which still describe calls that did happen.
     this.observerTraceStale = false;
+    // Names of helper functions whose body only arms throwing getters on their argument
+    // (see isNegativeProbeInstaller). Calls to them are dropped with the declaration.
+    this.negativeProbeInstallers = new Set();
     // Maps `const X = [...]` Identifier names to the literal element count.
     // Lets the observer-mode skip rule recognize `new Ctor(...X)` patterns where
     // X was statically constructed with too few elements (e.g. PlainMonthDay's
@@ -652,11 +655,16 @@ class Emitter {
    * otherwise discard via Assert::incomplete + PHPUnit's coverage discard for
    * incomplete tests). Keeps the generated PHP traceable to the source JS.
    */
-  emitSkipComment(node, reason) {
+  /**
+   * @param invalidatesTrace Pass false for a statement whose ONLY effect in JS is to
+   *   arm a probe that PHP cannot arm — dropping it leaves the recorded trace exactly
+   *   as faithful as before, so the assertions that follow still mean something.
+   */
+  emitSkipComment(node, reason, invalidatesTrace = true) {
     // A dropped statement in an observer fixture is usually a call the trace was
     // meant to cover, so anything asserted about the tracker before its next reset
     // would be comparing against reads that never happened.
-    if (this.observersInUse) this.observerTraceStale = true;
+    if (this.observersInUse && invalidatesTrace) this.observerTraceStale = true;
     if (!node || typeof node.start !== 'number' || typeof node.end !== 'number') {
       this.emit(`// JS-only (${reason}): statement omitted`);
       return;
@@ -1104,6 +1112,15 @@ class Emitter {
       this.emitIncomplete('untranslatable: anonymous FunctionDeclaration');
       return;
     }
+    // A helper that exists only to arm throwing getters on its argument — the
+    // `checkTemporalObject(obj)` shape. PHP cannot arm them and never reads through
+    // one, so the function has nothing to do; record the name so its call sites are
+    // dropped too, and emit no closure.
+    if (isNegativeProbeInstaller(node.body)) {
+      this.negativeProbeInstallers.add(name);
+      this.emitSkipComment(node, `${name}() arms negative probes that are a no-op in PHP`, false);
+      return;
+    }
     const destructured = this.destructureParams(node.params);
     if (destructured === null) return;
     const { params, prologue, boundNames: paramNames } = destructured;
@@ -1401,7 +1418,39 @@ class Emitter {
       // The descriptor object is a data object with a `get`/`set` member holding a
       // function (acorn parses `{ get() {…} }` as a method-shorthand Property named
       // "get", kind 'init' — NOT a kind:'get' accessor). Match by key name.
-      this.emitSkipComment(node, 'JS-only observability getter on Temporal arg (PHP reads internal slot directly, getter never fires)');
+      this.emitSkipComment(
+        node,
+        'JS-only observability getter on Temporal arg (PHP reads internal slot directly, getter never fires)',
+        false,
+      );
+      return;
+    }
+    // TemporalHelpers.observeProperty(trace, temporalInstance, name, value, "this") —
+    // a NEGATIVE probe: it arms an accessor on the instance so that an implementation
+    // wrongly reading the public property instead of its internal slot would show up
+    // in the trace. The fixtures' expected traces contain no such event, i.e. the
+    // assertion is that it never fires. PHP cannot arm one — these are final classes
+    // whose property reads never dispatch through a user-installed accessor — and the
+    // spec layer reads its own state directly, so the probe is a no-op either way.
+    if (node.expression.type === 'CallExpression'
+        && isMember(node.expression.callee, 'TemporalHelpers', 'observeProperty')) {
+      this.emitSkipComment(
+        node,
+        'negative probe on a Temporal instance; PHP cannot arm one and never reads through one',
+        false,
+      );
+      return;
+    }
+    // A call to a function whose whole body arms such probes — the `checkTemporalObject`
+    // helper the Duration order-of-operations fixtures use. Same reasoning.
+    if (node.expression.type === 'CallExpression'
+        && node.expression.callee.type === 'Identifier'
+        && this.negativeProbeInstallers.has(node.expression.callee.name)) {
+      this.emitSkipComment(
+        node,
+        'arms negative probes on a Temporal instance; PHP cannot arm one and never reads through one',
+        false,
+      );
       return;
     }
     const php = this.transpileExpr(node.expression);
@@ -2904,12 +2953,17 @@ class Emitter {
     const boundNames = new Set();
     const paramParts = [];
     for (const [idx, param] of params.entries()) {
-      // `{…} = {}` — a default for the whole pattern.
-      const hasPatternDefault = param.type === 'AssignmentPattern' && param.left?.type === 'ObjectPattern';
-      const p = hasPatternDefault ? param.left : param;
+      // Strip a default off the parameter — `{…} = {}` or plain `x = 1` — so the rest
+      // of the loop sees the pattern itself.
+      const p = param.type === 'AssignmentPattern' ? param.left : param;
+      const hasPatternDefault = param.type === 'AssignmentPattern' && p.type === 'ObjectPattern';
       if (p.type !== 'ObjectPattern') {
         paramParts.push(this.transpilePattern(param));
-        if (param.type === 'Identifier') boundNames.add(param.name);
+        // `p` is the pattern with any default stripped, so a parameter written
+        // `x = default` still registers as bound — otherwise it would be treated as a
+        // free variable and captured in the closure's `use` clause as well as declared
+        // as a parameter, which PHP rejects outright.
+        if (p.type === 'Identifier') boundNames.add(p.name);
         continue;
       }
       const fields = p.properties.every(pr => pr.type === 'Property' && !pr.computed
@@ -3886,6 +3940,51 @@ function hasMethodShorthand(node) {
  * Anything more complex (extra properties, computed/renamed key, params, a non-trivial
  * body) returns null so the caller falls through to ordinary object handling.
  */
+/**
+ * True when a function body does nothing but arm throwing getters on its argument —
+ * the `checkTemporalObject` shape the Duration order-of-operations fixtures use:
+ *
+ *   function checkTemporalObject(object) {
+ *     ["year", …].forEach((property) => {
+ *       Object.defineProperty(object, property, { get() { throw new Test262Error(…) } });
+ *     });
+ *   }
+ *
+ * Such a helper asserts a NEGATIVE: the property must never be read. PHP cannot arm
+ * the getter (these are final classes) and never reads through one, so the whole
+ * helper is inert and both it and its call sites are dropped.
+ *
+ * Requiring every statement to match keeps this from swallowing a helper that also
+ * does something observable.
+ */
+function isNegativeProbeInstaller(body) {
+  if (body?.type !== 'BlockStatement' || body.body.length === 0) return false;
+  return body.body.every(stmt => {
+    if (stmt.type !== 'ExpressionStatement') return false;
+    const e = stmt.expression;
+    if (e?.type !== 'CallExpression') return false;
+    // `<array>.forEach(<arrow>)` — recurse into the arrow's body.
+    if (e.callee?.type === 'MemberExpression' && !e.callee.computed
+        && e.callee.property?.type === 'Identifier' && e.callee.property.name === 'forEach') {
+      const cb = e.arguments[0];
+      if (cb?.type !== 'ArrowFunctionExpression' && cb?.type !== 'FunctionExpression') return false;
+      return isNegativeProbeInstaller(cb.body);
+    }
+    return isThrowingGetterDefineProperty(e);
+  });
+}
+
+/** True for `Object.defineProperty(x, k, { get() { throw … } })`. */
+function isThrowingGetterDefineProperty(node) {
+  if (!isMember(node.callee, 'Object', 'defineProperty') || node.arguments.length < 3) return false;
+  const descriptor = node.arguments[2];
+  if (descriptor?.type !== 'ObjectExpression') return false;
+  return descriptor.properties.some(p =>
+    p.type === 'Property' && !p.computed && p.key?.type === 'Identifier' && p.key.name === 'get'
+    && p.value?.body?.type === 'BlockStatement'
+    && p.value.body.body.every(s => s.type === 'ThrowStatement'));
+}
+
 /** True for a `{ toString: () => <non-String> }` object literal. */
 function hasNonStringToPrimitive(node) {
   const ret = singleToStringReturnExpr(node);

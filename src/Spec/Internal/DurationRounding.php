@@ -55,13 +55,24 @@ final class DurationRounding
                     throw new TypeError('Duration::round() requires a non-undefined options argument.');
                 }
             }
-            $roundTo = Options::requireObject($roundTo, [
-                'largestUnit',
-                'relativeTo',
+            // The five options are read alphabetically, but `relativeTo` is not merely
+            // read: GetTemporalRelativeToOption CONVERTS it where it stands, walking a
+            // property bag field by field before `roundingIncrement` is looked at. So
+            // the snapshot is split around it rather than taken in one pass.
+            $bag = Options::asOptionsBag($roundTo);
+            $roundTo = Options::bagSnapshot($bag, ['largestUnit']);
+            /** @var mixed $relativeTo */
+            $relativeTo = RelativeTo::readOption($bag);
+            $roundTo = array_merge($roundTo, Options::bagSnapshot($bag, [
                 'roundingIncrement',
                 'roundingMode',
                 'smallestUnit',
-            ]);
+            ]));
+            // Merged last: an ARRAY bag snapshots as itself, so an earlier merge would
+            // be overwritten by the raw value the second snapshot carries along.
+            if ($relativeTo !== Options::ABSENT) {
+                $roundTo = array_merge($roundTo, ['relativeTo' => $relativeTo]);
+            }
         }
 
         /** @var mixed $suRaw */

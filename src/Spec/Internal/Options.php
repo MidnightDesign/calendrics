@@ -310,6 +310,33 @@ final class Options
     }
 
     /**
+     * TC39 GetOptionsObject with NO reads: validates that the argument is an options
+     * object and hands it back untouched.
+     *
+     * {@see self::requireObject()} snapshots every recognized name in one pass, which
+     * is right when an operation reads its options as a block. It is wrong when the
+     * spec interleaves a read with the CONVERSION of what it read — `total()` and
+     * `round()` resolve `relativeTo` completely, property bag and all, before they so
+     * much as look at the next option. Those callers take the bag from here and drive
+     * the reads themselves with {@see self::bagGet()} / {@see self::bagSnapshot()}.
+     *
+     * @return array<array-key, mixed>|object The argument, unread.
+     * @throws TypeError if $options is null, a non-object primitive, or a Symbol sentinel.
+     */
+    public static function asOptionsBag(mixed $options): array|object
+    {
+        if ($options === null || !is_array($options) && !is_object($options)) {
+            throw new TypeError('options must be an object.');
+        }
+        if ($options instanceof Stringable) {
+            // JsSymbol sentinel: __toString throws. Must propagate.
+            (string) $options;
+        }
+
+        return $options;
+    }
+
+    /**
      * TC39 GetOptionsObject applied to an OPTIONAL options argument: null / omitted
      * means "use defaults" (returns an empty array), but a Stringable sentinel that
      * behaves like a Symbol (its __toString throws) is still a TypeError.  Ordinary

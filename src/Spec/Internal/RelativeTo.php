@@ -53,6 +53,39 @@ final class RelativeTo
     ];
 
     /**
+     * TC39 GetTemporalRelativeToOption: reads `relativeTo` off an options bag and
+     * converts it, before the caller reads any other option.
+     *
+     * The conversion has to happen here rather than wherever the anchor is eventually
+     * consumed, because it is observable: a property-bag `relativeTo` is itself read
+     * field by field, and the spec puts those reads between `get options.relativeTo`
+     * and the next option's read. Doing it late also let the bag be normalized more
+     * than once on some paths, firing every accessor twice.
+     *
+     * A `PlainDate` / `ZonedDateTime` anchor is returned untouched: those take the
+     * fast path off their internal slots and are never read as property bags. So are
+     * strings, which are parsed later.
+     *
+     * @param array<array-key, mixed>|object $options
+     * @return mixed The converted anchor, or {@see Options::ABSENT} when not present.
+     */
+    public static function readOption(array|object $options): mixed
+    {
+        /** @var mixed $raw */
+        $raw = Options::bagGet($options, 'relativeTo');
+        if (
+            !is_object($raw)
+            || $raw instanceof PlainDate
+            || $raw instanceof ZonedDateTime
+            || $raw instanceof \Stringable
+        ) {
+            return $raw;
+        }
+
+        return self::normalizeBag($raw);
+    }
+
+    /**
      * Reports whether a valid, non-null `relativeTo` is present in the options,
      * throwing if one is present but malformed.
      *
