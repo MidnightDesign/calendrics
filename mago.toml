@@ -31,35 +31,35 @@ threshold = 140
 level = "error"
 threshold = 35
 
-# Class-level cyclomatic complexity on Duration (~700), ZonedDateTime (~684),
-# and PlainDateTime (~330) is dominated by the full TC39 rounding/diff/add matrix
-# across 10 duration fields × 9 rounding modes × signed/IANA-vs-offset branches.
-# These numbers reflect the inherent TC39 spec structure; splitting them would
-# require moving logic across method boundaries the spec keeps together.
+# PlainDateTime now carries the highest class-level cyclomatic complexity (just under
+# 280), dominated by the TC39 parse/round/diff matrix across 9 rounding modes and the
+# signed branches. Duration and ZonedDateTime used to sit near 700 and were brought under
+# this by moving their engines into Temporal\Spec\Internal\ collaborators — so treat this
+# as a ratchet, not a ceiling: it should only ever move down.
 [linter.rules.cyclomatic-complexity]
 level = "warning"
-threshold = 750
+threshold = 300
 
-# Kan-defect scores are dominated by control-flow density across the 10 Duration
-# fields × 9 TC39 rounding modes × sign handling matrix in Duration, ZonedDateTime,
-# and PlainDateTime. These classes implement the TC39 spec 1:1 and cannot be split
-# without moving logic across method boundaries that the spec keeps together.
+# Kan-defect measures control-flow density; the highest remaining score is between 12 and
+# 16, again on the classes that still hold a full TC39 algorithm inline. Same ratchet rule
+# as above.
 [linter.rules.kan-defect]
 level = "warning"
-threshold = 35.0
+threshold = 20.0
 
 # Duration.assertDuration-style test helpers assert all 10 Duration fields in a
 # single call; ZonedDateTime::with() accepts 13 TC39-spec date/time/calendar
-# fields plus 3 option enums; localToZdt receives the full 6-field local
-# date/time plus timezone and option bag. These are inherent to the TC39 spec
-# and cannot be split without making the call sites worse.
+# fields plus 3 option enums; ZonedFields::fromLocal() receives the full 6-field
+# local date/time plus timezone, calendar and disambiguation. These are inherent
+# to the TC39 spec and cannot be split without making the call sites worse.
 [linter.rules.excessive-parameter-list]
 level = "warning"
 threshold = 16
 
 # Halstead volumes/effort are dominated by the TC39 parsing, add/subtract, and
-# round/diff algorithms in Duration, ZonedDateTime, and PlainDateTime, which must
-# handle all 10 duration fields × 9 rounding modes × signed paths in one call.
+# round/diff algorithms in PlainDateTime and in the Temporal\Spec\Internal\
+# collaborators, which must handle all 10 duration fields × 9 rounding modes ×
+# signed paths in one call.
 # Thresholds are sized to accommodate spec-level algorithms without masking
 # genuinely out-of-control methods.
 [linter.rules.halstead]

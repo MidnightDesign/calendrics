@@ -11,6 +11,7 @@ use Temporal\Spec\Internal\Calendar\CalendarFactory;
 use Temporal\Spec\Internal\CalendarMath;
 use Temporal\Spec\Internal\EpochLimits;
 use Temporal\Spec\Internal\FieldBag;
+use Temporal\Spec\Internal\IsoFraction;
 use Temporal\Spec\Internal\MonthCode;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
@@ -1388,7 +1389,7 @@ final class PlainDateTime implements Stringable
         $calendarId = CalendarMath::validateAnnotations($annotations, $s);
 
         // Decompose sub-second nanoseconds.
-        $subNs = $fracRaw !== '' ? self::parseFraction($fracRaw) : 0;
+        $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
         $ms = intdiv(num1: $subNs, num2: self::NS_PER_MS);
         $us = intdiv(num1: $subNs % self::NS_PER_MS, num2: self::NS_PER_US);
         $ns = $subNs % self::NS_PER_US;
@@ -2257,19 +2258,6 @@ final class PlainDateTime implements Stringable
         $nsR = $rem % self::NS_PER_US;
 
         return new self($newYear, $newMonth, $newDay, $h, $min, $sec, $msR, $usR, $nsR, $this->calendarId);
-    }
-
-    /**
-     * Parses fractional-second string (".123456789" or ",123") into nanoseconds.
-     * Pads or truncates to exactly 9 digits.
-     *
-     * @return int<0, 999999999>
-     */
-    private static function parseFraction(string $fractionRaw): int
-    {
-        $digits = substr(string: $fractionRaw, offset: 1); // strip leading '.' or ','
-        /** @var int<0, 999999999> — 9 decimal digits, range 000000000–999999999 */
-        return (int) str_pad(substr(string: $digits, offset: 0, length: 9), length: 9, pad_string: '0');
     }
 
     /**

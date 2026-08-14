@@ -66,6 +66,19 @@ trait HasEpochParts
     }
 
     /**
+     * Reports whether this instant's true value is carried in {@see $trueEpochSec} /
+     * {@see $trueSubNs} because {@see $epochNanoseconds} clamped to a sentinel.
+     *
+     * The distinction matters to arithmetic that works on the nanosecond field directly:
+     * a sentinel with no carried parts is a genuinely unrepresentable instant, whereas a
+     * sentinel with them is exact and merely too large for int64.
+     */
+    public function hasCarriedParts(): bool
+    {
+        return $this->trueEpochSec !== null;
+    }
+
+    /**
      * Stamps the carried true epoch parts from $epoch onto this instance.
      *
      * The public {@see $epochNanoseconds} field is readonly and is set separately by the
