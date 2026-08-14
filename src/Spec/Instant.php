@@ -16,6 +16,7 @@ use Temporal\Spec\Internal\EpochValue;
 use Temporal\Spec\Internal\HasEpochParts;
 use Temporal\Spec\Internal\IntlFormatter;
 use Temporal\Spec\Internal\IsoFraction;
+use Temporal\Spec\Internal\IsoOffset;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TimeZoneHelper;
 
@@ -309,7 +310,10 @@ final class Instant implements Stringable
 
         // Parse the offset to [sign, absSec, fracNs].  The offset is applied
         // manually so that sub-minute precision is handled correctly.
-        [$offsetSign, $offsetAbsSec, $offsetFracNs] = self::parseOffset($offsetRaw, $text);
+        [$offsetSign, $offsetAbsSec, $offsetFracNs] = IsoOffset::parts($offsetRaw);
+        if ((($offsetAbsSec * EpochLimits::NS_PER_SECOND) + $offsetFracNs) > 86_399_999_999_999) {
+            throw new RangeError("Invalid Instant string \"{$text}\": UTC offset out of range.");
+        }
 
         CalendarMath::validateAnnotations($annotationSection, $text, false);
 
@@ -846,7 +850,7 @@ final class Instant implements Stringable
     {
         $tzId = self::parseTimeZoneId($timeZone);
         [$epochSec, $subNs] = $this->epochParts();
-        return ZonedDateTime::fromInstantParts($epochSec, $subNs, $tzId);
+        return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId);
     }
 
     /**
@@ -1136,68 +1140,6 @@ final class Instant implements Stringable
     private static function validateRoundingMode(string $mode): void
     {
         Options::roundingMode($mode);
-    }
-
-    /**
-     * Parses an offset string captured by the regex into [sign, absSec, fracNs].
-     *
-     * Accepted forms:
-     *   Z                              → [+1, 0, 0]
-     *   ±HH                            → [sign, H*3600, 0]
-     *   ±HH:MM | ±HH:MM:SS[.,f]       → colon-separated
-     *   ±HHMM  | ±HHMMSS[.,f]         → no separators
-     *
-     * @return array{-1|1, int<0, 86399>, int<0, 999999999>}  [sign (+1|-1), absSec, fracNs]
-     * @throws RangeError if the offset is out of range
-     */
-    private static function parseOffset(string $offset, string $original): array
-    {
-        if ($offset === 'Z' || $offset === 'z') {
-            return [1, 0, 0];
-        }
-
-        $sign = $offset[0] === '+' ? 1 : -1;
-        $rest = substr(string: $offset, offset: 1); // digits (and separators) after the sign
-
-        $hours = (int) substr(string: $rest, offset: 0, length: 2);
-        $rest = substr(string: $rest, offset: 2);
-        $minutes = 0;
-        $seconds = 0;
-        $fracNs = 0;
-
-        if ($rest !== '') {
-            if ($rest[0] === ':') {
-                // Colon-separated: :MM[:SS[.frac]]
-                $minutes = (int) substr(string: $rest, offset: 1, length: 2);
-                $rest = substr(string: $rest, offset: 3);
-                if (str_starts_with($rest, ':')) {
-                    $seconds = (int) substr(string: $rest, offset: 1, length: 2);
-                    $rest = substr(string: $rest, offset: 3);
-                    if (str_starts_with($rest, '.') || str_starts_with($rest, ',')) {
-                        $fracNs = IsoFraction::toNanoseconds($rest);
-                    }
-                }
-            } else {
-                // No separators: MM[SS[.frac]]
-                $minutes = (int) substr(string: $rest, offset: 0, length: 2);
-                $rest = substr(string: $rest, offset: 2);
-                if (strlen($rest) >= 2) {
-                    $seconds = (int) substr(string: $rest, offset: 0, length: 2);
-                    $rest = substr(string: $rest, offset: 2);
-                    if (str_starts_with($rest, '.') || str_starts_with($rest, ',')) {
-                        $fracNs = IsoFraction::toNanoseconds($rest);
-                    }
-                }
-            }
-        }
-
-        $absSec = ($hours * 3600) + ($minutes * 60) + $seconds;
-        if ((($absSec * EpochLimits::NS_PER_SECOND) + $fracNs) > 86_399_999_999_999) {
-            throw new RangeError("Invalid Instant string \"{$original}\": UTC offset out of range.");
-        }
-        /** @var int<0, 86399> $absSec — range validated above */
-
-        return [$sign, $absSec, $fracNs];
     }
 
     /**

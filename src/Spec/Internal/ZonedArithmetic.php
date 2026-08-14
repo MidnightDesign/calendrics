@@ -42,7 +42,7 @@ final class ZonedArithmetic
         // sentinel. The calendar path goes through localComponents(), which reads those
         // carried parts, but the pure-time path adds to the nanosecond field directly and
         // has nothing to add to when the field is a bare clamped sentinel.
-        if ($zdt->epochNanoseconds === PHP_INT_MAX || $zdt->epochNanoseconds === PHP_INT_MIN) {
+        if ($zdt->isClampedEpoch()) {
             $isBlank =
                 $dur->years === 0
                 && $dur->months === 0
@@ -55,7 +55,7 @@ final class ZonedArithmetic
                 && $dur->microseconds === 0
                 && $dur->nanoseconds === 0;
             $hasCalendar = $dur->years !== 0 || $dur->months !== 0 || $dur->weeks !== 0 || $dur->days !== 0;
-            if (!$isBlank && !$hasCalendar && !$zdt->hasCarriedParts()) {
+            if (!$isBlank && !$hasCalendar) {
                 throw new RangeError('ZonedDateTime arithmetic result is outside the representable range.');
             }
         }
@@ -165,7 +165,7 @@ final class ZonedArithmetic
         $totalSubNs = $intermediateSubNs + $timeNs;
         $overflowSec = CalendarMath::floorDiv($totalSubNs, EpochLimits::NS_PER_SECOND);
 
-        return ZonedDateTime::createFromEpochParts(
+        return ZonedDateTime::fromEpochParts(
             $intermediateEpochSec + $overflowSec,
             $totalSubNs - ($overflowSec * EpochLimits::NS_PER_SECOND),
             $zdt->timeZoneId,
@@ -271,6 +271,6 @@ final class ZonedArithmetic
             $newSubNs += $carry * EpochLimits::NS_PER_SECOND;
         }
 
-        return ZonedDateTime::createFromEpochParts($newEpochSec, $newSubNs, $zdt->timeZoneId, $zdt->calendarId);
+        return ZonedDateTime::fromEpochParts($newEpochSec, $newSubNs, $zdt->timeZoneId, $zdt->calendarId);
     }
 }

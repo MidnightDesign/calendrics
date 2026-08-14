@@ -1216,11 +1216,11 @@ final class PlainDateTime implements Stringable
 
         $subNs = ($this->millisecond * self::NS_PER_MS) + ($this->microsecond * self::NS_PER_US) + $this->nanosecond;
 
-        // Route through createFromEpochParts(): it performs the Instant range check
+        // Route through fromEpochParts(): it performs the Instant range check
         // (throwing RangeError for |epochNs| > 8.64e21) AND preserves the
         // true over-int64 epoch in trueEpochSec/trueSubNs, so later ops on a max/min-year
         // ZDT decode the real instant and throw correctly when the arithmetic overflows.
-        return ZonedDateTime::createFromEpochParts($epochSec, $subNs, $normalTzId, $this->calendarId);
+        return ZonedDateTime::fromEpochParts($epochSec, $subNs, $normalTzId, $this->calendarId);
     }
 
     /**

@@ -11,12 +11,13 @@ namespace Temporal\Spec\Internal;
  * Both classes carry the same instant as a triple — the public {@see $epochNanoseconds}
  * field (clamped to a PHP_INT_MIN/MAX sentinel once the true value overflows int64) plus
  * the carried {@see $trueEpochSec}/{@see $trueSubNs} pair that survives that clamp. This
- * trait owns those three fields and the two operations on them so the
+ * trait owns those three fields and every operation on them so the
  * "epochNanoseconds is a sentinel iff trueEpochSec !== null" invariant lives in exactly
  * one place rather than being re-asserted by hand in each class:
  *
  *   - {@see epochParts()} — decodes the triple back into (epochSec, subNs), handling
  *     sentinels transparently without allocating a temporary {@see EpochValue}.
+ *   - {@see isClampedEpoch()} — reports the one state that decode cannot rescue.
  *   - {@see applyEpoch()} — stamps the carried true parts from a single {@see EpochValue},
  *     the canonical encoder of the int64-fit / sentinel rule.
  *
@@ -66,16 +67,21 @@ trait HasEpochParts
     }
 
     /**
-     * Reports whether this instant's true value is carried in {@see $trueEpochSec} /
-     * {@see $trueSubNs} because {@see $epochNanoseconds} clamped to a sentinel.
+     * Reports whether {@see $epochNanoseconds} clamped to a sentinel with nothing carried
+     * behind it — the one state in which this instant's true value is genuinely lost.
      *
      * The distinction matters to arithmetic that works on the nanosecond field directly:
-     * a sentinel with no carried parts is a genuinely unrepresentable instant, whereas a
-     * sentinel with them is exact and merely too large for int64.
+     * a sentinel WITH carried parts is exact and merely too large for int64, so
+     * {@see epochParts()} still recovers it; a sentinel WITHOUT them can only decode back
+     * to the sentinel. Both halves of that test live here, so a caller asks one question
+     * instead of reassembling the invariant from the raw field and a partial predicate.
      */
-    public function hasCarriedParts(): bool
+    public function isClampedEpoch(): bool
     {
-        return $this->trueEpochSec !== null;
+        return (
+            $this->trueEpochSec === null
+            && ($this->epochNanoseconds === PHP_INT_MAX || $this->epochNanoseconds === PHP_INT_MIN)
+        );
     }
 
     /**

@@ -252,7 +252,7 @@ final class ZonedFields
             }
         }
 
-        return ZonedDateTime::createFromEpochParts($epochSec, $subNs, $normalTzId, $calendarId);
+        return ZonedDateTime::fromEpochParts($epochSec, $subNs, $normalTzId, $calendarId);
     }
 
     /**
@@ -281,7 +281,7 @@ final class ZonedFields
         $epochSec = TimeZoneHelper::wallSecToEpochSec($wallSec, ZoneOffsets::canonicalize($tzId), $disambiguation);
         $subNs = ($ms * EpochLimits::NS_PER_MILLISECOND) + ($us * EpochLimits::NS_PER_MICROSECOND) + $ns;
 
-        return ZonedDateTime::createFromEpochParts($epochSec, $subNs, $tzId, $calendarId);
+        return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId, $calendarId);
     }
 
     /**

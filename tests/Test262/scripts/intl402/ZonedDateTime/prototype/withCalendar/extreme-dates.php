@@ -9,8 +9,8 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 use Temporal\Tests\Test262\TemporalHelpers;
-$min = \Temporal\Spec\ZonedDateTime::fromInstantParts(-8640000000000, 0, 'UTC');
-$max = \Temporal\Spec\ZonedDateTime::fromInstantParts(8640000000000, 0, 'UTC');
+$min = \Temporal\Spec\ZonedDateTime::fromEpochParts(-8640000000000, 0, 'UTC');
+$max = \Temporal\Spec\ZonedDateTime::fromEpochParts(8640000000000, 0, 'UTC');
 $testData = [['buddhist', -271_278, 4, 'M04', 20, 'be', -271_278, 276_303, 9, 'M09', 13, 'be', 276_303], ['coptic', -272_099, 3, 'M03', 24, 'am', -272_099, 275_471, 5, 'M05', 22, 'am', 275_471], ['ethioaa', -266_323, 3, 'M03', 24, 'aa', -266_323, 281_247, 5, 'M05', 22, 'aa', 281_247], ['ethiopic', -271_823, 3, 'M03', 24, 'aa', -266_323, 275_747, 5, 'M05', 22, 'am', 275_747], ['gregory', -271_821, 4, 'M04', 20, 'bce', 271_822, 275_760, 9, 'M09', 13, 'ce', 275_760], ['hebrew', -268_058, 11, 'M11', 5, 'am', -268_058, 279_517, 10, 'M09', 11, 'am', 279_517], ['indian', -271_899, 1, 'M01', 30, 'shaka', -271_899, 275_682, 6, 'M06', 22, 'shaka', 275_682], ['islamic-civil', -280_804, 3, 'M03', 22, 'bh', 280_805, 283_583, 5, 'M05', 23, 'ah', 283_583], ['islamic-tbla', -280_804, 3, 'M03', 23, 'bh', 280_805, 283_583, 5, 'M05', 24, 'ah', 283_583], ['islamic-umalqura', -280_804, 3, 'M03', 22, 'bh', 280_805, 283_583, 5, 'M05', 23, 'ah', 283_583], ['japanese', -271_821, 4, 'M04', 20, 'bce', 271_822, 275_760, 9, 'M09', 13, 'reiwa', 273_742], ['persian', -272_442, 1, 'M01', 10, 'ap', -272_442, 275_139, 7, 'M07', 12, 'ap', 275_139], ['roc', -273_732, 4, 'M04', 20, 'broc', 273_733, 273_849, 9, 'M09', 13, 'roc', 273_849]];
 foreach ($testData as $__entry__) {
 [$calendar, $minYear, $minMonth, $minMonthCode, $minDay, $minEra, $minEraYear, $maxYear, $maxMonth, $maxMonthCode, $maxDay, $maxEra, $maxEraYear] = array_pad($__entry__, 13, null);

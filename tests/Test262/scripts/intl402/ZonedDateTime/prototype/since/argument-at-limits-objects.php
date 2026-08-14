@@ -9,7 +9,7 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 use Temporal\Tests\Test262\TemporalHelpers;
-$max = \Temporal\Spec\ZonedDateTime::fromInstantParts(8640000000000, 0, 'UTC');
+$max = \Temporal\Spec\ZonedDateTime::fromEpochParts(8640000000000, 0, 'UTC');
 foreach (['Etc/GMT+0', 'Europe/Amsterdam', 'America/Vancouver'] as $timeZone) {
 $limit = $max->withTimeZone($timeZone);
 $instance = new \Temporal\Spec\PlainDateTime(1970, 1, 1, 1, 1, 1, 1, 1, 1)->toZonedDateTime($timeZone);
@@ -18,7 +18,7 @@ $limit->since($instance, (object) ['largestUnit' => 'years']);
 $resultTimeUnit = $instance->since($limit, (object) ['largestUnit' => 'seconds']);
 TemporalHelpers::assertDurationsEqual($limit->since($instance, (object) ['largestUnit' => 'seconds']), $resultTimeUnit->negated(), "Arithmetic since limit with time largestUnit is self-consistent ({$timeZone})");
 }
-$min = \Temporal\Spec\ZonedDateTime::fromInstantParts(-8640000000000, 0, 'UTC');
+$min = \Temporal\Spec\ZonedDateTime::fromEpochParts(-8640000000000, 0, 'UTC');
 foreach (['Etc/GMT+0', 'Europe/Amsterdam', 'America/Vancouver'] as $timeZone) {
 $limit = $min->withTimeZone($timeZone);
 $instance = new \Temporal\Spec\PlainDateTime(1970, 9, 1, 15, 47, 32)->toZonedDateTime($timeZone);

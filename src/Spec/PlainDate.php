@@ -872,7 +872,7 @@ final class PlainDate implements Stringable
         // for cross-midnight DST gaps instead of regular disambiguation.
         if ($startOfDay && $h === 0 && $m === 0 && $s === 0 && $ms === 0 && $us === 0 && $ns === 0) {
             $epochSec = TimeZoneHelper::wallSecToEpochSec($wallSec, $tzId);
-            $zdt = ZonedDateTime::createFromEpochParts($epochSec, 0, $tzId, $this->calendarId);
+            $zdt = ZonedDateTime::fromEpochParts($epochSec, 0, $tzId, $this->calendarId);
             return $zdt->startOfDay();
         }
 
@@ -880,7 +880,7 @@ final class PlainDate implements Stringable
 
         $subNs = ($ms * EpochLimits::NS_PER_MILLISECOND) + ($us * EpochLimits::NS_PER_MICROSECOND) + $ns;
 
-        return ZonedDateTime::createFromEpochParts($epochSec, $subNs, $tzId, $this->calendarId);
+        return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId, $this->calendarId);
     }
 
     /**

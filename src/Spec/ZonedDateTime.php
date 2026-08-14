@@ -693,7 +693,7 @@ final class ZonedDateTime implements Stringable
         // epoch itself — the first valid instant of the day.
         $epochSec = TimeZoneHelper::wallSecToEpochSecStartOfDay($wallSec, $this->resolvedTimeZoneId);
 
-        return self::createFromEpochParts($epochSec, 0, $this->timeZoneId, $this->calendarId);
+        return self::fromEpochParts($epochSec, 0, $this->timeZoneId, $this->calendarId);
     }
 
     /**
@@ -1680,27 +1680,6 @@ final class ZonedDateTime implements Stringable
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a ZonedDateTime from true UTC epoch seconds and sub-second
-     * nanoseconds, preserving over-int64 values behind a sentinel.
-     *
-     * Internal seam for sibling Spec classes (e.g. Instant::toZonedDateTimeISO)
-     * that hold true epoch parts and must hand them across the class boundary
-     * without clamping. Not part of the TC39 public surface.
-     *
-     * @internal
-     * @psalm-internal Temporal\Spec
-     * @throws RangeError if the result is outside the representable range.
-     */
-    public static function fromInstantParts(
-        int|float $epochSec,
-        int|float $subNs,
-        string $tzId,
-        string $calendarId = 'iso8601',
-    ): self {
-        return self::fromEpochParts($epochSec, $subNs, $tzId, $calendarId);
-    }
-
-    /**
      * Compares two ZonedDateTimes by their true epoch instant, handling sentinels.
      *
      * @return int -1, 0, or 1
@@ -1794,38 +1773,27 @@ final class ZonedDateTime implements Stringable
     // -------------------------------------------------------------------------
 
     /**
-     * Shared add/subtract implementation for ZonedDateTime.
-     *
-     * Calendar units are applied to local date fields and re-resolved;
-     * /**
      * Creates a ZonedDateTime from UTC epoch seconds and sub-second nanoseconds.
      *
-     * Used by PlainDate::toZonedDateTime() and external callers that have decomposed
-     * epoch components and need to construct a ZonedDateTime without re-encoding through
-     * an int64 nanosecond intermediate (which overflows for dates near the ISO range
-     * boundary). The method handles int64 overflow internally by storing a sentinel
-     * epochNanoseconds value while preserving the true epoch seconds for later
-     * decomposition.
-     */
-    public static function createFromEpochParts(
-        int|float $epochSec,
-        int|float $subNs,
-        string $tzId,
-        string $calendarId = 'iso8601',
-    ): self {
-        return self::fromEpochParts($epochSec, $subNs, $tzId, $calendarId);
-    }
-
-    /**
-     * Creates a ZonedDateTime from UTC epoch seconds and sub-second nanoseconds.
+     * The seam every caller holding decomposed epoch parts builds through — the
+     * Internal\Zoned* collaborators, {@see Instant::toZonedDateTimeISO()}, and
+     * `PlainDate`/`PlainDateTime::toZonedDateTime()` — so none of them re-encodes through
+     * an int64 nanosecond intermediate, which overflows near the ISO range boundary.
+     * int64 overflow is handled here by storing a sentinel epochNanoseconds value while
+     * preserving the true epoch seconds for later decomposition in
+     * {@see localComponents()}.
      *
-     * Handles int64 overflow by storing a sentinel epochNanoseconds value while
-     * preserving the true epoch seconds for later decomposition in localComponents().
+     * Named to match {@see Instant::fromEpochParts()}: it is the same operation on the
+     * other class that carries an instant, and it used to answer to three names.
      *
      * $epochSec/$subNs accept int|float and are narrowed by
      * {@see EpochValue::narrowParts()}, which documents where float parts come from.
+     *
+     * @internal
+     * @psalm-internal Temporal\Spec
+     * @throws RangeError if the result is outside the representable range.
      */
-    private static function fromEpochParts(
+    public static function fromEpochParts(
         int|float $epochSec,
         int|float $subNs,
         string $tzId,

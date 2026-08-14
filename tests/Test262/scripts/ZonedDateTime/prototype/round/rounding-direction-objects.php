@@ -8,5 +8,5 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-$instance = \Temporal\Spec\ZonedDateTime::fromInstantParts(-65261246400, 500000000, 'UTC');
+$instance = \Temporal\Spec\ZonedDateTime::fromEpochParts(-65261246400, 500000000, 'UTC');
 \PHPUnit\Framework\Assert::assertTrue(true, 'Script completed without throwing');
