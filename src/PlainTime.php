@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Temporal;
 
 use Temporal\Spec\PlainTime as SpecPlainTime;
+use Temporal\Trait\HasLocalizedFormatting;
 use Temporal\Trait\HasTimeOfDayProperties;
 use Temporal\Trait\HasTimeOfDaySpec;
 
@@ -17,6 +18,7 @@ use Temporal\Trait\HasTimeOfDaySpec;
 final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpec
 {
     use HasTimeOfDayProperties;
+    use HasLocalizedFormatting;
 
     private readonly SpecPlainTime $spec;
 
@@ -262,6 +264,50 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
         $opts['roundingMode'] = $roundingMode->value;
 
         return $this->spec->toString($opts);
+    }
+
+    /**
+     * Returns a locale-aware string representation of this time.
+     *
+     * A `PlainTime` has no date, so the date-side options are absent from this
+     * signature: supply `timeStyle` (a locale-provided preset) or any combination
+     * of the individual component options — mixing the two throws.
+     *
+     * ```php
+     * $time->toLocaleString('de-AT', timeStyle: FormatStyle::Medium); // '09:30:00'
+     * $time->toLocaleString('en-US', hour: NumberWidth::Numeric, minute: NumberWidth::TwoDigit);
+     * ```
+     *
+     * @param string|null      $locale    BCP 47 locale tag; null uses the ICU default locale.
+     * @param FormatStyle|null $timeStyle Preset time verbosity; excludes the component options below.
+     * @param TextWidth|null   $dayPeriod
+     * @param NumberWidth|null $hour
+     * @param NumberWidth|null $minute
+     * @param NumberWidth|null $second
+     * @param int|null         $fractionalSecondDigits Number of sub-second digits to render (1–3).
+     * @param HourCycle|null   $hourCycle Hour numbering; null lets the locale decide.
+     * @return string
+     * @throws \Temporal\Exception\TypeError if `timeStyle` is combined with a component option.
+     */
+    public function toLocaleString(
+        ?string $locale = null,
+        ?FormatStyle $timeStyle = null,
+        ?TextWidth $dayPeriod = null,
+        ?NumberWidth $hour = null,
+        ?NumberWidth $minute = null,
+        ?NumberWidth $second = null,
+        ?int $fractionalSecondDigits = null,
+        ?HourCycle $hourCycle = null,
+    ): string {
+        return $this->spec->toLocaleString($locale, self::localeOptions([
+            'timeStyle' => $timeStyle,
+            'dayPeriod' => $dayPeriod,
+            'hour' => $hour,
+            'minute' => $minute,
+            'second' => $second,
+            'fractionalSecondDigits' => $fractionalSecondDigits,
+            'hourCycle' => $hourCycle,
+        ]));
     }
 
     /**

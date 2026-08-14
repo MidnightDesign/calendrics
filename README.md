@@ -8,7 +8,7 @@ Temporal is the modern replacement for JavaScript's `Date`, providing a precise,
 
 - PHP 8.4+ (64-bit recommended)
 - Composer
-- `ext-intl` (required for `toLocaleString()` on spec-layer `Instant`, `ZonedDateTime`, and `Duration`)
+- `ext-intl` (required for non-ISO calendars and for `toLocaleString()`)
 
 > **32-bit platforms.** The library targets 64-bit PHP. It is not a hard requirement, but on 32-bit builds the native date primitives (`gmmktime()` and friends) only cover years ~1901–2038, so calculations near Temporal's extreme year range may misbehave. Running on 32-bit is not recommended.
 
@@ -38,6 +38,7 @@ Notable differences:
 - **No polymorphic `from()` method.** PHP has named arguments, backed enums, and tight types — three features that remove the need for a single factory that dispatches on input shape. Use `parse()` for ISO 8601 strings and `fromFields()` for calendar fields.
 - **`fromFields()` takes named arguments, not a property bag.** Each parameter has its own type (`int<1, 12>` for `month`, `Calendar` for `calendar`, etc.) so PHPStan/Psalm can validate call sites fully. Only five classes expose `fromFields()` — the ones whose constructors cannot express every field combination (`PlainDate`, `PlainDateTime`, `PlainYearMonth`, `PlainMonthDay`, `ZonedDateTime`). For `PlainTime`, `Instant`, and `Duration`, the constructor already covers every field.
 - **Option strings replaced by backed enums.** `Overflow::Reject` instead of `'reject'`, `Calendar::Gregory` instead of `'gregory'`, etc.
+- **`toLocaleString()` takes typed named arguments, not an options bag** — and each type exposes only the options that apply to it, so `$plainDate->toLocaleString(timeStyle: …)` is a compile error rather than the runtime `TypeError` ECMA-402 specifies. See [Localized formatting](#localized-formatting).
 - **Time zones and calendars are first-class.** `ZonedDateTime::fromFields()` takes `timeZone` as a required positional parameter; all calendar fields accept the `Calendar` enum rather than an identifier string.
 - **No `valueOf()` on spec-layer types.** The TC39 spec defines `valueOf()` to throw `TypeError` so that `<`, `>`, `+`, etc. fail loudly rather than silently coercing. PHP has no equivalent hook — relational operators on objects walk declared properties, arithmetic operators raise `TypeError` from the engine itself, and there is no language path that calls `valueOf()`. A throw-only method that the runtime never invokes is just dead surface, so the spec layer does not expose it. Use `compare()` (or, for `Instant` / `ZonedDateTime`, the underlying `epochNanoseconds`) when you need ordering. Test262 fixtures that target `valueOf()` are emitted as incomplete by the transpiler.
 - **`Duration` field values are exact integers, not float64-narrowed.** TC39's spec performs all internal arithmetic in BigInt and then materializes Duration fields into JS `Number` (= float64), which loses precision past 2⁵³. PHP's `int` is 64-bit, so we keep the exact integer representation: a 584-year microsecond delta lands as `microseconds = 18_446_744_073_709_551, nanoseconds = 616` (reconstructible to the original nanosecond span exactly), where JS would store `microseconds = 18_446_744_073_709_552, nanoseconds = 616` — off by 1 µs because `18_446_744_073_709_551` rounds up to the next float64-representable integer. Practical impact: any Duration produced from sub-second arithmetic across a multi-century span is more accurate than its JS counterpart by up to 1 ULP at the largestUnit. Test262 fixtures that pin down the JS-narrowing behavior verbatim (`PlainDateTime/prototype/{since,until}/float64-representable-integer*`) are emitted as incomplete by the transpiler.
@@ -400,6 +401,64 @@ $buddhist->eraYear; // 2567
 
 Available calendars: `Iso8601`, `Buddhist`, `Chinese`, `Coptic`, `Dangi`, `EthiopicAmeteAlem`, `Ethiopic`, `Gregory`, `Hebrew`, `Indian`, `IslamicCivil`, `IslamicTabular`, `IslamicUmalqura`, `Japanese`, `Persian`, `Roc`.
 
+### Localized formatting
+
+`toLocaleString()` renders a value the way a human in a given locale would write it, via ICU. It is available on `PlainDate`, `PlainDateTime`, `PlainTime`, `PlainYearMonth`, `PlainMonthDay`, `Instant`, and `ZonedDateTime`.
+
+```php
+use Temporal\PlainDate;
+use Temporal\ZonedDateTime;
+use Temporal\FormatStyle;
+use Temporal\MonthWidth;
+use Temporal\NumberWidth;
+use Temporal\TextWidth;
+use Temporal\TimeZoneNameStyle;
+
+$date = PlainDate::parse('2020-06-15');
+
+// Preset verbosity
+$date->toLocaleString('de-AT', dateStyle: FormatStyle::Long);   // '15. Juni 2020'
+$date->toLocaleString('en-US', dateStyle: FormatStyle::Full);   // 'Monday, June 15, 2020'
+$date->toLocaleString();                                        // ICU default locale
+
+// Or pick the components yourself
+$date->toLocaleString(
+    'en-US',
+    weekday: TextWidth::Long,
+    month: MonthWidth::Long,
+    day: NumberWidth::Numeric,
+);  // 'Monday, June 15'
+
+$zdt = ZonedDateTime::parse('2020-06-15T09:30:00-04:00[America/New_York]');
+$zdt->toLocaleString('en-US', dateStyle: FormatStyle::Full, timeStyle: FormatStyle::Long);
+// 'Monday, June 15, 2020 at 9:30:00 AM EDT'
+$zdt->toLocaleString('de-AT', timeZoneName: TimeZoneNameStyle::LongGeneric);
+// '15.6.2020, 09:30:00 Nordamerikanische Ostküstenzeit'
+```
+
+Unlike ECMA-402's untyped options bag, each type exposes only the options that mean something for it, so the compiler rejects the rest: a `PlainDate` has no `timeStyle`, a `PlainTime` has no `dateStyle`, a `PlainYearMonth` has no `day`. `hour12` and `hourCycle` are collapsed into a single `HourCycle` enum, since the two overlap and can contradict each other.
+
+A style option selects a locale-provided pattern as a whole, so combining `dateStyle`/`timeStyle` with an individual component option throws `Temporal\Exception\TypeError`.
+
+**Calendars.** The formatter's calendar comes from the locale (`th-TH` → `buddhist`) unless you pass `calendar:` explicitly, and per ECMA-402 it must agree with the value's own calendar:
+
+```php
+use Temporal\Calendar;
+use Temporal\PlainYearMonth;
+
+// An ISO date is unambiguous, so it projects into the formatter's calendar
+PlainDate::parse('2020-06-15')->toLocaleString('th-TH');            // '15/6/2563' (Buddhist)
+PlainDate::parse('2020-06-15')->toLocaleString('en-US', calendar: Calendar::Hebrew);  // '23 Sivan 5780'
+
+// A bare year-month or month-day has no meaning outside its own calendar, and no
+// locale resolves to iso8601 — so build these in the calendar you want to render in
+new PlainYearMonth(2020, 6)->toLocaleString('de-AT');               // RangeError
+PlainYearMonth::fromFields(year: 2020, month: 6, calendar: Calendar::Gregory)
+    ->toLocaleString('de-AT');                                      // 'Juni 2020'
+```
+
+`Duration` has no `toLocaleString()`: localized duration output needs `Intl.DurationFormat`, which `ext-intl` does not expose.
+
 ### Enums
 
 All option strings are replaced by backed enums:
@@ -416,6 +475,12 @@ All option strings are replaced by backed enums:
 | `TimeZoneDisplay` | `Auto`, `Never`, `Critical` |
 | `OffsetDisplay` | `Auto`, `Never` |
 | `TransitionDirection` | `Next`, `Previous` |
+| `FormatStyle` | `Full`, `Long`, `Medium`, `Short` |
+| `TextWidth` | `Narrow`, `Short`, `Long` |
+| `NumberWidth` | `Numeric`, `TwoDigit` |
+| `MonthWidth` | `Numeric`, `TwoDigit`, `Narrow`, `Short`, `Long` |
+| `TimeZoneNameStyle` | `Short`, `Long`, `ShortOffset`, `LongOffset`, `ShortGeneric`, `LongGeneric` |
+| `HourCycle` | `H11`, `H12`, `H23`, `H24` |
 
 ### Spec-layer interop
 

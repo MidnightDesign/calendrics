@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Temporal;
 
 use Temporal\Spec\PlainYearMonth as SpecPlainYearMonth;
+use Temporal\Trait\HasLocalizedFormatting;
 use Temporal\Trait\HasYearMonthProperties;
 use Temporal\Trait\HasYearMonthSpec;
 
@@ -18,6 +19,7 @@ use Temporal\Trait\HasYearMonthSpec;
 final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMonthSpec
 {
     use HasYearMonthProperties;
+    use HasLocalizedFormatting;
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -262,6 +264,54 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
     public function toString(CalendarDisplay $calendarName = CalendarDisplay::Auto): string
     {
         return $this->spec->toString(['calendarName' => $calendarName->value]);
+    }
+
+    /**
+     * Returns a locale-aware string representation of this year-month.
+     *
+     * A `PlainYearMonth` has no day, so the day and weekday options are absent
+     * from this signature. Supply `dateStyle` (a locale-provided preset, with the
+     * day component stripped out) or any combination of the individual component
+     * options — mixing the two throws.
+     *
+     * Unlike `PlainDate`, an ISO 8601 year-month is *not* projectable into another
+     * calendar: a bare year-month has no meaning outside the calendar it was
+     * expressed in, so the value's calendar must match the formatter's. Since no
+     * locale resolves to `iso8601`, formatting a default-constructed (ISO)
+     * year-month always throws — build it in the target calendar instead:
+     *
+     * ```php
+     * $ym = PlainYearMonth::fromFields(year: 2020, month: 6, calendar: Calendar::Gregory);
+     * $ym->toLocaleString('de-AT', dateStyle: FormatStyle::Long);               // 'Juni 2020'
+     * $ym->toLocaleString('en-US', month: MonthWidth::Long, year: NumberWidth::Numeric); // 'June 2020'
+     * ```
+     *
+     * @param string|null      $locale    BCP 47 locale tag; null uses the ICU default locale.
+     * @param FormatStyle|null $dateStyle Preset date verbosity; excludes the component options below.
+     * @param TextWidth|null   $era
+     * @param NumberWidth|null $year
+     * @param MonthWidth|null  $month
+     * @param Calendar|null    $calendar  Calendar to render in; null keeps the locale's own calendar.
+     * @return string
+     * @throws \Temporal\Exception\TypeError if `dateStyle` is combined with a component option.
+     * @throws \Temporal\Exception\RangeError if this value's calendar differs from the resolved
+     *                                        formatter's.
+     */
+    public function toLocaleString(
+        ?string $locale = null,
+        ?FormatStyle $dateStyle = null,
+        ?TextWidth $era = null,
+        ?NumberWidth $year = null,
+        ?MonthWidth $month = null,
+        ?Calendar $calendar = null,
+    ): string {
+        return $this->spec->toLocaleString($locale, self::localeOptions([
+            'dateStyle' => $dateStyle,
+            'era' => $era,
+            'year' => $year,
+            'month' => $month,
+            'calendar' => $calendar,
+        ]));
     }
 
     /**

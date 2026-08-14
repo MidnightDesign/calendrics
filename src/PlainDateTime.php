@@ -7,6 +7,7 @@ namespace Temporal;
 use Temporal\Spec\PlainDateTime as SpecPlainDateTime;
 use Temporal\Trait\HasDayOfMonthProperties;
 use Temporal\Trait\HasDayOfMonthSpec;
+use Temporal\Trait\HasLocalizedFormatting;
 use Temporal\Trait\HasTimeOfDayProperties;
 use Temporal\Trait\HasTimeOfDaySpec;
 use Temporal\Trait\HasYearMonthProperties;
@@ -29,6 +30,7 @@ final class PlainDateTime implements
     use HasYearMonthProperties;
     use HasDayOfMonthProperties;
     use HasTimeOfDayProperties;
+    use HasLocalizedFormatting;
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -450,6 +452,73 @@ final class PlainDateTime implements
         $opts['roundingMode'] = $roundingMode->value;
 
         return $this->spec->toString($opts);
+    }
+
+    /**
+     * Returns a locale-aware string representation of this date-time.
+     *
+     * Supply `dateStyle` and/or `timeStyle` (locale-provided presets) or any
+     * combination of the individual component options — mixing the two throws.
+     * With nothing set, the locale's default date and time are rendered.
+     *
+     * ```php
+     * $dt->toLocaleString('de-AT', dateStyle: FormatStyle::Long, timeStyle: FormatStyle::Short);
+     * $dt->toLocaleString('en-US', hour: NumberWidth::Numeric, minute: NumberWidth::TwoDigit);
+     * ```
+     *
+     * @param string|null      $locale    BCP 47 locale tag; null uses the ICU default locale.
+     * @param FormatStyle|null $dateStyle Preset date verbosity; excludes the component options below.
+     * @param FormatStyle|null $timeStyle Preset time verbosity; excludes the component options below.
+     * @param TextWidth|null   $weekday
+     * @param TextWidth|null   $era
+     * @param NumberWidth|null $year
+     * @param MonthWidth|null  $month
+     * @param NumberWidth|null $day
+     * @param TextWidth|null   $dayPeriod
+     * @param NumberWidth|null $hour
+     * @param NumberWidth|null $minute
+     * @param NumberWidth|null $second
+     * @param int|null         $fractionalSecondDigits Number of sub-second digits to render (1–3).
+     * @param HourCycle|null   $hourCycle Hour numbering; null lets the locale decide.
+     * @param Calendar|null    $calendar  Calendar to render in; null keeps the locale's own calendar.
+     * @return string
+     * @throws \Temporal\Exception\TypeError if a style option is combined with a component option.
+     * @throws \Temporal\Exception\RangeError if this value's calendar cannot be rendered by the
+     *                                        resolved formatter — see {@see withCalendar()}.
+     */
+    public function toLocaleString(
+        ?string $locale = null,
+        ?FormatStyle $dateStyle = null,
+        ?FormatStyle $timeStyle = null,
+        ?TextWidth $weekday = null,
+        ?TextWidth $era = null,
+        ?NumberWidth $year = null,
+        ?MonthWidth $month = null,
+        ?NumberWidth $day = null,
+        ?TextWidth $dayPeriod = null,
+        ?NumberWidth $hour = null,
+        ?NumberWidth $minute = null,
+        ?NumberWidth $second = null,
+        ?int $fractionalSecondDigits = null,
+        ?HourCycle $hourCycle = null,
+        ?Calendar $calendar = null,
+    ): string {
+        return $this->spec->toLocaleString($locale, self::localeOptions([
+            'dateStyle' => $dateStyle,
+            'timeStyle' => $timeStyle,
+            'weekday' => $weekday,
+            'era' => $era,
+            'year' => $year,
+            'month' => $month,
+            'day' => $day,
+            'dayPeriod' => $dayPeriod,
+            'hour' => $hour,
+            'minute' => $minute,
+            'second' => $second,
+            'fractionalSecondDigits' => $fractionalSecondDigits,
+            'hourCycle' => $hourCycle,
+            'calendar' => $calendar,
+        ]));
     }
 
     /**
