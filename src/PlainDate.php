@@ -7,6 +7,7 @@ namespace Temporal;
 use Temporal\Spec\PlainDate as SpecPlainDate;
 use Temporal\Trait\HasDayOfMonthProperties;
 use Temporal\Trait\HasDayOfMonthSpec;
+use Temporal\Trait\HasLocalizedFormatting;
 use Temporal\Trait\HasYearMonthProperties;
 use Temporal\Trait\HasYearMonthSpec;
 
@@ -21,6 +22,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
 {
     use HasYearMonthProperties;
     use HasDayOfMonthProperties;
+    use HasLocalizedFormatting;
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -302,6 +304,51 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
     public function toString(CalendarDisplay $calendarName = CalendarDisplay::Auto): string
     {
         return $this->spec->toString(['calendarName' => $calendarName->value]);
+    }
+
+    /**
+     * Returns a locale-aware string representation of this date.
+     *
+     * Supply either `dateStyle` (a locale-provided preset) or any combination of
+     * the individual component options — mixing the two throws.
+     *
+     * ```php
+     * $date->toLocaleString('de-AT', dateStyle: FormatStyle::Long); // '15. Juni 2020'
+     * $date->toLocaleString('en-US', weekday: TextWidth::Long, month: MonthWidth::Long, day: NumberWidth::Numeric);
+     * ```
+     *
+     * @param string|null      $locale    BCP 47 locale tag; null uses the ICU default locale.
+     * @param FormatStyle|null $dateStyle Preset date verbosity; excludes the component options below.
+     * @param TextWidth|null   $weekday
+     * @param TextWidth|null   $era
+     * @param NumberWidth|null $year
+     * @param MonthWidth|null  $month
+     * @param NumberWidth|null $day
+     * @param Calendar|null    $calendar  Calendar to render in; null keeps the locale's own calendar.
+     * @return string
+     * @throws \Temporal\Exception\TypeError if `dateStyle` is combined with a component option.
+     * @throws \Temporal\Exception\RangeError if this date's calendar cannot be rendered by the
+     *                                        resolved formatter — see {@see withCalendar()}.
+     */
+    public function toLocaleString(
+        ?string $locale = null,
+        ?FormatStyle $dateStyle = null,
+        ?TextWidth $weekday = null,
+        ?TextWidth $era = null,
+        ?NumberWidth $year = null,
+        ?MonthWidth $month = null,
+        ?NumberWidth $day = null,
+        ?Calendar $calendar = null,
+    ): string {
+        return $this->spec->toLocaleString($locale, self::localeOptions([
+            'dateStyle' => $dateStyle,
+            'weekday' => $weekday,
+            'era' => $era,
+            'year' => $year,
+            'month' => $month,
+            'day' => $day,
+            'calendar' => $calendar,
+        ]));
     }
 
     /**
