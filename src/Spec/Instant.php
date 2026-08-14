@@ -503,7 +503,12 @@ final class Instant implements Stringable
         // read. normalizeOptions uses get_object_vars(), which never triggers __get.
         // The resulting value is validated below exactly as before.
         $timeZoneRaw = $options === null ? Options::ABSENT : Options::bagGet($options, 'timeZone');
-        $options = Options::normalizeOptions($options);
+        $options = Options::normalizeOptions($options, [
+            'fractionalSecondDigits',
+            'roundingMode',
+            'smallestUnit',
+            'timeZone',
+        ]);
 
         // $digits: -2 = 'auto' (strip trailing zeros), -1 = minute format, 0-9 = fixed.
         $digits = -2;
@@ -818,7 +823,7 @@ final class Instant implements Stringable
     {
         $locale = IntlFormatter::resolveLocale($locales);
         /** @var array<string, mixed> $opts */
-        $opts = is_object($options) ? get_object_vars($options) : $options ?? [];
+        $opts = $options === null ? [] : Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES);
 
         /** @var mixed $tzOpt */
         $tzOpt = $opts['timeZone'] ?? null;
@@ -1029,7 +1034,7 @@ final class Instant implements Stringable
                     throw new TypeError('Instant::round() requires a non-undefined options argument.');
                 }
             }
-            $roundTo = Options::requireObject($roundTo);
+            $roundTo = Options::requireObject($roundTo, ['roundingIncrement', 'roundingMode', 'smallestUnit']);
         }
 
         /** @var mixed $suRaw */
@@ -1406,7 +1411,12 @@ final class Instant implements Stringable
         ];
 
         // ---- Parse options ----
-        $options = Options::normalizeOptions($options);
+        $options = Options::normalizeOptions($options, [
+            'largestUnit',
+            'roundingIncrement',
+            'roundingMode',
+            'smallestUnit',
+        ]);
 
         // Track whether largestUnit was explicitly provided.
         $luProvided = array_key_exists('largestUnit', $options) && $options['largestUnit'] !== null;

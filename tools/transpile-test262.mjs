@@ -3113,13 +3113,14 @@ class Emitter {
     }
 
     // Negative-probe getter bag: `{ key: literal, get probe() { throw / assertUnreachable } }`.
-    // Lower to an anon class with the literal props declared plus a throwing __get, so
-    // get_object_vars() (how the spec layer reads bags) snapshots only the real props and
-    // the probe never fires — matching the test's "must not read this property" intent.
+    // Lower to an anon class with the literal props declared plus a __get that throws for
+    // the probed names only — the spec layer reading one of them is the bug the fixture
+    // watches for, and any other name is simply absent from the object.
     const negativeBag = probeGetterBag(node, isNegativeProbeGetterBody, negativeProbeGate);
     if (negativeBag !== null) {
       const cls = this.emitProbeBagAnonClass(
         negativeBag.initProps,
+        negativeBag.getterNames,
         "throw new \\RuntimeException('test262: property '.$name.' must not be read');",
       );
       if (cls !== null) return cls;
@@ -3127,14 +3128,15 @@ class Emitter {
 
     // Positive-probe getter bag: `{ key: literal, get probe() { throw new Test262Error() } }`.
     // Lower to an anon class with the literal props declared plus a __get that throws
-    // Test262Error. The operation is expected to READ the probed key via a true Get(O, P)
-    // (Options::bagGet, used by PlainDate::toZonedDateTime / Instant::toString), so __get
-    // fires and the surrounding assert.throws(Test262Error, …) catches it. Declared props
-    // are read directly (no throw).
+    // Test262Error for the probed names. The operation is expected to READ one of them via
+    // a true Get(O, P) (Options::bagGet), so __get fires and the surrounding
+    // assert.throws(Test262Error, …) catches it. Declared props are read directly (no
+    // throw), and unrelated names report absent.
     const positiveBag = probeGetterBag(node, isPositiveProbeGetterBody);
     if (positiveBag !== null) {
       const cls = this.emitProbeBagAnonClass(
         positiveBag.initProps,
+        positiveBag.getterNames,
         'throw new \\Temporal\\Tests\\Test262\\Test262Error();',
       );
       if (cls !== null) return cls;
@@ -3252,22 +3254,30 @@ class Emitter {
 
   /**
    * Emits a probe-bag anonymous class: the literal init props declared as public
-   * properties plus a `__get` whose body is `throwStmt`. Shared by both probe-bag
-   * lowerings (negative: read-is-a-bug; positive: read-is-the-asserted-throw),
-   * which differ only in that throw statement. Returns null if any init prop
-   * value fails to transpile.
+   * properties plus a `__get` that runs `throwStmt` for the PROBED names and reports
+   * every other name as absent. Shared by both probe-bag lowerings (negative:
+   * read-is-a-bug; positive: read-is-the-asserted-throw), which differ only in that
+   * throw statement. Returns null if any init prop value fails to transpile.
+   *
+   * Only the source object's getters throw. The JS bag being modelled has exactly the
+   * properties it declares, so reading any other name yields `undefined` — reading
+   * `calendar` off `{ year, month, get day() { throw } }` is not the bug the fixture is
+   * watching for. `null` is how a `__get` reports that absence to `Options::bagGet()`.
    *
    * @param {Array<{ name: string, valueNode: object }>} initProps
+   * @param {string[]} getterNames the source object's accessor properties
    * @param {string} throwStmt a complete PHP throw statement, e.g. `throw new \\Foo();`
    */
-  emitProbeBagAnonClass(initProps, throwStmt) {
+  emitProbeBagAnonClass(initProps, getterNames, throwStmt) {
     const decls = initProps.map(({ name, valueNode }) => {
       const v = this.transpileExpr(valueNode);
       return v === null ? null : `public mixed $${name} = ${v};`;
     });
     if (decls.includes(null)) return null;
     const declStr = decls.length > 0 ? decls.join(' ') + ' ' : '';
-    return `new class { ${declStr}public function __get(string $name): mixed { ${throwStmt} } }`;
+    const probed = getterNames.map(n => `'${n}'`).join(', ');
+    const body = `if (in_array($name, [${probed}], true)) { ${throwStmt} } return null;`;
+    return `new class { ${declStr}public function __get(string $name): mixed { ${body} } }`;
   }
 
   // ── assert.* helpers ──────────────────────────────────────────────────────
@@ -3880,7 +3890,7 @@ function probeGetterBag(node, getterPredicate, gateFn = () => true) {
 
   if (getters.length === 0) return null;
   if (!gateFn({ initProps, getters })) return null;
-  return { initProps };
+  return { initProps, getterNames: getters.map(g => g.name) };
 }
 
 /**

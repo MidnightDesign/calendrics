@@ -15,7 +15,7 @@ TemporalHelpers::assertPlainYearMonth($ym->with(['month' => 9]), 2019, 9, 'M09',
 TemporalHelpers::assertPlainYearMonth($ym->with(['monthCode' => 'M09']), 2019, 9, 'M09', 'monthCode');
 Assert::throws(\RangeException::class, function () use (&$ym) { return $ym->with(['month' => 9, 'monthCode' => 'M10']); }, 'month/monthCode mismatch');
 TemporalHelpers::assertPlainYearMonth($ym->with(['month' => 1, 'years' => 2020]), 2019, 1, 'M01', 'plural \'years\'');
-$withDay = $ym->with(new class { public mixed $year = 2019; public function __get(string $name): mixed { throw new \RuntimeException('test262: property '.$name.' must not be read'); } });
+$withDay = $ym->with(new class { public mixed $year = 2019; public function __get(string $name): mixed { if (in_array($name, ['day'], true)) { throw new \RuntimeException('test262: property '.$name.' must not be read'); } return null; } });
 TemporalHelpers::assertPlainYearMonth($withDay, 2019, 10, 'M10', 'day property');
 $isoDay = (float) (\Temporal\Tests\Test262\Js::slice(explode('-', $withDay->toString(['calendarName' => 'always']))[2], 0, 2));
 Assert::sameValue($isoDay, 1, '');

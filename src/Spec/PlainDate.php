@@ -10,6 +10,7 @@ use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\Calendar\CalendarFactory;
 use Temporal\Spec\Internal\CalendarMath;
 use Temporal\Spec\Internal\EpochLimits;
+use Temporal\Spec\Internal\FieldBag;
 use Temporal\Spec\Internal\MonthCode;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
@@ -26,6 +27,15 @@ use Temporal\Spec\Internal\TimeZoneHelper;
 final class PlainDate implements Stringable
 {
     use TemporalSerde;
+
+    /**
+     * The calendar fields a PlainDate is built from, as passed to PrepareCalendarFields.
+     * `era`/`eraYear` are not listed: they are CalendarExtraFields, added by
+     * {@see FieldBag} only for calendars that have eras.
+     *
+     * @var list<string>
+     */
+    private const array CALENDAR_FIELDS = ['year', 'month', 'monthCode', 'day'];
 
     // -------------------------------------------------------------------------
     // Virtual (get-only) properties
@@ -295,9 +305,7 @@ final class PlainDate implements Stringable
         if ($item instanceof self) {
             return new self($item->isoYear, $item->isoMonth, $item->isoDay, $item->calendarId);
         }
-        if (is_object($item)) {
-            $item = get_object_vars($item);
-        }
+        $item = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, [], 'PlainDate');
         return self::fromPropertyBag($item, $overflow);
     }
 
@@ -357,7 +365,7 @@ final class PlainDate implements Stringable
             throw new TypeError('PlainDate::with() argument must not be a Temporal object.');
         }
 
-        $fields = is_object($fields) ? get_object_vars($fields) : $fields;
+        $fields = FieldBag::forPartial($fields, self::CALENDAR_FIELDS, $this->calendarId);
 
         if (array_key_exists('calendar', $fields) || array_key_exists('timeZone', $fields)) {
             throw new TypeError('PlainDate::with() fields must not contain a calendar or timeZone property.');
@@ -642,7 +650,7 @@ final class PlainDate implements Stringable
         // default; PHP null (the spec layer's representation of JS undefined, since the
         // transpiler maps `undefined` → null in argument position) is the same omitted
         // case. A Symbol sentinel is rejected; a bag is normalized to an array.
-        $opts = Options::requireObject($options ?? []);
+        $opts = Options::requireObject($options ?? [], ['calendarName']);
 
         // TC39: years 0–9999 → 4 digits; years outside → ±YYYYYY (6 digits with sign prefix).
         if ($this->isoYear < 0) {
@@ -1110,7 +1118,12 @@ final class PlainDate implements Stringable
         $roundingIncrement = 1;
 
         if ($options !== null) {
-            $opts = Options::normalizeOptions($options);
+            $opts = Options::normalizeOptions($options, [
+                'largestUnit',
+                'roundingIncrement',
+                'roundingMode',
+                'smallestUnit',
+            ]);
 
             // largestUnit
             if (array_key_exists('largestUnit', $opts)) {

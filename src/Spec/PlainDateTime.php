@@ -10,6 +10,7 @@ use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\Calendar\CalendarFactory;
 use Temporal\Spec\Internal\CalendarMath;
 use Temporal\Spec\Internal\EpochLimits;
+use Temporal\Spec\Internal\FieldBag;
 use Temporal\Spec\Internal\MonthCode;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
@@ -27,6 +28,26 @@ use Temporal\Spec\Internal\TimeZoneHelper;
 final class PlainDateTime implements Stringable
 {
     use TemporalSerde;
+
+    /**
+     * The calendar fields a PlainDateTime is built from, as passed to
+     * PrepareCalendarFields. `era`/`eraYear` are CalendarExtraFields, added by
+     * {@see FieldBag} only for calendars that have eras.
+     *
+     * @var list<string>
+     */
+    private const array CALENDAR_FIELDS = [
+        'year',
+        'month',
+        'monthCode',
+        'day',
+        'hour',
+        'minute',
+        'second',
+        'millisecond',
+        'microsecond',
+        'nanosecond',
+    ];
 
     private const int NS_PER_HOUR = 3_600_000_000_000;
     private const int NS_PER_MINUTE = 60_000_000_000;
@@ -389,9 +410,7 @@ final class PlainDateTime implements Stringable
             Options::overflowFromValue($options);
             return $result;
         }
-        if (is_object($item)) {
-            $item = get_object_vars($item);
-        }
+        $item = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, [], 'PlainDateTime');
         $overflow = Options::overflowFromValue($options);
         return self::fromPropertyBag($item, $overflow);
     }
@@ -458,7 +477,7 @@ final class PlainDateTime implements Stringable
             throw new TypeError('PlainDateTime::with() argument must not be a Temporal object.');
         }
 
-        $fields = is_object($fields) ? get_object_vars($fields) : $fields;
+        $fields = FieldBag::forPartial($fields, self::CALENDAR_FIELDS, $this->calendarId);
 
         if (array_key_exists('calendar', $fields) || array_key_exists('timeZone', $fields)) {
             throw new TypeError('PlainDateTime::with() fields must not contain a calendar or timeZone property.');
@@ -806,7 +825,7 @@ final class PlainDateTime implements Stringable
                     throw new TypeError('PlainDateTime::round() requires a non-undefined options argument.');
                 }
             }
-            $options = Options::requireObject($options);
+            $options = Options::requireObject($options, ['roundingIncrement', 'roundingMode', 'smallestUnit']);
         }
 
         /** @var mixed $suRaw */
@@ -946,7 +965,12 @@ final class PlainDateTime implements Stringable
         // GetOptionsObject: PHP null (the spec layer's representation of an omitted/
         // `undefined` options argument) resolves to the empty-array default; a Symbol
         // sentinel is rejected; a bag is normalized to an array.
-        $options = Options::requireObject($options ?? []);
+        $options = Options::requireObject($options ?? [], [
+            'calendarName',
+            'fractionalSecondDigits',
+            'roundingMode',
+            'smallestUnit',
+        ]);
 
         $calendarName = 'auto';
         $digits = -2; // -2 = 'auto'
@@ -1162,7 +1186,7 @@ final class PlainDateTime implements Stringable
         // GetOptionsObject: PHP null (the spec layer's representation of an omitted/
         // `undefined` options argument) resolves to the empty-array default; a Symbol
         // sentinel is rejected; a bag is normalized to an array.
-        $opts = Options::requireObject($options ?? []);
+        $opts = Options::requireObject($options ?? [], ['disambiguation']);
 
         // Validate disambiguation option if present.
         $disambiguation = 'compatible';
@@ -1589,7 +1613,12 @@ final class PlainDateTime implements Stringable
         $roundingIncrement = 1;
 
         if ($options !== null) {
-            $opts = Options::requireObject($options);
+            $opts = Options::requireObject($options, [
+                'largestUnit',
+                'roundingIncrement',
+                'roundingMode',
+                'smallestUnit',
+            ]);
 
             if (array_key_exists('largestUnit', $opts)) {
                 /** @var mixed $lu */

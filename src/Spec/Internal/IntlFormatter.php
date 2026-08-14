@@ -21,6 +21,32 @@ use Temporal\Spec\Internal\Calendar\CalendarFactory;
  */
 final class IntlFormatter
 {
+    /**
+     * Every option name toLocaleString() reads, for snapshotting an object options bag
+     * through {@see Options::bagSnapshot()}.
+     *
+     * @var list<string>
+     */
+    public const array OPTION_NAMES = [
+        'calendar',
+        'dateStyle',
+        'day',
+        'dayPeriod',
+        'era',
+        'fractionalSecondDigits',
+        'hour',
+        'hour12',
+        'hourCycle',
+        'minute',
+        'month',
+        'second',
+        'timeStyle',
+        'timeZone',
+        'timeZoneName',
+        'weekday',
+        'year',
+    ];
+
     /** @var list<string> Individual date/time component options that conflict with dateStyle/timeStyle. */
     private const COMPONENT_OPTIONS = [
         'weekday',
