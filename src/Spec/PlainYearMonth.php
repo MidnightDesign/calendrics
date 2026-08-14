@@ -247,14 +247,18 @@ final class PlainYearMonth implements Stringable
             return $result;
         }
 
-        // Object/instance/property-bag: GetOptionsObject + GetTemporalOverflowOption
-        // are read before the algorithmic field validation (CalendarYearMonthFromFields).
-        $overflow = Options::overflowFromValue($options);
-
+        // An existing PlainYearMonth is copied wholesale — no fields are read — but the
+        // options argument is still put through GetOptionsObject.
         if ($item instanceof self) {
+            Options::overflowFromValue($options);
             return new self($item->isoYear, $item->isoMonth, $item->calendarId, $item->referenceISODay);
         }
+
+        // Property-bag branch: PrepareCalendarFields reads the bag BEFORE
+        // GetOptionsObject, and both precede the algorithmic field validation in
+        // CalendarYearMonthFromFields.
         $item = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, [], 'PlainYearMonth');
+        $overflow = Options::overflowFromValue($options);
         return self::fromPropertyBag($item, $overflow);
     }
 
@@ -347,31 +351,36 @@ final class PlainYearMonth implements Stringable
             $year = CalendarMath::toFiniteInt($fields['year'], 'PlainYearMonth::with() year');
         }
 
-        $month = $this->isoMonth;
         $hasMonth = array_key_exists('month', $fields);
         $hasMonthCode = array_key_exists('monthCode', $fields);
 
-        if ($hasMonthCode) {
-            // MonthCode::validate: non-string TYPE => TypeError, ill-formed STRING =>
-            // RangeError (type-then-syntax, before month suitability is resolved).
-            $month = CalendarMath::monthCodeToMonth(MonthCode::validate($fields['monthCode']));
-        }
-        if ($hasMonth) {
-            $newMonth = CalendarMath::toFiniteInt($fields['month'], 'PlainYearMonth::with() month');
-            if ($hasMonthCode && $newMonth !== $month) {
-                throw new RangeError('Conflicting month and monthCode fields.');
-            }
-            $month = $newMonth;
-        }
+        // MonthCode::validate is field preparation: TYPE (non-stringifiable => TypeError)
+        // then SYNTAX (ill-formed => RangeError). Whether the code names a month this
+        // calendar has is CalendarDateFromFields, resolved after the options are read.
+        $monthCode = $hasMonthCode ? MonthCode::validate($fields['monthCode']) : null;
+        $newMonth = $hasMonth ? CalendarMath::toFiniteInt($fields['month'], 'PlainYearMonth::with() month') : null;
 
-        if ($month < 1) {
-            throw new RangeError("Invalid month {$month}: must be at least 1.");
+        // `month` is read with ToPositiveIntegerWithTruncation, so a non-positive value
+        // is rejected during field preparation — before the options are read.
+        if ($newMonth !== null && $newMonth < 1) {
+            throw new RangeError("Invalid month {$newMonth}: must be at least 1.");
         }
 
         // GetOptionsObject + GetTemporalOverflowOption: explicit null / primitive /
         // Symbol => TypeError; omitted ([]) and a bag without 'overflow' default to
         // 'constrain'; an 'overflow' value is coerced/validated.
         $overflow = Options::overflowFromValue($options);
+
+        $month = $this->isoMonth;
+        if ($monthCode !== null) {
+            $month = CalendarMath::monthCodeToMonth($monthCode);
+        }
+        if ($newMonth !== null) {
+            if ($monthCode !== null && $newMonth !== $month) {
+                throw new RangeError('Conflicting month and monthCode fields.');
+            }
+            $month = $newMonth;
+        }
 
         if ($overflow === 'constrain') {
             $month = min(12, $month);
@@ -483,7 +492,7 @@ final class PlainYearMonth implements Stringable
      * @param array<array-key, mixed>|object                 $options ['overflow' => 'constrain'|'reject']
      * @psalm-api
      */
-    public function add(string|array|object $duration, array|object $options = []): self
+    public function add(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return $this->addDuration(1, $dur, $options);
@@ -496,7 +505,7 @@ final class PlainYearMonth implements Stringable
      * @param array<array-key, mixed>|object                 $options ['overflow' => 'constrain'|'reject']
      * @psalm-api
      */
-    public function subtract(string|array|object $duration, array|object $options = []): self
+    public function subtract(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return $this->addDuration(-1, $dur, $options);
@@ -509,7 +518,7 @@ final class PlainYearMonth implements Stringable
      * @param array<array-key, mixed>|object $options ['largestUnit' => 'year'|'month', 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      * @psalm-api
      */
-    public function since(string|array|object $other, array|object $options = []): Duration
+    public function since(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -527,7 +536,7 @@ final class PlainYearMonth implements Stringable
      * @param array<array-key, mixed>|object $options ['largestUnit' => 'year'|'month', 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      * @psalm-api
      */
-    public function until(string|array|object $other, array|object $options = []): Duration
+    public function until(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -566,7 +575,7 @@ final class PlainYearMonth implements Stringable
      * @psalm-api
      */
     #[\Override]
-    public function toString(array|object|null $options = null): string
+    public function toString(mixed $options = null): string
     {
         $opts = Options::normalizeOptions($options, ['calendarName']);
 

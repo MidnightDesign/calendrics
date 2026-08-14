@@ -22,8 +22,8 @@ Assert::throws(\RangeException::class, function () use (&$propertyBag) { return 
 Assert::throws(\RangeException::class, function () use (&$propertyBag) { return \Temporal\Spec\PlainDateTime::from($propertyBag, (object) ['overflow' => 2]); }, 'bigint');
 Assert::throws(\RangeException::class, function () use (&$propertyBag) { return \Temporal\Spec\PlainDateTime::from($propertyBag, (object) JsUndefined::strip(['overflow' => (object) []])); }, 'plain object');
 $expected = ['get overflow.toString', 'call overflow.toString'];
-$actual = [];
+$actual = new \Temporal\Tests\Test262\ObserverTrace();
 $observer = TemporalHelpers::toPrimitiveObserver($actual, 'constrain', 'overflow');
 $result = \Temporal\Spec\PlainDateTime::from($propertyBag, (object) JsUndefined::strip(['overflow' => $observer]));
 TemporalHelpers::assertPlainDateTime($result, 2000, 5, 'M05', 2, 12, 0, 0, 0, 0, 0, 'object with toString');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(actual, expected, "order of operations");
+Assert::compareObserverTrace($actual, $expected, 'order of operations');

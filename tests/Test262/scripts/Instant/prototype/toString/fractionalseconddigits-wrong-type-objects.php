@@ -17,9 +17,9 @@ Assert::throws(\TypeError::class, function () use (&$instant) { return $instant-
 // JS-only (BigInt option-bag value; Number-vs-BigInt distinction not representable in PHP): assert.throws(RangeError, () => instant.toString({ fractionalSecondDigits: 2n }), "bigints are not numbers and convert to strings which are not valid for fract…
 Assert::throws(\RangeException::class, function () use (&$instant) { return $instant->toString((object) JsUndefined::strip(['fractionalSecondDigits' => (object) []])); }, 'plain objects are not numbers and convert to strings which are not valid for fractionalSecondDigits');
 $expected = ['get fractionalSecondDigits.toString', 'call fractionalSecondDigits.toString'];
-$actual = [];
+$actual = new \Temporal\Tests\Test262\ObserverTrace();
 $observer = TemporalHelpers::toPrimitiveObserver($actual, 'auto', 'fractionalSecondDigits');
 $result = $instant->toString((object) JsUndefined::strip(['fractionalSecondDigits' => $observer]));
 Assert::sameValue($result, '2001-09-09T01:46:40.98765Z', 'object with toString uses toString return value');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(actual, expected, "object with toString calls toString and not valueOf");
+// JS-only (trace covers a call skipped above, so the tracker is empty here): assert.compareArray(actual, expected, "object with toString calls toString and not valueOf");
 Assert::incomplete('BigInt option-bag value; Number-vs-BigInt distinction not representable in PHP');

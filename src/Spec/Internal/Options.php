@@ -281,13 +281,20 @@ final class Options
      * required argument precisely so that a new call site cannot quietly reintroduce
      * that blind spot.
      *
-     * @param array<array-key, mixed>|object|null $options
+     * The parameter is `mixed` rather than `array|object|null` on purpose: a
+     * primitive options argument must be rejected HERE, at the point GetOptionsObject
+     * runs, not by a parameter-type guard on the public method. PHP checks a typed
+     * parameter before the body executes, which would raise the TypeError before the
+     * operation's primary argument had been converted — and TC39 requires that
+     * conversion, with the property reads it performs, to happen first.
+     *
+     * @param mixed $options Raw options argument (null/primitive → TypeError).
      * @param list<string> $props Option names this operation recognizes.
      * @return array<array-key, mixed>
      */
-    public static function requireObject(array|object|null $options, array $props): array
+    public static function requireObject(mixed $options, array $props): array
     {
-        if ($options === null) {
+        if ($options === null || !is_array($options) && !is_object($options)) {
             throw new TypeError('options must be an object.');
         }
         if (is_object($options)) {
@@ -319,14 +326,21 @@ final class Options
      * list of option names the calling operation reads, so an object bag exposing its
      * options through `__get` is seen instead of snapshotting empty.
      *
-     * @param array<array-key, mixed>|object|null $options
+     * `mixed` for the same reason as {@see self::requireObject()}: a primitive must be
+     * rejected at the GetOptionsObject step inside the body, not by a parameter-type
+     * guard that fires before the primary argument is converted.
+     *
+     * @param mixed $options Raw options argument (null → defaults; primitive → TypeError).
      * @param list<string> $props Option names this operation recognizes.
      * @return array<array-key, mixed>
      */
-    public static function normalizeOptions(array|object|null $options, array $props): array
+    public static function normalizeOptions(mixed $options, array $props): array
     {
         if ($options === null) {
             return [];
+        }
+        if (!is_array($options) && !is_object($options)) {
+            throw new TypeError('options must be an object.');
         }
         if (is_object($options)) {
             if ($options instanceof Stringable) {
@@ -346,6 +360,32 @@ final class Options
      * {@see self::bagGet()} returns as `null`.
      */
     public const string ABSENT = "\0Temporal\\Spec\\Internal\\Options::ABSENT\0";
+
+    /**
+     * Bag entries TC39 reads with ToString, and which {@see self::bagSnapshot()}
+     * therefore stringifies at read time.
+     *
+     * Covers both option keywords (GetOption with type string) and the string-valued
+     * date fields (PrepareCalendarFields' ToPrimitiveAndRequireString entries). The
+     * numeric fields are absent because PHP reaches ToNumber only for real int/float
+     * values, and so is `calendar`: ToTemporalCalendarIdentifier REQUIRES a String
+     * rather than coercing to one, so a non-string there stays a TypeError.
+     */
+    private const array STRING_VALUED = [
+        'calendarName',
+        'direction',
+        'disambiguation',
+        'era',
+        'fractionalSecondDigits',
+        'largestUnit',
+        'monthCode',
+        'offset',
+        'overflow',
+        'roundingMode',
+        'smallestUnit',
+        'timeZoneName',
+        'unit',
+    ];
 
     /**
      * Faithful TC39 `Get(O, P)` for a property bag.
@@ -398,31 +438,6 @@ final class Options
     }
 
     /**
-     * Faithful TC39 `HasProperty(O, P)` for a property bag.
-     *
-     * Distinct from {@see self::bagGet()} in the one way that matters: it never invokes
-     * an accessor. JS's `[[HasProperty]]` answers whether the property exists without
-     * evaluating its getter, so the algorithms that merely ask "does this bag carry a
-     * `calendar` key?" — and reject it if so — must not be able to trigger a getter's
-     * side effects or its throw. `__isset` is PHP's spelling of that question; an object
-     * exposing `__get` without it reports only its declared properties.
-     *
-     * @param array<array-key, mixed>|object $bag
-     */
-    public static function bagHas(array|object $bag, string $prop): bool
-    {
-        if (is_array($bag)) {
-            return array_key_exists($prop, $bag);
-        }
-        if (array_key_exists($prop, get_object_vars($bag))) {
-            return true;
-        }
-
-        /** @phpstan-ignore property.dynamicName */
-        return method_exists($bag, '__isset') && isset($bag->{$prop});
-    }
-
-    /**
      * Normalizes a property bag to an array by reading $props through the faithful
      * {@see self::bagGet()}, in the order given.
      *
@@ -439,6 +454,13 @@ final class Options
      * lists that PrepareCalendarFields walks). Names outside it are never probed,
      * which matters for bags whose accessor throws on an unrecognized name — probing
      * one that the spec does not read would invent an error the spec never raises.
+     *
+     * A name TC39 reads with ToString ({@see self::STRING_VALUED}) is stringified
+     * here, as it is read, rather than by whichever caller eventually consumes it.
+     * That timing is observable: an accessor may have side effects, and a value that
+     * cannot stringify throws. Coercing at read time keeps each read paired with its
+     * own coercion, so a bag whose second field throws on access cannot pre-empt the
+     * error the first field's value was already going to raise.
      *
      * Array bags are returned unchanged: their keys are already a snapshot, there is
      * no accessor to fire, and passing them through preserves entries the caller
@@ -462,6 +484,9 @@ final class Options
             $read = [$prop => self::bagGet($bag, $prop)];
             if ($read[$prop] === self::ABSENT) {
                 continue;
+            }
+            if ($read[$prop] instanceof Stringable && in_array($prop, self::STRING_VALUED, strict: true)) {
+                $read = [$prop => (string) $read[$prop]];
             }
             $snapshot = array_merge($snapshot, $read);
         }

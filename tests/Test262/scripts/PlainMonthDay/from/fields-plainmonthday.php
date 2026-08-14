@@ -10,5 +10,5 @@ use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 use Temporal\Tests\Test262\TemporalHelpers;
 $expected = ['get overflow', 'get overflow.toString', 'call overflow.toString'];
-$actual = [];
+$actual = new \Temporal\Tests\Test262\ObserverTrace();
 Assert::incomplete('untranslatable object property');

@@ -71,11 +71,14 @@ final class FieldBag
      * Snapshots a PARTIAL bag — the argument to a `with()` call, which overrides some
      * fields of an existing value and inherits the rest.
      *
-     * Two things separate this from {@see self::forCalendarType()}. The calendar is the
-     * receiver's, never the bag's: `with()` cannot change it, and IsPartialTemporalObject
-     * rejects a bag that so much as carries a `calendar` or `timeZone` key. And that
-     * rejection is a HasProperty check, so those two names are probed through
-     * {@see Options::bagHas()} — an accessor for them is never evaluated.
+     * What separates this from {@see self::forCalendarType()} is the calendar: it is the
+     * receiver's, never the bag's. `with()` cannot change it, and IsPartialTemporalObject
+     * rejects a bag that so much as carries a `calendar` or `timeZone` key.
+     *
+     * That rejection reads both names with `Get(O, P)`, not HasProperty, and does so
+     * BEFORE any field is touched — IsPartialTemporalObject runs ahead of
+     * PrepareCalendarFields. An accessor for either name therefore does fire, and fires
+     * first, which is observable when it has side effects or throws.
      *
      * @param array<array-key, mixed>|object $bag
      * @param list<string> $calendarFields Calendar field names the operation recognizes.
@@ -93,18 +96,19 @@ final class FieldBag
             return $bag;
         }
 
-        $snapshot = Options::bagSnapshot($bag, self::fieldNames($calendarFields, $calendarId, $nonCalendarFields));
-
-        // Re-expose the two rejected names so the caller's IsPartialTemporalObject check
-        // sees them, without their values ever having been read.
-        foreach (['calendar', 'timeZone'] as $rejected) {
-            if (!Options::bagHas($bag, $rejected)) {
+        // Re-exposed as null so the caller's IsPartialTemporalObject check sees the name;
+        // only its presence decides the rejection, never its value.
+        $rejected = [];
+        foreach (['calendar', 'timeZone'] as $name) {
+            if (Options::bagGet($bag, $name) === Options::ABSENT) {
                 continue;
             }
-            $snapshot[$rejected] = null;
+            $rejected[$name] = null;
         }
 
-        return $snapshot;
+        $snapshot = Options::bagSnapshot($bag, self::fieldNames($calendarFields, $calendarId, $nonCalendarFields));
+
+        return array_merge($snapshot, $rejected);
     }
 
     /**

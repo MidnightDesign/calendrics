@@ -12,8 +12,8 @@ use Temporal\Tests\Test262\TemporalHelpers;
 $instance = new \Temporal\Spec\PlainYearMonth(2000, 5);
 foreach ([INF, -INF] as $inf) {
 Assert::throws(\RangeException::class, function () use (&$instance, &$inf) { return $instance->toPlainDate((object) JsUndefined::strip(['day' => $inf])); }, "day property cannot be {$inf}");
-$calls = [];
+$calls = new \Temporal\Tests\Test262\ObserverTrace();
 $obj = TemporalHelpers::toPrimitiveObserver($calls, $inf, 'day');
 Assert::throws(\RangeException::class, function () use (&$instance, &$obj) { return $instance->toPlainDate((object) JsUndefined::strip(['day' => $obj])); }, '');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(calls, ["get day.valueOf", "call day.valueOf"], "it fails after fetching the primitive value");
+Assert::compareObserverTrace($calls, ['get day.valueOf', 'call day.valueOf'], 'it fails after fetching the primitive value');
 }

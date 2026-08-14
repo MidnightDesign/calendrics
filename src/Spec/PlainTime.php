@@ -369,7 +369,7 @@ final class PlainTime implements Stringable
      * @throws RangeError for invalid option values.
      * @psalm-api
      */
-    public function until(string|array|object $other, array|object|null $options = []): Duration
+    public function until(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         $diffNs = $o->ns - $this->ns;
@@ -386,7 +386,7 @@ final class PlainTime implements Stringable
      * @throws RangeError for invalid option values.
      * @psalm-api
      */
-    public function since(string|array|object $other, array|object|null $options = []): Duration
+    public function since(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         $diffNs = $this->ns - $o->ns;
@@ -506,7 +506,7 @@ final class PlainTime implements Stringable
      * @psalm-api
      */
     #[\Override]
-    public function toString(array|object|null $options = []): string
+    public function toString(mixed $options = []): string
     {
         // GetOptionsObject: explicit null / non-object primitive / Symbol => TypeError.
         // An omitted options argument arrives as the empty-array default.

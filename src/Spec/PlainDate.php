@@ -297,15 +297,19 @@ final class PlainDate implements Stringable
             return $result;
         }
 
-        // Object / instance / property-bag branch: GetOptionsObject and
-        // GetTemporalOverflowOption are read before the algorithmic field validation
-        // (CalendarDateFromFields, steps 17-20).
-        $overflow = Options::overflowFromValue($options);
-
+        // An existing PlainDate is copied wholesale — no fields are read — but the
+        // options argument is still put through GetOptionsObject.
         if ($item instanceof self) {
+            Options::overflowFromValue($options);
             return new self($item->isoYear, $item->isoMonth, $item->isoDay, $item->calendarId);
         }
+
+        // Property-bag branch: PrepareCalendarFields (step 16) reads the bag BEFORE
+        // GetOptionsObject (step 18), so an accessor on the bag runs — and can throw —
+        // ahead of any complaint about the options argument. Both precede the
+        // algorithmic field validation in CalendarDateFromFields (steps 19-20).
         $item = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, [], 'PlainDate');
+        $overflow = Options::overflowFromValue($options);
         return self::fromPropertyBag($item, $overflow);
     }
 
@@ -395,38 +399,37 @@ final class PlainDate implements Stringable
             return $this->withNonIso($fields, $options, $calendar);
         }
 
-        // --- ISO calendar path --- TC39 PrepareCalendarFields reads and coerces the
-        // partial fields BEFORE GetOptionsObject validates the options argument's type,
-        // so a bad field value's RangeError precedes a primitive options TypeError. The
-        // overflow keyword (which only drives regulation) is resolved afterward.
+        // --- ISO calendar path --- The three TC39 steps run in this order, and the
+        // boundaries between them are observable:
+        //   1. PrepareCalendarFields — read and COERCE every partial field. A bad field
+        //      value's RangeError therefore precedes a primitive options TypeError.
+        //   2. GetOptionsObject + GetTemporalOverflowOption — read the options bag.
+        //   3. CalendarDateFromFields — decide whether the coerced fields describe a
+        //      real date in this calendar. A month code the calendar does not have is
+        //      rejected HERE, after the options have already been read.
         $year = $this->isoYear;
         if (array_key_exists('year', $fields)) {
             $year = CalendarMath::toFiniteInt($fields['year'], 'PlainDate::with() year');
         }
 
-        $month = $this->isoMonth;
         $hasMonth = array_key_exists('month', $fields);
         $hasMonthCode = array_key_exists('monthCode', $fields);
-        if ($hasMonthCode) {
-            // MonthCode::validate: non-string TYPE => TypeError, ill-formed STRING =>
-            // RangeError (type-then-syntax, before month suitability is resolved).
-            $month = CalendarMath::monthCodeToMonth(MonthCode::validate($fields['monthCode']));
-        }
-        if ($hasMonth) {
-            $newMonth = CalendarMath::toFiniteInt($fields['month'], 'PlainDate::with() month');
-            if ($hasMonthCode && $newMonth !== $month) {
-                throw new RangeError('Conflicting month and monthCode fields.');
-            }
-            $month = $newMonth;
-        }
+        // MonthCode::validate is step 1: it checks TYPE (non-stringifiable => TypeError)
+        // then SYNTAX (ill-formed => RangeError). Whether the code names a month this
+        // calendar actually has is step 3, below.
+        $monthCode = $hasMonthCode ? MonthCode::validate($fields['monthCode']) : null;
+        $newMonth = $hasMonth ? CalendarMath::toFiniteInt($fields['month'], 'PlainDate::with() month') : null;
 
         $day = $this->isoDay;
         if (array_key_exists('day', $fields)) {
             $day = CalendarMath::toFiniteInt($fields['day'], 'PlainDate::with() day');
         }
 
-        if ($month < 1) {
-            throw new RangeError("Invalid month {$month}: must be at least 1.");
+        // `month` and `day` are read with ToPositiveIntegerWithTruncation, so a
+        // non-positive value is rejected as part of step 1 — before the options are
+        // read, not with the calendar validation below.
+        if ($newMonth !== null && $newMonth < 1) {
+            throw new RangeError("Invalid month {$newMonth}: must be at least 1.");
         }
         if ($day < 1) {
             throw new RangeError("Invalid day {$day}: must be at least 1.");
@@ -435,6 +438,17 @@ final class PlainDate implements Stringable
         // GetOptionsObject + GetTemporalOverflowOption: explicit null / primitive /
         // Symbol => TypeError; omitted ([]) defaults to 'constrain'.
         $overflow = Options::overflowFromValue($options);
+
+        $month = $this->isoMonth;
+        if ($monthCode !== null) {
+            $month = CalendarMath::monthCodeToMonth($monthCode);
+        }
+        if ($newMonth !== null) {
+            if ($monthCode !== null && $newMonth !== $month) {
+                throw new RangeError('Conflicting month and monthCode fields.');
+            }
+            $month = $newMonth;
+        }
 
         if ($overflow === 'constrain') {
             /**
@@ -564,7 +578,7 @@ final class PlainDate implements Stringable
      * @param array<array-key, mixed>|object                 $options ['overflow' => 'constrain'|'reject']
      * @psalm-api
      */
-    public function add(string|array|object $duration, array|object $options = []): self
+    public function add(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return $this->addDuration(1, $dur, $options);
@@ -577,7 +591,7 @@ final class PlainDate implements Stringable
      * @param array<array-key, mixed>|object                 $options ['overflow' => 'constrain'|'reject']
      * @psalm-api
      */
-    public function subtract(string|array|object $duration, array|object $options = []): self
+    public function subtract(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return $this->addDuration(-1, $dur, $options);
@@ -592,7 +606,7 @@ final class PlainDate implements Stringable
      * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      * @psalm-api
      */
-    public function since(string|array|object $other, array|object|null $options = null): Duration
+    public function since(string|array|object $other, mixed $options = null): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -610,7 +624,7 @@ final class PlainDate implements Stringable
      * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      * @psalm-api
      */
-    public function until(string|array|object $other, array|object|null $options = null): Duration
+    public function until(string|array|object $other, mixed $options = null): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -644,7 +658,7 @@ final class PlainDate implements Stringable
      * @psalm-api
      */
     #[\Override]
-    public function toString(array|object|null $options = []): string
+    public function toString(mixed $options = []): string
     {
         // GetOptionsObject: an omitted options argument arrives as the empty-array
         // default; PHP null (the spec layer's representation of JS undefined, since the

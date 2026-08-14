@@ -15,13 +15,13 @@ foreach ([INF, -INF] as $inf) {
 foreach (['year', 'month', 'day', 'hour', 'minute', 'second', 'millisecond', 'microsecond', 'nanosecond'] as $prop) {
 Assert::throws(\RangeException::class, function () use (&$base, &$prop, &$inf, &$other) { return \Temporal\Spec\PlainDateTime::compare((object) JsUndefined::strip(array_merge((array) $base, [$prop => $inf])), $other); }, "{$prop} property cannot be {$inf}");
 Assert::throws(\RangeException::class, function () use (&$other, &$base, &$prop, &$inf) { return \Temporal\Spec\PlainDateTime::compare($other, (object) JsUndefined::strip(array_merge((array) $base, [$prop => $inf]))); }, "{$prop} property cannot be {$inf}");
-$calls1 = [];
+$calls1 = new \Temporal\Tests\Test262\ObserverTrace();
 $obj1 = TemporalHelpers::toPrimitiveObserver($calls1, $inf, $prop);
 Assert::throws(\RangeException::class, function () use (&$base, &$prop, &$obj1, &$other) { return \Temporal\Spec\PlainDateTime::compare((object) JsUndefined::strip(array_merge((array) $base, [$prop => $obj1])), $other); }, '');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(calls1, [`get ${prop}.valueOf`, `call ${prop}.valueOf`], "it fails after fetching the primitive value");
-$calls2 = [];
+Assert::compareObserverTrace($calls1, ["get {$prop}.valueOf", "call {$prop}.valueOf"], 'it fails after fetching the primitive value');
+$calls2 = new \Temporal\Tests\Test262\ObserverTrace();
 $obj2 = TemporalHelpers::toPrimitiveObserver($calls2, $inf, $prop);
 Assert::throws(\RangeException::class, function () use (&$other, &$base, &$prop, &$obj2) { return \Temporal\Spec\PlainDateTime::compare($other, (object) JsUndefined::strip(array_merge((array) $base, [$prop => $obj2]))); }, '');
-// JS-only (observer call-order check, tracker is empty in PHP): assert.compareArray(calls2, [`get ${prop}.valueOf`, `call ${prop}.valueOf`], "it fails after fetching the primitive value");
+Assert::compareObserverTrace($calls2, ["get {$prop}.valueOf", "call {$prop}.valueOf"], 'it fails after fetching the primitive value');
 }
 }

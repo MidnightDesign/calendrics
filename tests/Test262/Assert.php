@@ -139,6 +139,31 @@ final class Assert
     }
 
     /**
+     * Asserts a property-access trace recorded by the observers in
+     * {@see Helper\ObserversAndCalendar}, ignoring the events PHP cannot produce.
+     *
+     * JS has two coercion hooks; PHP has one. `__toString` stands in for ToString, so
+     * `get X.toString` / `call X.toString` events are recorded and compared. ToNumber
+     * has no equivalent — an object cannot be handed to the implementation where an
+     * integer is expected without changing the behavior under test — so numeric option
+     * values travel unwrapped and never announce their coercion. Dropping the
+     * `…valueOf` pairs from the expected trace is what makes the remaining sequence
+     * comparable; the property READS around them, which are the point of these
+     * fixtures, are compared in full.
+     *
+     * @param array<mixed> $expected
+     */
+    public static function compareObserverTrace(ObserverTrace $actual, array $expected, ?string $message = null): void
+    {
+        $observable = array_values(array_filter(
+            $expected,
+            static fn(mixed $event): bool => !is_string($event) || !str_ends_with($event, '.valueOf'),
+        ));
+
+        PHPUnitAssert::assertSame($observable, $actual->events(), $message ?? '');
+    }
+
+    /**
      * Marks the current test as skipped.
      *
      * @psalm-api
