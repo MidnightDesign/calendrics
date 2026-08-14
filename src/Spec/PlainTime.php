@@ -9,6 +9,7 @@ use Temporal\Exception\RangeError;
 use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\CalendarMath;
 use Temporal\Spec\Internal\EpochLimits;
+use Temporal\Spec\Internal\FieldBag;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
 
@@ -23,6 +24,21 @@ use Temporal\Spec\Internal\TemporalSerde;
 final class PlainTime implements Stringable
 {
     use TemporalSerde;
+
+    /**
+     * The fields a PlainTime is built from. A time carries no calendar, so this list is
+     * fixed — there are no CalendarExtraFields to add.
+     *
+     * @var list<string>
+     */
+    private const array TIME_FIELDS = [
+        'hour',
+        'minute',
+        'second',
+        'millisecond',
+        'microsecond',
+        'nanosecond',
+    ];
 
     private const int NS_PER_HOUR = 3_600_000_000_000;
     private const int NS_PER_MINUTE = 60_000_000_000;
@@ -181,9 +197,7 @@ final class PlainTime implements Stringable
             Options::overflowFromValue($options);
             return $result;
         }
-        if (is_object($item)) {
-            $item = get_object_vars($item);
-        }
+        $item = FieldBag::forFields($item, self::TIME_FIELDS);
         // ToTemporalTime steps 2.c-2.e: read fields then validate options.
         $overflow = Options::overflowFromValue($options);
         return self::fromPropertyBag($item, $overflow);
@@ -242,7 +256,7 @@ final class PlainTime implements Stringable
             throw new TypeError('PlainTime::with() argument must be an object.');
         }
 
-        $fields = is_object($fields) ? get_object_vars($fields) : $fields;
+        $fields = FieldBag::forPartial($fields, self::TIME_FIELDS, null);
 
         // RejectObjectWithCalendarOrTimeZone: calendar/timeZone keys are date-specific
         // and must not appear in a PlainTime fields bag.
@@ -403,7 +417,7 @@ final class PlainTime implements Stringable
                     throw new TypeError('PlainTime::round() requires a non-undefined options argument.');
                 }
             }
-            $options = Options::requireObject($options);
+            $options = Options::requireObject($options, ['roundingIncrement', 'roundingMode', 'smallestUnit']);
         }
 
         /** @var mixed $suRaw */
@@ -496,7 +510,7 @@ final class PlainTime implements Stringable
     {
         // GetOptionsObject: explicit null / non-object primitive / Symbol => TypeError.
         // An omitted options argument arrives as the empty-array default.
-        $options = Options::requireObject($options);
+        $options = Options::requireObject($options, ['fractionalSecondDigits', 'roundingMode', 'smallestUnit']);
 
         // $digits: -2 = 'auto', -1 = minute format (no seconds), 0-9 = fixed digits.
         $digits = -2;
@@ -972,7 +986,7 @@ final class PlainTime implements Stringable
 
         // GetOptionsObject: explicit null / non-object primitive / Symbol => TypeError.
         // An omitted options argument arrives as the empty-array default.
-        $opts = Options::requireObject($options);
+        $opts = Options::requireObject($options, ['largestUnit', 'roundingIncrement', 'roundingMode', 'smallestUnit']);
 
         if ($opts !== []) {
             if (array_key_exists('largestUnit', $opts)) {

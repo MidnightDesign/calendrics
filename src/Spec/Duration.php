@@ -10,6 +10,7 @@ use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\Calendar\CalendarFactory;
 use Temporal\Spec\Internal\CalendarMath;
 use Temporal\Spec\Internal\EpochLimits;
+use Temporal\Spec\Internal\FieldBag;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TimeZoneHelper;
 
@@ -24,6 +25,46 @@ use Temporal\Spec\Internal\TimeZoneHelper;
  */
 final class Duration implements Stringable
 {
+    /**
+     * The ten recognized duration fields. A duration carries no calendar, so this list
+     * is fixed — there are no CalendarExtraFields to add.
+     *
+     * @var list<string>
+     */
+    /**
+     * The calendar fields a `relativeTo` property bag is built from — a ZonedDateTime-
+     * shaped anchor, so the full date-and-time set. `era`/`eraYear` are added by
+     * {@see FieldBag} for calendars that have eras; `offset`/`timeZone` are non-calendar
+     * fields, passed alongside.
+     *
+     * @var list<string>
+     */
+    private const array RELATIVE_TO_FIELDS = [
+        'year',
+        'month',
+        'monthCode',
+        'day',
+        'hour',
+        'minute',
+        'second',
+        'millisecond',
+        'microsecond',
+        'nanosecond',
+    ];
+
+    private const array PLURAL_FIELDS = [
+        'years',
+        'months',
+        'weeks',
+        'days',
+        'hours',
+        'minutes',
+        'seconds',
+        'milliseconds',
+        'microseconds',
+        'nanoseconds',
+    ];
+
     /**
      * Returns 1 if any field is positive, -1 if any field is negative, 0 if all are zero.
      *
@@ -250,9 +291,7 @@ final class Duration implements Stringable
         if (is_string($item)) {
             return self::fromString($item);
         }
-        if (is_object($item)) {
-            $item = get_object_vars($item);
-        }
+        $item = FieldBag::forFields($item, self::PLURAL_FIELDS);
         return self::parseDurationLike($item);
     }
 
@@ -488,24 +527,11 @@ final class Duration implements Stringable
             throw new TypeError('Duration::with() argument must not be a Temporal object.');
         }
 
-        $fields = is_object($fields) ? get_object_vars($fields) : $fields;
+        $fields = FieldBag::forFields($fields, self::PLURAL_FIELDS);
 
         // TC39 ToTemporalPartialDurationRecord: at least one recognized plural field required.
-        /** @var list<string> $PLURAL_FIELDS */
-        static $PLURAL_FIELDS = [
-            'years',
-            'months',
-            'weeks',
-            'days',
-            'hours',
-            'minutes',
-            'seconds',
-            'milliseconds',
-            'microseconds',
-            'nanoseconds',
-        ];
         $hasAny = false;
-        foreach ($PLURAL_FIELDS as $f) {
+        foreach (self::PLURAL_FIELDS as $f) {
             if (!array_key_exists($f, $fields)) {
                 continue;
             }
@@ -552,7 +578,7 @@ final class Duration implements Stringable
     {
         // GetOptionsObject: explicit null / non-object primitive / Symbol => TypeError.
         // An omitted options argument arrives as the empty-array default.
-        $options = Options::requireObject($options);
+        $options = Options::requireObject($options, ['fractionalSecondDigits', 'roundingMode', 'smallestUnit']);
 
         // $digits: null = auto, 0–9 = exact digit count.
         $digits = null;
@@ -751,7 +777,7 @@ final class Duration implements Stringable
                     throw new TypeError('Duration::total() requires a non-undefined options argument.');
                 }
             }
-            $totalOf = Options::requireObject($totalOf);
+            $totalOf = Options::requireObject($totalOf, ['relativeTo', 'unit']);
         }
 
         if (is_array($totalOf)) {
@@ -857,7 +883,12 @@ final class Duration implements Stringable
                 }
             } elseif ($rtRaw !== null) {
                 if (is_object($rtRaw)) {
-                    $rtForVal = get_object_vars($rtRaw);
+                    $rtForVal = FieldBag::forCalendarType(
+                        $rtRaw,
+                        self::RELATIVE_TO_FIELDS,
+                        ['offset', 'timeZone'],
+                        'relativeTo',
+                    );
                 } elseif (is_array($rtRaw)) {
                     $rtForVal = $rtRaw;
                 } else {
@@ -1063,7 +1094,7 @@ final class Duration implements Stringable
             $rt = $this->parseRelativeToString($rt);
         } else {
             if (is_object($rt)) {
-                $rt = get_object_vars($rt);
+                $rt = FieldBag::forCalendarType($rt, self::RELATIVE_TO_FIELDS, ['offset', 'timeZone'], 'relativeTo');
             }
             if (is_array($rt)) {
                 self::validateRelativeToPropertyBag($rt);
@@ -1730,22 +1761,8 @@ final class Duration implements Stringable
      */
     private static function parseDurationLike(array $item): self
     {
-        /** @var list<string> $PLURAL_FIELDS */
-        static $PLURAL_FIELDS = [
-            'years',
-            'months',
-            'weeks',
-            'days',
-            'hours',
-            'minutes',
-            'seconds',
-            'milliseconds',
-            'microseconds',
-            'nanoseconds',
-        ];
-
         $hasAny = false;
-        foreach ($PLURAL_FIELDS as $f) {
+        foreach (self::PLURAL_FIELDS as $f) {
             if (!array_key_exists($f, $item)) {
                 continue;
             }
@@ -1761,7 +1778,7 @@ final class Duration implements Stringable
 
         // Validate and extract each field.
         $values = [];
-        foreach ($PLURAL_FIELDS as $field) {
+        foreach (self::PLURAL_FIELDS as $field) {
             /** @var mixed $v */
             $v = $item[$field] ?? 0;
             // Coerce per the universal numeric contract: a numeric value (int /
@@ -2146,7 +2163,7 @@ final class Duration implements Stringable
         string|array|object $two,
         array|object|null $options = null,
     ): int {
-        $opts = Options::normalizeOptions($options);
+        $opts = Options::normalizeOptions($options, ['relativeTo']);
 
         $d1 = self::from($one);
         $d2 = self::from($two);
@@ -2254,7 +2271,13 @@ final class Duration implements Stringable
                     throw new TypeError('Duration::round() requires a non-undefined options argument.');
                 }
             }
-            $roundTo = Options::requireObject($roundTo);
+            $roundTo = Options::requireObject($roundTo, [
+                'largestUnit',
+                'relativeTo',
+                'roundingIncrement',
+                'roundingMode',
+                'smallestUnit',
+            ]);
         }
 
         /** @var mixed $suRaw */
@@ -2868,7 +2891,7 @@ final class Duration implements Stringable
     private static function extractRelativeTo(array|object|null $options): bool
     {
         if (is_object($options)) {
-            $options = get_object_vars($options);
+            $options = Options::bagSnapshot($options, ['relativeTo']);
         }
         if ($options === null || !array_key_exists('relativeTo', $options)) {
             return false;
@@ -2895,7 +2918,7 @@ final class Duration implements Stringable
             return true;
         }
         if (is_object($rt)) {
-            $rt = get_object_vars($rt);
+            $rt = FieldBag::forCalendarType($rt, self::RELATIVE_TO_FIELDS, ['offset', 'timeZone'], 'relativeTo');
         }
         if (is_array($rt)) {
             self::validateRelativeToPropertyBag($rt);
@@ -2925,7 +2948,7 @@ final class Duration implements Stringable
         }
         // Property bag — normalize generic objects to arrays first.
         if (is_object($rt)) {
-            $rt = get_object_vars($rt);
+            $rt = FieldBag::forCalendarType($rt, self::RELATIVE_TO_FIELDS, ['offset', 'timeZone'], 'relativeTo');
         }
         assert(is_array($rt), description: 'non-string $rt must be a property-bag array at this point');
         [$year, $month, $day] = self::resolveAnchorYmd($rt);
@@ -3649,7 +3672,7 @@ final class Duration implements Stringable
     {
         // Normalize plain-object property bags (but keep Temporal instances intact).
         if (is_object($rt) && !$rt instanceof ZonedDateTime && !$rt instanceof PlainDate) {
-            $rt = get_object_vars($rt);
+            $rt = FieldBag::forCalendarType($rt, self::RELATIVE_TO_FIELDS, ['offset', 'timeZone'], 'relativeTo');
         }
         if ($rt instanceof ZonedDateTime) {
             $tzId = $rt->timeZoneId;

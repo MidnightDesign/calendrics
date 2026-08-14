@@ -9,6 +9,7 @@ use Temporal\Exception\RangeError;
 use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\Calendar\CalendarFactory;
 use Temporal\Spec\Internal\CalendarMath;
+use Temporal\Spec\Internal\FieldBag;
 use Temporal\Spec\Internal\MonthCode;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
@@ -23,6 +24,15 @@ use Temporal\Spec\Internal\TemporalSerde;
 final class PlainYearMonth implements Stringable
 {
     use TemporalSerde;
+
+    /**
+     * The calendar fields a PlainYearMonth is built from, as passed to
+     * PrepareCalendarFields. `era`/`eraYear` are CalendarExtraFields, added by
+     * {@see FieldBag} only for calendars that have eras.
+     *
+     * @var list<string>
+     */
+    private const array CALENDAR_FIELDS = ['year', 'month', 'monthCode'];
 
     // -------------------------------------------------------------------------
     // Virtual (get-only) properties
@@ -244,9 +254,7 @@ final class PlainYearMonth implements Stringable
         if ($item instanceof self) {
             return new self($item->isoYear, $item->isoMonth, $item->calendarId, $item->referenceISODay);
         }
-        if (is_object($item)) {
-            $item = get_object_vars($item);
-        }
+        $item = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, [], 'PlainYearMonth');
         return self::fromPropertyBag($item, $overflow);
     }
 
@@ -305,7 +313,7 @@ final class PlainYearMonth implements Stringable
             throw new TypeError('PlainYearMonth::with() argument must not be a Temporal object.');
         }
 
-        $fields = is_object($fields) ? get_object_vars($fields) : $fields;
+        $fields = FieldBag::forPartial($fields, self::CALENDAR_FIELDS, $this->calendarId);
 
         if (array_key_exists('calendar', $fields) || array_key_exists('timeZone', $fields)) {
             throw new TypeError('PlainYearMonth::with() fields must not contain a calendar or timeZone property.');
@@ -560,7 +568,7 @@ final class PlainYearMonth implements Stringable
     #[\Override]
     public function toString(array|object|null $options = null): string
     {
-        $opts = Options::normalizeOptions($options);
+        $opts = Options::normalizeOptions($options, ['calendarName']);
 
         $yearStr = self::formatYear($this->isoYear);
         $base = sprintf('%s-%02d', $yearStr, $this->isoMonth);
@@ -594,7 +602,7 @@ final class PlainYearMonth implements Stringable
      */
     public function toPlainDate(array|object $fields): PlainDate
     {
-        $bag = is_object($fields) ? get_object_vars($fields) : $fields;
+        $bag = FieldBag::forFields($fields, ['day']);
 
         if (!array_key_exists('day', $bag)) {
             throw new TypeError('PlainYearMonth::toPlainDate() argument must have a day property.');
@@ -924,7 +932,7 @@ final class PlainYearMonth implements Stringable
 
         // GetOptionsObject: validate and normalise the options bag.
         // Stringable sentinels (JsSymbol) trigger TypeError via __toString().
-        $opts = Options::requireObject($options);
+        $opts = Options::requireObject($options, ['largestUnit', 'roundingIncrement', 'roundingMode', 'smallestUnit']);
         if ($opts !== []) {
             // largestUnit
             if (array_key_exists('largestUnit', $opts)) {

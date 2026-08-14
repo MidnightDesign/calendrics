@@ -9,5 +9,5 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $instance = new \Temporal\Spec\PlainDate(1970, 1, 1);
-$item = new class { public function __get(string $name): mixed { throw new \Temporal\Tests\Test262\Test262Error(); } };
+$item = new class { public function __get(string $name): mixed { if (in_array($name, ['timeZone'], true)) { throw new \Temporal\Tests\Test262\Test262Error(); } return null; } };
 Assert::throws(\Temporal\Tests\Test262\Test262Error::class, function () use (&$instance, &$item) { return $instance->toZonedDateTime($item); }, '');

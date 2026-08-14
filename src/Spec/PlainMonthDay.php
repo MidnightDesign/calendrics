@@ -9,6 +9,7 @@ use Temporal\Exception\RangeError;
 use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\Calendar\CalendarFactory;
 use Temporal\Spec\Internal\CalendarMath;
+use Temporal\Spec\Internal\FieldBag;
 use Temporal\Spec\Internal\MonthCode;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
@@ -24,6 +25,15 @@ use Temporal\Spec\Internal\TemporalSerde;
 final class PlainMonthDay implements Stringable
 {
     use TemporalSerde;
+
+    /**
+     * The calendar fields a PlainMonthDay is built from, as passed to
+     * PrepareCalendarFields. `era`/`eraYear` are CalendarExtraFields, added by
+     * {@see FieldBag} only for calendars that have eras.
+     *
+     * @var list<string>
+     */
+    private const array CALENDAR_FIELDS = ['year', 'month', 'monthCode', 'day'];
 
     // -------------------------------------------------------------------------
     // Virtual (get-only) properties
@@ -212,9 +222,7 @@ final class PlainMonthDay implements Stringable
             ];
             return self::fromPropertyBag($bag, $overflow);
         }
-        if (is_object($item)) {
-            $item = get_object_vars($item);
-        }
+        $item = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, [], 'PlainMonthDay');
         return self::fromPropertyBag($item, $overflow);
     }
 
@@ -253,7 +261,7 @@ final class PlainMonthDay implements Stringable
         }
 
         // Normalize inputs to array up front so the body has a single path.
-        $bag = is_object($fields) ? get_object_vars($fields) : $fields;
+        $bag = FieldBag::forPartial($fields, self::CALENDAR_FIELDS, $this->calendarId);
 
         // IsPartialTemporalObject step 3: calendar key present → TypeError.
         if (array_key_exists('calendar', $bag)) {
@@ -477,7 +485,7 @@ final class PlainMonthDay implements Stringable
     #[\Override]
     public function toString(array|object|null $options = null): string
     {
-        $opts = Options::normalizeOptions($options);
+        $opts = Options::normalizeOptions($options, ['calendarName']);
 
         $calendarName = 'auto';
         if (array_key_exists('calendarName', $opts)) {
@@ -529,7 +537,7 @@ final class PlainMonthDay implements Stringable
      */
     public function toPlainDate(array|object $fields): PlainDate
     {
-        $bag = is_object($fields) ? get_object_vars($fields) : $fields;
+        $bag = FieldBag::forFields($fields, ['year', 'era', 'eraYear']);
 
         $calendar = $this->calendarId !== 'iso8601' ? CalendarFactory::get($this->calendarId) : null;
 

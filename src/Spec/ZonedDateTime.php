@@ -12,6 +12,7 @@ use Temporal\Spec\Internal\CalendarMath;
 use Temporal\Spec\Internal\EpochLimits;
 use Temporal\Spec\Internal\EpochRounding;
 use Temporal\Spec\Internal\EpochValue;
+use Temporal\Spec\Internal\FieldBag;
 use Temporal\Spec\Internal\HasEpochParts;
 use Temporal\Spec\Internal\IntlFormatter;
 use Temporal\Spec\Internal\Options;
@@ -34,6 +35,28 @@ use function assert;
 final class ZonedDateTime implements Stringable
 {
     use HasEpochParts;
+
+    /**
+     * The calendar fields a ZonedDateTime is built from, as passed to
+     * PrepareCalendarFields. `era`/`eraYear` are CalendarExtraFields, added by
+     * {@see FieldBag} only for calendars that have eras; `offset`/`timeZone` are
+     * non-calendar fields, supplied per call site.
+     *
+     * @var list<string>
+     */
+    private const array CALENDAR_FIELDS = [
+        'year',
+        'month',
+        'monthCode',
+        'day',
+        'hour',
+        'minute',
+        'second',
+        'millisecond',
+        'microsecond',
+        'nanosecond',
+    ];
+
     use TemporalSerde;
 
     private const int MS_PER_SECOND = 1_000;
@@ -493,7 +516,7 @@ final class ZonedDateTime implements Stringable
      */
     public static function from(string|array|object $item, array|object|null $options = null): self
     {
-        $opts = Options::normalizeOptions($options);
+        $opts = Options::normalizeOptions($options, ['disambiguation', 'offset', 'overflow']);
 
         // Validate 'disambiguation' option if present.
         if (array_key_exists('disambiguation', $opts)) {
@@ -539,7 +562,7 @@ final class ZonedDateTime implements Stringable
         if (array_key_exists('offset', $opts) && is_string($opts['offset'])) {
             $offsetOption = $opts['offset'];
         }
-        $bag = is_object($item) ? get_object_vars($item) : $item;
+        $bag = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, ['offset', 'timeZone'], 'ZonedDateTime');
         return self::fromPropertyBag($bag, $overflow, $disambiguation, $offsetOption);
     }
 
@@ -857,7 +880,14 @@ final class ZonedDateTime implements Stringable
     #[\Override]
     public function toString(array|object|null $options = null): string
     {
-        $options = Options::normalizeOptions($options);
+        $options = Options::normalizeOptions($options, [
+            'calendarName',
+            'fractionalSecondDigits',
+            'offset',
+            'roundingMode',
+            'smallestUnit',
+            'timeZoneName',
+        ]);
 
         $digits = -2; // -2 = 'auto'
         $offsetMode = 'auto';
@@ -1041,7 +1071,7 @@ final class ZonedDateTime implements Stringable
         if ($options === null) {
             $opts = [];
         } else {
-            $opts = is_array($options) ? $options : get_object_vars($options);
+            $opts = Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES);
         }
         /** @psalm-var array<string, mixed> $opts */
 
@@ -1172,7 +1202,7 @@ final class ZonedDateTime implements Stringable
                     throw new TypeError('ZonedDateTime::round() requires a non-undefined options argument.');
                 }
             }
-            $options = Options::requireObject($options);
+            $options = Options::requireObject($options, ['roundingIncrement', 'roundingMode', 'smallestUnit']);
         }
 
         /** @var mixed $suRaw */
@@ -1302,7 +1332,7 @@ final class ZonedDateTime implements Stringable
             throw new TypeError('ZonedDateTime::with() argument must not be a Temporal object.');
         }
 
-        $fields = is_object($fields) ? get_object_vars($fields) : $fields;
+        $fields = FieldBag::forPartial($fields, self::CALENDAR_FIELDS, $this->calendarId, ['offset']);
 
         if (array_key_exists('calendar', $fields) || array_key_exists('timeZone', $fields)) {
             throw new TypeError('ZonedDateTime::with() fields must not contain a calendar or timeZone property.');
@@ -1342,7 +1372,7 @@ final class ZonedDateTime implements Stringable
         // Extract the 'offset' option (default is 'prefer' for with()).
         $offsetOption = 'prefer';
         if ($options !== null) {
-            $optArr = is_array($options) ? $options : get_object_vars($options);
+            $optArr = Options::bagSnapshot($options, ['offset']);
             if (array_key_exists('offset', $optArr)) {
                 /** @var mixed $offOpt */
                 $offOpt = $optArr['offset'];
@@ -1704,7 +1734,7 @@ final class ZonedDateTime implements Stringable
             if (is_array($direction)) {
                 $bag = $direction;
             } elseif (is_object($direction) && !$direction instanceof \Stringable) {
-                $bag = get_object_vars($direction);
+                $bag = Options::bagSnapshot($direction, ['direction']);
             } else {
                 // Anything else fails GetOptionsObject and surfaces as a single
                 // TypeError.
@@ -2012,7 +2042,7 @@ final class ZonedDateTime implements Stringable
      */
     private static function parseZdtString(string $text, array|object|null $options = null): self
     {
-        $opts = Options::normalizeOptions($options);
+        $opts = Options::normalizeOptions($options, ['disambiguation', 'offset']);
 
         // Resolve the 'offset' option (default: 'reject').
         $offsetOption = 'reject';
@@ -3102,7 +3132,12 @@ final class ZonedDateTime implements Stringable
         $roundingIncrement = 1;
 
         if ($options !== null) {
-            $opts = Options::normalizeOptions($options);
+            $opts = Options::normalizeOptions($options, [
+                'largestUnit',
+                'roundingIncrement',
+                'roundingMode',
+                'smallestUnit',
+            ]);
 
             if (array_key_exists('largestUnit', $opts)) {
                 /** @var mixed $lu */
@@ -3862,7 +3897,7 @@ final class ZonedDateTime implements Stringable
         if ($options === null) {
             return 'compatible';
         }
-        $options = Options::normalizeOptions($options);
+        $options = Options::normalizeOptions($options, ['disambiguation']);
         if (!array_key_exists('disambiguation', $options)) {
             return 'compatible';
         }

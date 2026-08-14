@@ -136,7 +136,7 @@ final class Options
         }
         // requireObject turns an explicit null / Symbol sentinel into a TypeError and
         // normalizes an object to an array; the empty-array default passes through.
-        return self::overflowFromBag(self::requireObject($options));
+        return self::overflowFromBag(self::requireObject($options, ['overflow']));
     }
 
     /**
@@ -163,7 +163,7 @@ final class Options
         if ($options === null) {
             return 'constrain';
         }
-        $options = self::normalizeOptions($options);
+        $options = self::normalizeOptions($options, ['overflow']);
         if (!array_key_exists('overflow', $options)) {
             return 'constrain';
         }
@@ -249,10 +249,17 @@ final class Options
      * Omitted options arrive as the empty-array default, which passes through as "no
      * options". A genuine options object/array is returned normalized to an array.
      *
+     * $props is the exhaustive list of option names the calling operation reads; an
+     * object bag is snapshotted through {@see self::bagSnapshot()} so that one exposing
+     * its options via `__get` is seen rather than silently read as empty. It is a
+     * required argument precisely so that a new call site cannot quietly reintroduce
+     * that blind spot.
+     *
      * @param array<array-key, mixed>|object|null $options
+     * @param list<string> $props Option names this operation recognizes.
      * @return array<array-key, mixed>
      */
-    public static function requireObject(array|object|null $options): array
+    public static function requireObject(array|object|null $options, array $props): array
     {
         if ($options === null) {
             throw new TypeError('options must be an object.');
@@ -261,10 +268,10 @@ final class Options
             if ($options instanceof Stringable) {
                 // JsSymbol sentinel: __toString throws Temporal\Exception\TypeError.
                 // For any other Stringable (e.g. JsUndefined which returns 'undefined'),
-                // the cast succeeds and we fall through to get_object_vars.
+                // the cast succeeds and we fall through to the snapshot.
                 (string) $options;
             }
-            return get_object_vars($options);
+            return self::bagSnapshot($options, $props);
         }
         return $options;
     }
@@ -282,10 +289,15 @@ final class Options
      *   "If options is undefined, set options to OrdinaryObjectCreate(null)"
      * i.e. null/undefined is valid (use defaults) but non-object non-undefined is TypeError.
      *
+     * $props carries the same contract as in {@see self::requireObject()}: the exhaustive
+     * list of option names the calling operation reads, so an object bag exposing its
+     * options through `__get` is seen instead of snapshotting empty.
+     *
      * @param array<array-key, mixed>|object|null $options
+     * @param list<string> $props Option names this operation recognizes.
      * @return array<array-key, mixed>
      */
-    public static function normalizeOptions(array|object|null $options): array
+    public static function normalizeOptions(array|object|null $options, array $props): array
     {
         if ($options === null) {
             return [];
@@ -296,7 +308,7 @@ final class Options
                 // This must propagate — do not catch it.
                 (string) $options;
             }
-            return get_object_vars($options);
+            return self::bagSnapshot($options, $props);
         }
         return $options;
     }
@@ -322,7 +334,12 @@ final class Options
      *   - object with a DECLARED property `$p` (including a declared `null` value):
      *     direct read, never dispatching through `__get`.
      *   - object exposing `__get`: read `$o->$p`, firing the accessor getter (whose
-     *     body may legitimately throw — that throw must propagate).
+     *     body may legitimately throw — that throw must propagate). A getter that
+     *     yields `null` reports {@see self::ABSENT}: `null` is the PHP rendering of
+     *     the `undefined` a JS `[[Get]]` returns for a property the object does not
+     *     carry, and every algorithm here treats `undefined` as "field not supplied".
+     *     A DECLARED `null` keeps meaning "present, and its value is null", which is
+     *     what makes `{month: null}` a rejected field rather than an omitted one.
      *   - otherwise: {@see self::ABSENT}.
      *
      * @param array<array-key, mixed>|object $bag
@@ -344,10 +361,86 @@ final class Options
         if (method_exists($bag, '__get')) {
             // Accessor getter: a runtime property name is intrinsic to Get(O, P);
             // the getter body may legitimately throw, which must propagate.
-            /** @phpstan-ignore property.dynamicName */
-            return $bag->{$prop};
+            /**
+             * @var mixed $value
+             * @phpstan-ignore property.dynamicName
+             */
+            $value = $bag->{$prop};
+            return $value ?? self::ABSENT;
         }
         return self::ABSENT;
+    }
+
+    /**
+     * Faithful TC39 `HasProperty(O, P)` for a property bag.
+     *
+     * Distinct from {@see self::bagGet()} in the one way that matters: it never invokes
+     * an accessor. JS's `[[HasProperty]]` answers whether the property exists without
+     * evaluating its getter, so the algorithms that merely ask "does this bag carry a
+     * `calendar` key?" — and reject it if so — must not be able to trigger a getter's
+     * side effects or its throw. `__isset` is PHP's spelling of that question; an object
+     * exposing `__get` without it reports only its declared properties.
+     *
+     * @param array<array-key, mixed>|object $bag
+     */
+    public static function bagHas(array|object $bag, string $prop): bool
+    {
+        if (is_array($bag)) {
+            return array_key_exists($prop, $bag);
+        }
+        if (array_key_exists($prop, get_object_vars($bag))) {
+            return true;
+        }
+
+        /** @phpstan-ignore property.dynamicName */
+        return method_exists($bag, '__isset') && isset($bag->{$prop});
+    }
+
+    /**
+     * Normalizes a property bag to an array by reading $props through the faithful
+     * {@see self::bagGet()}, in the order given.
+     *
+     * This is the object-bag counterpart to {@see self::normalizeOptions()}. The
+     * difference is what an OBJECT bag is allowed to be: `get_object_vars()` sees
+     * only declared public properties, so an object that exposes its fields through
+     * `__get` — an ordinary PHP DTO, a lazily-hydrated entity, a config wrapper —
+     * snapshots as an empty bag and every field silently goes missing. Reading the
+     * recognized names one at a time instead fires those accessors, which is what
+     * TC39 prescribes: each field is an individual `Get(O, P)`.
+     *
+     * $props is therefore the exhaustive list of names the calling algorithm
+     * recognizes, in the order TC39 reads them (alphabetical, for the calendar field
+     * lists that PrepareCalendarFields walks). Names outside it are never probed,
+     * which matters for bags whose accessor throws on an unrecognized name — probing
+     * one that the spec does not read would invent an error the spec never raises.
+     *
+     * Array bags are returned unchanged: their keys are already a snapshot, there is
+     * no accessor to fire, and passing them through preserves entries the caller
+     * inspects but did not list.
+     *
+     * @param array<array-key, mixed>|object $bag
+     * @param list<string> $props Recognized property names, in TC39 read order.
+     * @return array<array-key, mixed>
+     */
+    public static function bagSnapshot(array|object $bag, array $props): array
+    {
+        if (is_array($bag)) {
+            return $bag;
+        }
+
+        $snapshot = [];
+        foreach ($props as $prop) {
+            // Merged as a single-entry array rather than assigned to $snapshot[$prop]:
+            // the value is `mixed`, and Psalm rejects a mixed value reaching an array
+            // offset directly.
+            $read = [$prop => self::bagGet($bag, $prop)];
+            if ($read[$prop] === self::ABSENT) {
+                continue;
+            }
+            $snapshot = array_merge($snapshot, $read);
+        }
+
+        return $snapshot;
     }
 
     /**
