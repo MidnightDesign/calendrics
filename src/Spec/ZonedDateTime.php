@@ -1829,8 +1829,8 @@ final class ZonedDateTime implements Stringable
      * @throws RangeError if the result is outside the representable range.
      */
     public static function fromInstantParts(
-        int $epochSec,
-        int $subNs,
+        int|float $epochSec,
+        int|float $subNs,
         string $tzId,
         string $calendarId = 'iso8601',
     ): self {
@@ -2982,8 +2982,8 @@ final class ZonedDateTime implements Stringable
      * decomposition.
      */
     public static function createFromEpochParts(
-        int $epochSec,
-        int $subNs,
+        int|float $epochSec,
+        int|float $subNs,
         string $tzId,
         string $calendarId = 'iso8601',
     ): self {
@@ -2995,13 +2995,22 @@ final class ZonedDateTime implements Stringable
      *
      * Handles int64 overflow by storing a sentinel epochNanoseconds value while
      * preserving the true epoch seconds for later decomposition in localComponents().
+     *
+     * $epochSec/$subNs accept int|float and are narrowed by
+     * {@see EpochValue::narrowParts()}, which documents where float parts come from.
      */
     private static function fromEpochParts(
-        int $epochSec,
-        int $subNs,
+        int|float $epochSec,
+        int|float $subNs,
         string $tzId,
         string $calendarId = 'iso8601',
     ): self {
+        $parts = EpochValue::narrowParts($epochSec, $subNs);
+        if ($parts === null) {
+            throw new RangeError('ZonedDateTime arithmetic result is outside the representable range.');
+        }
+        [$epochSec, $subNs] = $parts;
+
         // Range check (message is ZonedDateTime-specific, so it stays here; the
         // int64-fit / sentinel packing is shared via EpochValue::fromParts()).
         $absEpochSec = abs($epochSec);

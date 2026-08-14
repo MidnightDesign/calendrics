@@ -15,6 +15,7 @@ namespace Temporal\Spec\Internal;
  * longer fits int64. This object owns the two pieces of that bookkeeping that are
  * byte-for-byte identical between the two classes:
  *
+ *   - {@see narrowParts()} — the int|float → int part narrowing both seams accept.
  *   - {@see fromParts()} — sub-second normalization + the int64-fit / sentinel pack.
  *   - {@see parts()} — the inverse decompose back into (epochSec, subNs).
  *
@@ -40,6 +41,47 @@ final readonly class EpochValue
         public ?int $trueEpochSec,
         public int $trueSubNs,
     ) {}
+
+    /**
+     * Narrows an (epochSec, subNs) pair that may arrive as floats into int parts,
+     * or returns null when the pair cannot describe a representable instant.
+     *
+     * Instant and ZonedDateTime expose @internal factories that take true epoch parts.
+     * The test262 transpiler feeds them the floor decomposition of an over-int64 BigInt
+     * epoch value, whose epoch-seconds component lands in PHP as a float literal once it
+     * passes PHP_INT_MAX. Both factories therefore accept int|float and funnel the value
+     * through here, so an out-of-range magnitude surfaces as the caller's RangeError
+     * rather than as a TypeError from the parameter type.
+     *
+     * A finite over-int64 float epochSec cannot be inside the ±8.64e12 s spec range, so
+     * it is rejected unconditionally. (float) PHP_INT_MAX rounds up past PHP_INT_MAX, so
+     * the comparison uses the spec bound — which is < 2^53 and therefore exact in float.
+     *
+     * @return array{int, int}|null The int pair, or null when no valid pair exists.
+     */
+    public static function narrowParts(int|float $epochSec, int|float $subNs): ?array
+    {
+        $maxSec = EpochLimits::MAX_EPOCH_SECONDS;
+        if (is_float($epochSec)) {
+            if (!is_finite($epochSec) || $epochSec > (float) $maxSec || $epochSec < -(float) $maxSec) {
+                return null;
+            }
+            $epochSec = (int) $epochSec;
+        }
+        if (is_float($subNs)) {
+            if (
+                !is_finite($subNs)
+                || floor($subNs) !== $subNs
+                || $subNs > (float) PHP_INT_MAX
+                || $subNs < (float) PHP_INT_MIN
+            ) {
+                return null;
+            }
+            $subNs = (int) $subNs;
+        }
+
+        return [$epochSec, $subNs];
+    }
 
     /**
      * Builds an EpochValue from an in-range (epochSec, subNs) pair: the sub-second
@@ -68,15 +110,14 @@ final readonly class EpochValue
         // ±9_223_372_035, and either way the sole effect is which of an equal-magnitude
         // int64-fitting pack vs. a sentinel clamp is chosen — and the clamped
         // epochNanoseconds field is never read directly (over-int64 reads route through
-        // the carried trueEpochSec; the only fixtures that would assert the sentinel are
-        // the BigInt-overflow limit tests the transpiler skips).
+        // the carried trueEpochSec; the BigInt-overflow limit fixtures assert the
+        // RangeError and the ±8.64e12 s boundary instants, both of which fit int64).
         if ($epochSec > $maxSecForNs || $epochSec < -$maxSecForNs) {
             // @infection-ignore-all Reached only when |epochSec| > MAX_EPOCH_SECONDS_FOR_INT64_NS,
             // so $epochSec is never 0 here (the < 0 ⇒ <= 0 boundary is dead) and the chosen
             // sentinel (PHP_INT_MIN/MAX) is never observed: every over-int64 read goes through
-            // the carried trueEpochSec, and no runnable test262 fixture asserts the raw sentinel
-            // (the BigInt limit tests transpile to skips). Swapping the ternary arms is therefore
-            // equivalent under the corpus.
+            // the carried trueEpochSec, and no runnable test262 fixture asserts the raw sentinel.
+            // Swapping the ternary arms is therefore equivalent under the corpus.
             return new self($epochSec < 0 ? PHP_INT_MIN : PHP_INT_MAX, $epochSec, $subNs);
         }
         // @infection-ignore-all trueSubNs literal 0: dead in the fits-int64 case. This

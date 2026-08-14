@@ -8,4 +8,14 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-Assert::incomplete('cannot represent value of \'nsMaxInstant\' in PHP (BigInt overflow)');
+// Folded (BigInt 8640000000000000000000 exceeds int64): nsMaxInstant
+// Folded (BigInt -8640000000000000000000 exceeds int64): nsMinInstant
+$invalidEpochNanoseconds = [Assert::int64Overflow(), Assert::int64Overflow(), Assert::int64Overflow(), Assert::int64Overflow()];
+$timeZones = ['UTC', '+00', '+01', '-01'];
+foreach ($timeZones as $timeZone) {
+// Unrolled (4 over-int64 BigInt values): epochNs
+Assert::throws(\RangeException::class, function () use (&$timeZone) { return \Temporal\Spec\ZonedDateTime::fromInstantParts(8640000000000, 1, $timeZone); }, "epochNs = 8640000000000000000001, timeZone = {$timeZone}");
+Assert::throws(\RangeException::class, function () use (&$timeZone) { return \Temporal\Spec\ZonedDateTime::fromInstantParts(-8640000000001, 999999999, $timeZone); }, "epochNs = -8640000000000000000001, timeZone = {$timeZone}");
+Assert::throws(\RangeException::class, function () use (&$timeZone) { return \Temporal\Spec\ZonedDateTime::fromInstantParts(340282366920938463463374607431, 768211456, $timeZone); }, "epochNs = 340282366920938463463374607431768211456, timeZone = {$timeZone}");
+Assert::throws(\RangeException::class, function () use (&$timeZone) { return \Temporal\Spec\ZonedDateTime::fromInstantParts(-340282366920938463463374607432, 231788544, $timeZone); }, "epochNs = -340282366920938463463374607431768211456, timeZone = {$timeZone}");
+}

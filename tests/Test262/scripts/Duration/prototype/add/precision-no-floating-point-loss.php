@@ -11,4 +11,5 @@ use Temporal\Tests\Test262\JsUndefined;
 use Temporal\Tests\Test262\TemporalHelpers;
 $duration1 = \Temporal\Spec\Duration::from(['seconds' => 4_503_599_627_370_495, 'nanoseconds' => 499_999_999]);
 $duration2 = \Temporal\Spec\Duration::from(JsUndefined::strip(['seconds' => 4_503_599_627_370_495 - 86_400, 'nanoseconds' => 499_999_999, 'days' => 1]));
-Assert::incomplete('cannot represent value of \'nanos\' in PHP (BigInt overflow)');
+// Folded (BigInt 9007199254740990999999998 exceeds int64): nanos
+TemporalHelpers::assertDuration($duration1->add($duration2), 0, 0, 0, 104_249_991_374, 7, 36, 30, 999, 999, 998, 'duration1.add(duration2)');
