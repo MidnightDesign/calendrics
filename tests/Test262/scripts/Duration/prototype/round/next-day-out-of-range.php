@@ -9,5 +9,5 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $instance = new \Temporal\Spec\Duration();
-$relativeTo = \Temporal\Spec\ZonedDateTime::fromInstantParts(8640000000000, 0, 'UTC');
+$relativeTo = \Temporal\Spec\ZonedDateTime::fromEpochParts(8640000000000, 0, 'UTC');
 Assert::throws(\RangeException::class, function () use (&$instance, &$relativeTo) { return $instance->round(JsUndefined::strip(['largestUnit' => 'days', 'smallestUnit' => 'minutes', 'relativeTo' => $relativeTo])); }, 'Next day boundary is out of range');

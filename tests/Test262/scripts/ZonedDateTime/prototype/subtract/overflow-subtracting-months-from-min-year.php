@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-$minYear = \Temporal\Spec\ZonedDateTime::fromInstantParts(-8640000000000, 0, 'UTC');
+$minYear = \Temporal\Spec\ZonedDateTime::fromEpochParts(-8640000000000, 0, 'UTC');
 $duration = new \Temporal\Spec\Duration(0, 5432, 5432, 0, 0, 0, 0, 0, 0, 0);
 Assert::throws(\RangeException::class, function () use (&$minYear, &$duration) { return $minYear->subtract($duration); }, '');
 $maxYear = new \Temporal\Spec\PlainDateTime(275_760, 1, 1)->toZonedDateTime('UTC');

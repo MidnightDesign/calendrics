@@ -9,8 +9,8 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 foreach (\DateTimeZone::listIdentifiers() as $id) {
-$min = \Temporal\Spec\ZonedDateTime::fromInstantParts(-8640000000000, 0, $id);
-$max = \Temporal\Spec\ZonedDateTime::fromInstantParts(8640000000000, 0, $id);
+$min = \Temporal\Spec\ZonedDateTime::fromEpochParts(-8640000000000, 0, $id);
+$max = \Temporal\Spec\ZonedDateTime::fromEpochParts(8640000000000, 0, $id);
 $next = $min->getTimeZoneTransition('next');
 if ($next) {
 Assert::assertTrue($next->epochNanoseconds > $min->epochNanoseconds, 'If there\'s any next transition, it should be after |min|');

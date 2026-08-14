@@ -15,6 +15,7 @@ use Temporal\Spec\Internal\MonthCode;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
 use Temporal\Spec\Internal\TimeZoneHelper;
+use Temporal\Spec\Internal\TimeZoneIdentity;
 
 /**
  * A calendar date without a time or time zone.
@@ -740,7 +741,7 @@ final class PlainDate implements Stringable
     {
         if (is_string($item)) {
             // String argument = timezone ID; use startOfDay semantics (TC39 spec).
-            $tzId = TimeZoneHelper::normalizeTimezoneId($item);
+            $tzId = TimeZoneIdentity::normalize($item);
             return $this->createZdt($tzId, 0, 0, 0, 0, 0, 0, startOfDay: true);
         }
         // Property bag (array or object). Read each property via the faithful
@@ -759,7 +760,7 @@ final class PlainDate implements Stringable
                 get_debug_type($tzRaw),
             ));
         }
-        $tzId = TimeZoneHelper::normalizeTimezoneId($tzRaw);
+        $tzId = TimeZoneIdentity::normalize($tzRaw);
 
         // Optional plainTime: probed UNCONDITIONALLY (the spec performs Get(item,
         // "plainTime") whenever timeZone is present). ABSENT → startOfDay; a declared
@@ -872,7 +873,7 @@ final class PlainDate implements Stringable
         // for cross-midnight DST gaps instead of regular disambiguation.
         if ($startOfDay && $h === 0 && $m === 0 && $s === 0 && $ms === 0 && $us === 0 && $ns === 0) {
             $epochSec = TimeZoneHelper::wallSecToEpochSec($wallSec, $tzId);
-            $zdt = ZonedDateTime::createFromEpochParts($epochSec, 0, $tzId, $this->calendarId);
+            $zdt = ZonedDateTime::fromEpochParts($epochSec, 0, $tzId, $this->calendarId);
             return $zdt->startOfDay();
         }
 
@@ -880,7 +881,7 @@ final class PlainDate implements Stringable
 
         $subNs = ($ms * EpochLimits::NS_PER_MILLISECOND) + ($us * EpochLimits::NS_PER_MICROSECOND) + $ns;
 
-        return ZonedDateTime::createFromEpochParts($epochSec, $subNs, $tzId, $this->calendarId);
+        return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId, $this->calendarId);
     }
 
     /**

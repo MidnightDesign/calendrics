@@ -10,6 +10,7 @@ use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\CalendarMath;
 use Temporal\Spec\Internal\EpochLimits;
 use Temporal\Spec\Internal\FieldBag;
+use Temporal\Spec\Internal\IsoToken;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
 
@@ -704,7 +705,7 @@ final class PlainTime implements Stringable
                 $secNum = 59;
             }
             $fracRaw = $m[6] !== '' ? $m[6] : '';
-            $subNs = $fracRaw !== '' ? self::parseFraction($fracRaw) : 0;
+            $subNs = $fracRaw !== '' ? IsoToken::fractionNanoseconds($fracRaw) : 0;
 
             CalendarMath::validateTimeFields($hourNum, $minNum, $secNum, 0, 0, 0);
 
@@ -771,7 +772,7 @@ final class PlainTime implements Stringable
                 $secNum = 59;
             }
             $fracRaw = $m2[4] !== '' ? $m2[4] : '';
-            $subNs = $fracRaw !== '' ? self::parseFraction($fracRaw) : 0;
+            $subNs = $fracRaw !== '' ? IsoToken::fractionNanoseconds($fracRaw) : 0;
 
             CalendarMath::validateTimeFields($hourNum, $minNum, $secNum, 0, 0, 0);
 
@@ -795,7 +796,7 @@ final class PlainTime implements Stringable
                 $secNum = 59;
             }
             $fracRaw = $m3[4] !== '' ? $m3[4] : '';
-            $subNs = $fracRaw !== '' ? self::parseFraction($fracRaw) : 0;
+            $subNs = $fracRaw !== '' ? IsoToken::fractionNanoseconds($fracRaw) : 0;
             $annotationSection = $m3[5] !== '' ? $m3[5] : '';
             CalendarMath::validateAnnotations($annotationSection, $s, false);
 
@@ -906,19 +907,6 @@ final class PlainTime implements Stringable
         }
 
         return new self($h, $min, $sec, $ms, $us, $ns);
-    }
-
-    /**
-     * Parses fractional-second string (".123" or ",123456789") into nanoseconds.
-     * Pads or truncates to exactly 9 digits.
-     *
-     * @return int<0, 999999999>
-     */
-    private static function parseFraction(string $fractionRaw): int
-    {
-        $digits = substr(string: $fractionRaw, offset: 1); // strip leading '.' or ','
-        /** @var int<0, 999999999> — 9 decimal digits, range 000000000–999999999 */
-        return (int) str_pad(substr(string: $digits, offset: 0, length: 9), length: 9, pad_string: '0');
     }
 
     /**

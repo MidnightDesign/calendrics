@@ -7,9 +7,15 @@ namespace Temporal\Spec\Internal;
 use Temporal\Exception\RangeError;
 
 /**
- * Internal helpers for timezone identifier normalization and wall-clock-to-epoch
- * resolution shared between ZonedDateTime, PlainDate, PlainDateTime, Instant, and
- * Duration.
+ * Offset-domain timezone helpers: what a zone's UTC offset is at a given instant, when
+ * it next changes, and which epoch second a wall-clock reading maps to. Shared between
+ * ZonedDateTime, PlainDate, PlainDateTime, Instant, and Duration.
+ *
+ * Questions about the identifier STRING — is it valid, what is its canonical spelling,
+ * do two spellings name the same zone — belong to {@see TimeZoneIdentity}. Callers hand
+ * this class an identifier that has already been through
+ * {@see TimeZoneIdentity::canonicalId()}, because offsets must be read from the zone the
+ * IANA links resolve to.
  *
  * This class lives in `Temporal\Spec\Internal\` and is therefore not part of the
  * public BC contract. Signatures, behavior, and existence may change between
@@ -17,138 +23,100 @@ use Temporal\Exception\RangeError;
  */
 final class TimeZoneHelper
 {
-    public static function normalizeTimezoneId(string $id, bool $rejectDatetimeStrings = false): string
+    /** Half-width of the transition search window: no zone goes 200 years without a change. */
+    private const int TRANSITION_SEARCH_SECONDS = 200 * 365 * 86_400;
+
+    /**
+     * Returns the UTC offset in seconds for a canonical zone at a given epoch second.
+     *
+     * - 'UTC' → 0 (via the empty transition list PHP reports for it).
+     * - '±HH:MM' → ±(H×3600 + M×60), read straight off the identifier.
+     * - IANA name → `DateTimeZone::getOffset()`.
+     */
+    public static function offsetSecondsAt(string $resolvedTzId, int $epochSec): int
     {
-        // Split caches per flag so the hot path skips the "R\0"/"N\0" prefix
-        // concat that the single-cache variant used to build the lookup key.
-        /** @var array<string, string> $cacheR */
-        static $cacheR = [];
-        /** @var array<string, string> $cacheN */
-        static $cacheN = [];
-        if ($rejectDatetimeStrings) {
-            if (array_key_exists($id, $cacheR)) {
-                return $cacheR[$id];
-            }
-            $result = self::normalizeTimezoneIdUncached($id, true);
-            if (count($cacheR) >= 1024) {
-                $cacheR = [];
-            }
-            return $cacheR[$id] = $result;
+        $m = null;
+        if (preg_match('/^([+\-])(\d{2}):(\d{2})$/', $resolvedTzId, $m) === 1) {
+            $sign = $m[1] === '+' ? 1 : -1;
+            return $sign * (((int) $m[2] * 3600) + ((int) $m[3] * 60));
         }
-        if (array_key_exists($id, $cacheN)) {
-            return $cacheN[$id];
-        }
-        $result = self::normalizeTimezoneIdUncached($id, false);
-        if (count($cacheN) >= 1024) {
-            $cacheN = [];
-        }
-        return $cacheN[$id] = $result;
+        return self::zone($resolvedTzId)->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
     }
 
-    private static function normalizeTimezoneIdUncached(string $id, bool $rejectDatetimeStrings): string
+    /**
+     * Finds the epoch second of the offset transition adjacent to a given instant, or
+     * null when the zone has none in that direction.
+     *
+     * TC39 defines a transition as a change in UTC offset, so entries that repeat the
+     * preceding offset (which PHP reports for the window boundary and for DST rule
+     * renewals that keep the same offset) are skipped rather than returned.
+     *
+     * The instant is taken as (epochSec, subNs) because "previous" is strictly before
+     * the receiver: a transition landing exactly on epochSec counts as previous only
+     * when the receiver carries sub-second nanoseconds past it.
+     *
+     * @param string $direction 'next' or 'previous'.
+     */
+    public static function findTransition(string $resolvedTzId, int $epochSec, int $subNs, string $direction): ?int
     {
-        if ($id === '') {
-            throw new RangeError('ZonedDateTime timeZoneId must not be empty.');
+        if (preg_match('/^[+\-]\d{2}:\d{2}$/', $resolvedTzId) === 1) {
+            return null;
         }
+        $tz = self::zone($resolvedTzId);
 
-        // 'UTC' (case-insensitive).
-        if (strtoupper($id) === 'UTC') {
-            return 'UTC';
-        }
-
-        // Reject minus-zero extended year.
-        if (preg_match('/^-0{6}(?:[^0-9]|$)/', $id) === 1) {
-            throw new RangeError("Invalid timeZoneId \"{$id}\": minus-zero year.");
-        }
-
-        // Datetime strings (have a T-separator after a date part).
-        $isDatetime = preg_match('/\d{4,}-\d{2}-\d{2}[Tt]|\d{8}[Tt]/', $id) === 1;
-
-        if ($isDatetime) {
-            if ($rejectDatetimeStrings) {
-                throw new RangeError(
-                    "Invalid timeZoneId \"{$id}\": ISO date-time string is not a valid timezone identifier for ZonedDateTime constructor.",
-                );
+        if ($direction === 'next') {
+            $transitions = self::safeGetTransitions($tz, $epochSec, $epochSec + self::TRANSITION_SEARCH_SECONDS);
+            if (count($transitions) < 2) {
+                return null;
             }
-            // Bracket annotation takes precedence.
-            $bm = null;
-            if (preg_match('/\[(!?[^\]]+)\]/', $id, $bm) === 1) {
-                $bracket = $bm[1];
-                if (preg_match('/^[+\-]\d{2}:\d{2}:\d{2}/', $bracket) === 1) {
-                    throw new RangeError("Invalid timeZoneId \"{$id}\": sub-minute offset in bracket annotation.");
+            // Skip index 0 (the zone's state at the window start, not a transition).
+            $prevOffset = $transitions[0]['offset'];
+            $nTransitions = count($transitions);
+            for ($i = 1; $i < $nTransitions; $i++) {
+                $curOffset = $transitions[$i]['offset'];
+                if ($curOffset !== $prevOffset) {
+                    return $transitions[$i]['ts'];
                 }
-                if (strtoupper($bracket) === 'UTC') {
-                    return 'UTC';
-                }
-                if (preg_match('/^[+\-]\d{2}:\d{2}$/', $bracket) === 1) {
-                    return $bracket;
-                }
-                // IANA name in bracket.
-                try {
-                    /** @psalm-suppress ArgumentTypeCoercion — $bracket is non-empty (matched by regex) */
-                    new \DateTimeZone($bracket);
-                    return $bracket;
-                } catch (\Exception) {
-                    throw new RangeError("Invalid timeZoneId \"{$id}\": unsupported bracket timezone \"{$bracket}\".");
-                }
+                $prevOffset = $curOffset;
             }
-            // No bracket: use inline offset.
-            if (preg_match('/[+\-]\d{2}:\d{2}:\d{2}/i', $id) === 1) {
-                throw new RangeError("Invalid timeZoneId \"{$id}\": inline offset contains a seconds component.");
-            }
-            if (preg_match('/[Zz](?:\[|$)/', $id) === 1) {
-                return 'UTC';
-            }
-            $om = null;
-            if (preg_match('/([+\-]\d{2}:\d{2})(?:\[|$)/', $id, $om) === 1) {
-                return $om[1];
-            }
-            throw new RangeError("Invalid timeZoneId \"{$id}\": bare datetime without Z, offset, or bracket.");
+            return null;
         }
 
-        // Pure UTC-offset strings.
-        // ±HH:MM
-        if (preg_match('/^([+\-]\d{2}):(\d{2})$/', $id) === 1) {
-            return $id;
+        // 'previous': the most recent transition strictly BEFORE the instant. The end
+        // bound is epochSec+1 so a transition at exactly epochSec is still in the
+        // window — some PHP/ICU versions exclude the boundary second — and the
+        // strictly-before test below is what actually rejects it.
+        $transitions = self::safeGetTransitions($tz, $epochSec - self::TRANSITION_SEARCH_SECONDS, $epochSec + 1);
+        if (count($transitions) < 2) {
+            return null;
         }
-        // ±HHMM → ±HH:MM
-        $m = null;
-        if (preg_match('/^([+\-])(\d{2})(\d{2})$/', $id, $m) === 1) {
-            return sprintf('%s%s:%s', $m[1], $m[2], $m[3]);
-        }
-        // ±HH → ±HH:00
-        if (preg_match('/^([+\-])(\d{2})$/', $id, $m) === 1) {
-            return sprintf('%s%s:00', $m[1], $m[2]);
-        }
-        // Sub-minute offsets → reject.
-        if (preg_match('/^[+\-]\d{2}:\d{2}[:.].*/i', $id) === 1) {
-            throw new RangeError("Invalid timeZoneId \"{$id}\": sub-minute offset is not a valid timezone identifier.");
-        }
-
-        // IANA timezone name: validate via PHP DateTimeZone (case-insensitive).
-        try {
-            new \DateTimeZone($id);
-        } catch (\Exception) {
-            throw new RangeError("Invalid timeZoneId \"{$id}\": not a recognized timezone identifier.");
-        }
-
-        // Case-normalize the timezone ID using the canonical timezone list.
-        /** @var array<string, string>|null $lowerToCanonical */
-        static $lowerToCanonical = null;
-        if ($lowerToCanonical === null) {
-            $lowerToCanonical = [];
-            foreach (\DateTimeZone::listIdentifiers(\DateTimeZone::ALL_WITH_BC) as $ident) {
-                $lowerToCanonical[strtolower($ident)] = $ident;
+        for ($i = count($transitions) - 1; $i >= 1; $i--) {
+            $ts = $transitions[$i]['ts'];
+            $isBefore = $ts < $epochSec || $ts === $epochSec && $subNs > 0;
+            if ($transitions[$i]['offset'] !== $transitions[$i - 1]['offset'] && $isBefore) {
+                return $ts;
             }
-            // PHP doesn't include Etc/UTC in listIdentifiers but accepts it
-            $lowerToCanonical['etc/utc'] = 'Etc/UTC';
         }
-        // Must be in the IANA timezone list — reject abbreviations like "AST", "EST".
-        $lower = strtolower($id);
-        if (!array_key_exists($lower, $lowerToCanonical)) {
-            throw new RangeError("Invalid timeZoneId \"{$id}\": not a recognized IANA timezone identifier.");
+        return null;
+    }
+
+    /**
+     * Returns a cached DateTimeZone for a canonical identifier.
+     *
+     * Offset and transition lookups run per property access on ZonedDateTime, so the
+     * objects are memoized rather than rebuilt for every question about the same zone.
+     */
+    private static function zone(string $resolvedTzId): \DateTimeZone
+    {
+        /** @var array<string, \DateTimeZone> $cache */
+        static $cache = [];
+        $tz = $cache[$resolvedTzId] ?? null;
+        if ($tz === null) {
+            /** @psalm-suppress ArgumentTypeCoercion — identifiers are validated non-empty before reaching here */
+            $tz = new \DateTimeZone($resolvedTzId);
+            $cache[$resolvedTzId] = $tz;
         }
-        return $lowerToCanonical[$lower];
+        return $tz;
     }
 
     /**
@@ -187,7 +155,7 @@ final class TimeZoneHelper
         if ($tzId === '' || $tzId === 'UTC' || preg_match('/^[+\-]\d{2}:\d{2}$/', $tzId) === 1) {
             return self::wallSecToEpochSec($wallSec, $tzId);
         }
-        $tz = new \DateTimeZone($tzId);
+        $tz = self::zone($tzId);
         $approxOffset = $tz->getOffset(new \DateTimeImmutable(sprintf('@%d', $wallSec)));
         $epoch1 = $wallSec - $approxOffset;
         $transitions = self::safeGetTransitions($tz, $epoch1 - 86_400, $epoch1 + 86_400);
@@ -230,8 +198,7 @@ final class TimeZoneHelper
             return $wallSec - $offsetSec;
         }
         // IANA: use PHP's DateTimeZone to resolve wall clock to epoch.
-        /** @psalm-suppress ArgumentTypeCoercion — $tzId is validated non-empty before this call */
-        $tz = new \DateTimeZone($tzId);
+        $tz = self::zone($tzId);
 
         // Get the standard resolution.
         $approxOffset = $tz->getOffset(new \DateTimeImmutable(sprintf('@%d', $wallSec)));

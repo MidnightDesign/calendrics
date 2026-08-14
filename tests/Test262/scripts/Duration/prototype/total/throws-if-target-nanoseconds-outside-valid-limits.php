@@ -9,6 +9,6 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $duration = new \Temporal\Spec\Duration(0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
-$relativeTo = \Temporal\Spec\ZonedDateTime::fromInstantParts(8640000000000, 0, 'UTC');
+$relativeTo = \Temporal\Spec\ZonedDateTime::fromEpochParts(8640000000000, 0, 'UTC');
 $totalOf = JsUndefined::strip(['unit' => 'nanoseconds', 'relativeTo' => $relativeTo]);
 Assert::throws(\RangeException::class, function () use (&$duration, &$totalOf) { return $duration->total($totalOf); }, '');

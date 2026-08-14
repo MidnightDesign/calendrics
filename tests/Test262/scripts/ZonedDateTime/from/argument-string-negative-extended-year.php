@@ -9,4 +9,4 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 use Temporal\Tests\Test262\TemporalHelpers;
-TemporalHelpers::assertZonedDateTimesEqual(\Temporal\Spec\ZonedDateTime::from('-009999-11-18T15:23:30.12+00:00[UTC]'), \Temporal\Spec\ZonedDateTime::fromInstantParts(-377677326990, 120000000, 'UTC'));
+TemporalHelpers::assertZonedDateTimesEqual(\Temporal\Spec\ZonedDateTime::from('-009999-11-18T15:23:30.12+00:00[UTC]'), \Temporal\Spec\ZonedDateTime::fromEpochParts(-377677326990, 120000000, 'UTC'));

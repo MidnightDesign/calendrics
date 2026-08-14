@@ -10,4 +10,4 @@ use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $zdt = new \Temporal\Spec\ZonedDateTime(217_178_610_123_456_789, 'UTC');
 Assert::sameValue($zdt->monthsInYear, 12, 'check months in year information');
-Assert::sameValue(\Temporal\Spec\ZonedDateTime::fromInstantParts(-23205637787, 0, 'UTC')->monthsInYear, 12, '');
+Assert::sameValue(\Temporal\Spec\ZonedDateTime::fromEpochParts(-23205637787, 0, 'UTC')->monthsInYear, 12, '');

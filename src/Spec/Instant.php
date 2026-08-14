@@ -15,8 +15,9 @@ use Temporal\Spec\Internal\EpochRounding;
 use Temporal\Spec\Internal\EpochValue;
 use Temporal\Spec\Internal\HasEpochParts;
 use Temporal\Spec\Internal\IntlFormatter;
+use Temporal\Spec\Internal\IsoToken;
 use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\TimeZoneHelper;
+use Temporal\Spec\Internal\TimeZoneIdentity;
 
 /**
  * A fixed point in time with nanosecond precision.
@@ -307,8 +308,13 @@ final class Instant implements Stringable
         }
 
         // Parse the offset to [sign, absSec, fracNs].  The offset is applied
-        // manually so that sub-minute precision is handled correctly.
-        [$offsetSign, $offsetAbsSec, $offsetFracNs] = self::parseOffset($offsetRaw, $text);
+        // manually so that sub-minute precision is handled correctly. IsoToken scans
+        // the token without judging its magnitude; the 24-hour bound is checked here
+        // because the RangeError names the Instant string it came from.
+        [$offsetSign, $offsetAbsSec, $offsetFracNs] = IsoToken::offsetParts($offsetRaw);
+        if ((($offsetAbsSec * EpochLimits::NS_PER_SECOND) + $offsetFracNs) > 86_399_999_999_999) {
+            throw new RangeError("Invalid Instant string \"{$text}\": UTC offset out of range.");
+        }
 
         CalendarMath::validateAnnotations($annotationSection, $text, false);
 
@@ -332,7 +338,7 @@ final class Instant implements Stringable
 
         // $localSec: Unix seconds for the local date/time as if it were UTC.
         $localSec = $dt->getTimestamp();
-        $localSubNs = $fractionRaw !== '' ? self::parseFraction($fractionRaw) : 0;
+        $localSubNs = $fractionRaw !== '' ? IsoToken::fractionNanoseconds($fractionRaw) : 0;
 
         // UTC epoch seconds = local seconds − offset seconds.
         // We avoid multiplying large second values by 10^9 (which would overflow
@@ -845,7 +851,7 @@ final class Instant implements Stringable
     {
         $tzId = self::parseTimeZoneId($timeZone);
         [$epochSec, $subNs] = $this->epochParts();
-        return ZonedDateTime::fromInstantParts($epochSec, $subNs, $tzId);
+        return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId);
     }
 
     /**
@@ -895,7 +901,7 @@ final class Instant implements Stringable
                 // Try as IANA timezone name.
                 try {
                     new \DateTimeZone($bracket);
-                    return TimeZoneHelper::normalizeTimezoneId($bracket);
+                    return TimeZoneIdentity::normalize($bracket);
                 } catch (\Exception) {
                     throw new RangeError(
                         "Invalid time zone string \"{$tz}\": unsupported bracket timezone \"{$bracket}\".",
@@ -938,7 +944,7 @@ final class Instant implements Stringable
         // IANA timezone name: validate via PHP DateTimeZone.
         try {
             new \DateTimeZone($tz);
-            return TimeZoneHelper::normalizeTimezoneId($tz);
+            return TimeZoneIdentity::normalize($tz);
         } catch (\Exception) {
             throw new RangeError("Invalid time zone string \"{$tz}\": not a recognized timezone identifier.");
         }
@@ -1135,98 +1141,6 @@ final class Instant implements Stringable
     private static function validateRoundingMode(string $mode): void
     {
         Options::roundingMode($mode);
-    }
-
-    /**
-     * Parses an offset string captured by the regex into [sign, absSec, fracNs].
-     *
-     * Accepted forms:
-     *   Z                              → [+1, 0, 0]
-     *   ±HH                            → [sign, H*3600, 0]
-     *   ±HH:MM | ±HH:MM:SS[.,f]       → colon-separated
-     *   ±HHMM  | ±HHMMSS[.,f]         → no separators
-     *
-     * @return array{-1|1, int<0, 86399>, int<0, 999999999>}  [sign (+1|-1), absSec, fracNs]
-     * @throws RangeError if the offset is out of range
-     */
-    private static function parseOffset(string $offset, string $original): array
-    {
-        if ($offset === 'Z' || $offset === 'z') {
-            return [1, 0, 0];
-        }
-
-        $sign = $offset[0] === '+' ? 1 : -1;
-        $rest = substr(string: $offset, offset: 1); // digits (and separators) after the sign
-
-        $hours = (int) substr(string: $rest, offset: 0, length: 2);
-        $rest = substr(string: $rest, offset: 2);
-        $minutes = 0;
-        $seconds = 0;
-        $fracNs = 0;
-
-        if ($rest !== '') {
-            if ($rest[0] === ':') {
-                // Colon-separated: :MM[:SS[.frac]]
-                $minutes = (int) substr(string: $rest, offset: 1, length: 2);
-                $rest = substr(string: $rest, offset: 3);
-                if (str_starts_with($rest, ':')) {
-                    $seconds = (int) substr(string: $rest, offset: 1, length: 2);
-                    $rest = substr(string: $rest, offset: 3);
-                    if (str_starts_with($rest, '.') || str_starts_with($rest, ',')) {
-                        $fracNs = self::parseFraction($rest);
-                    }
-                }
-            } else {
-                // No separators: MM[SS[.frac]]
-                $minutes = (int) substr(string: $rest, offset: 0, length: 2);
-                $rest = substr(string: $rest, offset: 2);
-                if (strlen($rest) >= 2) {
-                    $seconds = (int) substr(string: $rest, offset: 0, length: 2);
-                    $rest = substr(string: $rest, offset: 2);
-                    if (str_starts_with($rest, '.') || str_starts_with($rest, ',')) {
-                        $fracNs = self::parseFraction($rest);
-                    }
-                }
-            }
-        }
-
-        $absSec = ($hours * 3600) + ($minutes * 60) + $seconds;
-        if ((($absSec * EpochLimits::NS_PER_SECOND) + $fracNs) > 86_399_999_999_999) {
-            throw new RangeError("Invalid Instant string \"{$original}\": UTC offset out of range.");
-        }
-        /** @var int<0, 86399> $absSec — range validated above */
-
-        return [$sign, $absSec, $fracNs];
-    }
-
-    /**
-     * Validates the bracket-annotation section of an ISO string.
-     *
-     * Rules (per Temporal spec §13.29):
-     *  - Annotation keys must be all-lowercase.
-     *  - A critical unknown annotation (e.g. [!foo=bar]) → reject.
-     *  - Multiple time-zone annotations → reject.
-     *  - Multiple calendar annotations where any carries ! → reject.
-     *  - A time-zone annotation may only use ±HH:MM (no seconds component) as an offset.
-     *
-     * Non-critical unknown annotations and calendar annotations are ignored.
-     *
-     * @throws RangeError on any violation.
-     */
-    /**
-     * Strips the leading separator and truncates/pads the fractional-second
-     * string to exactly 9 digits, then returns the nanosecond count.
-     *
-     * The Temporal spec allows arbitrarily long fraction strings; digits beyond
-     * the 9th are discarded (truncation, not rounding).
-     *
-     * @return int<0, 999999999>
-     */
-    private static function parseFraction(string $fractionRaw): int
-    {
-        $digits = substr($fractionRaw, offset: 1); // strip leading '.' or ','
-        /** @var int<0, 999999999> — 9 decimal digits, range 000000000–999999999 */
-        return (int) str_pad(substr($digits, offset: 0, length: 9), length: 9, pad_string: '0');
     }
 
     /**

@@ -11,12 +11,14 @@ namespace Temporal\Spec\Internal;
  * Both classes carry the same instant as a triple — the public {@see $epochNanoseconds}
  * field (clamped to a PHP_INT_MIN/MAX sentinel once the true value overflows int64) plus
  * the carried {@see $trueEpochSec}/{@see $trueSubNs} pair that survives that clamp. This
- * trait owns those three fields and the two operations on them so the
+ * trait owns those three fields and every operation on them so the
  * "epochNanoseconds is a sentinel iff trueEpochSec !== null" invariant lives in exactly
  * one place rather than being re-asserted by hand in each class:
  *
  *   - {@see epochParts()} — decodes the triple back into (epochSec, subNs), handling
  *     sentinels transparently without allocating a temporary {@see EpochValue}.
+ *   - {@see isClampedEpoch()} — reports the one state the decode cannot rescue, so callers
+ *     ask about the invariant instead of re-deriving it from the raw fields.
  *   - {@see applyEpoch()} — stamps the carried true parts from a single {@see EpochValue},
  *     the canonical encoder of the int64-fit / sentinel rule.
  *
@@ -63,6 +65,24 @@ trait HasEpochParts
         }
         $epochSec = CalendarMath::floorDiv($this->epochNanoseconds, 1_000_000_000);
         return [$epochSec, $this->epochNanoseconds - ($epochSec * 1_000_000_000)];
+    }
+
+    /**
+     * True when {@see $epochNanoseconds} sits at a PHP_INT_MIN/MAX sentinel with no
+     * carried true parts behind it.
+     *
+     * That combination is the one state in which the instant is genuinely lost rather
+     * than merely unrepresentable as an int64 nanosecond count: the field was clamped and
+     * nothing was stashed, so {@see epochParts()} can only decode the sentinel itself.
+     * Operations that would have to read the true instant back — as opposed to those that
+     * work from the local calendar fields — must refuse it.
+     */
+    public function isClampedEpoch(): bool
+    {
+        return (
+            $this->trueEpochSec === null
+            && ($this->epochNanoseconds === PHP_INT_MAX || $this->epochNanoseconds === PHP_INT_MIN)
+        );
     }
 
     /**

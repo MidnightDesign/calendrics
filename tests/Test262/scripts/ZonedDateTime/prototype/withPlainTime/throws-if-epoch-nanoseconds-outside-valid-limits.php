@@ -8,9 +8,9 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-$zdt = \Temporal\Spec\ZonedDateTime::fromInstantParts(-8640000000000, 0, '-01');
+$zdt = \Temporal\Spec\ZonedDateTime::fromEpochParts(-8640000000000, 0, '-01');
 Assert::throws(\RangeException::class, function () use (&$zdt) { return $zdt->withPlainTime('00:00'); }, '');
-$zdt = \Temporal\Spec\ZonedDateTime::fromInstantParts(-8640000000000, 0, '+01');
+$zdt = \Temporal\Spec\ZonedDateTime::fromEpochParts(-8640000000000, 0, '+01');
 Assert::throws(\RangeException::class, function () use (&$zdt) { return $zdt->withPlainTime('00:00'); }, '');
-$zdt = \Temporal\Spec\ZonedDateTime::fromInstantParts(8640000000000, 0, 'UTC');
+$zdt = \Temporal\Spec\ZonedDateTime::fromEpochParts(8640000000000, 0, 'UTC');
 Assert::throws(\RangeException::class, function () use (&$zdt) { return $zdt->withPlainTime('01:00'); }, '');
