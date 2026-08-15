@@ -26,8 +26,6 @@ use Temporal\Spec\PlainDateTime;
  */
 final class DateTimeArithmetic
 {
-    private const int NS_PER_DAY = 86_400_000_000_000;
-
     /**
      * Adds $sign × $dur to $dt.
      *
@@ -105,11 +103,11 @@ final class DateTimeArithmetic
 
         // Carry overflow days from the time component.
         if ($newTimeNs < 0) {
-            $overflowDays = (int) floor($newTimeNs / self::NS_PER_DAY);
-            $newTimeNs -= $overflowDays * self::NS_PER_DAY;
+            $overflowDays = (int) floor($newTimeNs / EpochLimits::NS_PER_DAY);
+            $newTimeNs -= $overflowDays * EpochLimits::NS_PER_DAY;
         } else {
-            $overflowDays = intdiv(num1: $newTimeNs, num2: self::NS_PER_DAY);
-            $newTimeNs %= self::NS_PER_DAY;
+            $overflowDays = intdiv(num1: $newTimeNs, num2: EpochLimits::NS_PER_DAY);
+            $newTimeNs %= EpochLimits::NS_PER_DAY;
         }
 
         $days += $overflowDays;

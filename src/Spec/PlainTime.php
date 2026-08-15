@@ -9,6 +9,7 @@ use Temporal\Exception\RangeError;
 use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\CalendarMath;
 use Temporal\Spec\Internal\EpochLimits;
+use Temporal\Spec\Internal\EpochRounding;
 use Temporal\Spec\Internal\FieldBag;
 use Temporal\Spec\Internal\IsoFraction;
 use Temporal\Spec\Internal\Options;
@@ -472,7 +473,7 @@ final class PlainTime implements Stringable
 
         $nsIncrement = $nsPerUnit * $increment;
         // Round $this->ns (always non-negative) using the given mode.
-        $rounded = self::roundPositiveNs($this->ns, $nsIncrement, $roundingMode);
+        $rounded = EpochRounding::roundAsIfPositive($this->ns, $nsIncrement, $roundingMode);
         // Wrap modulo one day (rounded could reach exactly NS_PER_DAY).
         $rounded %= self::NS_PER_DAY;
         return self::fromNs($rounded);
@@ -566,7 +567,7 @@ final class PlainTime implements Stringable
         };
 
         // Round the nanoseconds (always non-negative).
-        $nsToFormat = self::roundPositiveNs($this->ns, $nsIncrement, $roundingMode);
+        $nsToFormat = EpochRounding::roundAsIfPositive($this->ns, $nsIncrement, $roundingMode);
         // Wrap modulo one day (rounding could reach exactly NS_PER_DAY for ceil-like modes).
         $nsToFormat %= self::NS_PER_DAY;
 
@@ -1153,37 +1154,6 @@ final class PlainTime implements Stringable
             microseconds: $sign * $us,
             nanoseconds: $sign * $ns,
         );
-    }
-
-    /**
-     * Rounds a non-negative nanosecond value to the nearest multiple of $increment
-     * using the given rounding mode (standard positive-value rounding).
-     *
-     * @throws RangeError for unknown rounding modes.
-     */
-    private static function roundPositiveNs(int $ns, int $increment, string $mode): int
-    {
-        $q = intdiv(num1: $ns, num2: $increment);
-        $rem = $ns - ($q * $increment);
-        $r1 = $q * $increment; // floor multiple
-        $r2 = $r1 + $increment; // ceil multiple
-        if ($mode === 'halfEven') {
-            $cmp = $rem * 2;
-            if ($cmp < $increment) {
-                return $r1;
-            }
-            if ($cmp > $increment) {
-                return $r2;
-            }
-            return ($q % 2) === 0 ? $r1 : $r2;
-        }
-        return match ($mode) {
-            'trunc', 'floor' => $r1,
-            'ceil', 'expand' => $rem === 0 ? $r1 : $r2,
-            'halfExpand', 'halfCeil' => ($rem * 2) >= $increment ? $r2 : $r1,
-            'halfTrunc', 'halfFloor' => ($rem * 2) > $increment ? $r2 : $r1,
-            default => throw new RangeError("Invalid roundingMode \"{$mode}\"."),
-        };
     }
 
     /**

@@ -34,12 +34,6 @@ final class PlainDateTime implements Stringable
 {
     use TemporalSerde;
 
-    private const int NS_PER_HOUR = 3_600_000_000_000;
-    private const int NS_PER_MINUTE = 60_000_000_000;
-    private const int NS_PER_MS = 1_000_000;
-    private const int NS_PER_US = 1_000;
-    private const int NS_PER_DAY = 86_400_000_000_000;
-
     // -------------------------------------------------------------------------
     // Virtual (get-only) properties
     // -------------------------------------------------------------------------
@@ -842,18 +836,18 @@ final class PlainDateTime implements Stringable
         // ns-per-unit and max increment (exclusive) for each unit.
         // For 'day', max = 1 (only increment 1 is valid).
         $unitMap = [
-            'day' => [self::NS_PER_DAY, 2], // only increment=1 is valid for day
-            'days' => [self::NS_PER_DAY, 2],
-            'hour' => [self::NS_PER_HOUR, 24],
-            'hours' => [self::NS_PER_HOUR, 24],
-            'minute' => [self::NS_PER_MINUTE, 60],
-            'minutes' => [self::NS_PER_MINUTE, 60],
+            'day' => [EpochLimits::NS_PER_DAY, 2], // only increment=1 is valid for day
+            'days' => [EpochLimits::NS_PER_DAY, 2],
+            'hour' => [EpochLimits::NS_PER_HOUR, 24],
+            'hours' => [EpochLimits::NS_PER_HOUR, 24],
+            'minute' => [EpochLimits::NS_PER_MINUTE, 60],
+            'minutes' => [EpochLimits::NS_PER_MINUTE, 60],
             'second' => [EpochLimits::NS_PER_SECOND, 60],
             'seconds' => [EpochLimits::NS_PER_SECOND, 60],
-            'millisecond' => [self::NS_PER_MS, 1_000],
-            'milliseconds' => [self::NS_PER_MS, 1_000],
-            'microsecond' => [self::NS_PER_US, 1_000],
-            'microseconds' => [self::NS_PER_US, 1_000],
+            'millisecond' => [EpochLimits::NS_PER_MILLISECOND, 1_000],
+            'milliseconds' => [EpochLimits::NS_PER_MILLISECOND, 1_000],
+            'microsecond' => [EpochLimits::NS_PER_MICROSECOND, 1_000],
+            'microseconds' => [EpochLimits::NS_PER_MICROSECOND, 1_000],
             'nanosecond' => [1, 1_000],
             'nanoseconds' => [1, 1_000],
         ];
@@ -901,8 +895,8 @@ final class PlainDateTime implements Stringable
         $roundedTimeNs = EpochRounding::roundAsIfPositive($timeNs, $nsIncrement, $roundingMode);
 
         // Determine how many days of overflow result from rounding (0 or 1).
-        $overflowDays = intdiv(num1: $roundedTimeNs, num2: self::NS_PER_DAY);
-        $newTimeNs = $roundedTimeNs % self::NS_PER_DAY;
+        $overflowDays = intdiv(num1: $roundedTimeNs, num2: EpochLimits::NS_PER_DAY);
+        $newTimeNs = $roundedTimeNs % EpochLimits::NS_PER_DAY;
 
         $newJdn = $jdn + $overflowDays;
 
@@ -1037,8 +1031,8 @@ final class PlainDateTime implements Stringable
         $roundedTimeNs = $increment === 1 ? $timeNs : EpochRounding::roundAsIfPositive($timeNs, $increment, $roundMode);
 
         // Determine overflow days from rounding (0 or 1).
-        $overflowDays = intdiv(num1: $roundedTimeNs, num2: self::NS_PER_DAY);
-        $newTimeNs = $roundedTimeNs % self::NS_PER_DAY;
+        $overflowDays = intdiv(num1: $roundedTimeNs, num2: EpochLimits::NS_PER_DAY);
+        $newTimeNs = $roundedTimeNs % EpochLimits::NS_PER_DAY;
 
         // Apply overflow days to date via Julian Day Number.
         $jdn = CalendarMath::toJulianDay($this->isoYear, $this->isoMonth, $this->isoDay) + $overflowDays;
@@ -1056,10 +1050,10 @@ final class PlainDateTime implements Stringable
 
         [$year, $month, $day] = CalendarMath::fromJulianDay($jdn);
 
-        $hour = intdiv(num1: $newTimeNs, num2: self::NS_PER_HOUR);
-        $rem = $newTimeNs % self::NS_PER_HOUR;
-        $min = intdiv(num1: $rem, num2: self::NS_PER_MINUTE);
-        $rem %= self::NS_PER_MINUTE;
+        $hour = intdiv(num1: $newTimeNs, num2: EpochLimits::NS_PER_HOUR);
+        $rem = $newTimeNs % EpochLimits::NS_PER_HOUR;
+        $min = intdiv(num1: $rem, num2: EpochLimits::NS_PER_MINUTE);
+        $rem %= EpochLimits::NS_PER_MINUTE;
         $sec = intdiv(num1: $rem, num2: EpochLimits::NS_PER_SECOND);
         $rem %= EpochLimits::NS_PER_SECOND;
 
@@ -1203,7 +1197,10 @@ final class PlainDateTime implements Stringable
         $wallSec = ($epochDays * 86_400) + ($this->hour * 3600) + ($this->minute * 60) + $this->second;
         $epochSec = TimeZoneHelper::wallSecToEpochSec($wallSec, $normalTzId, $disambiguation);
 
-        $subNs = ($this->millisecond * self::NS_PER_MS) + ($this->microsecond * self::NS_PER_US) + $this->nanosecond;
+        $subNs =
+            ($this->millisecond * EpochLimits::NS_PER_MILLISECOND)
+            + ($this->microsecond * EpochLimits::NS_PER_MICROSECOND)
+            + $this->nanosecond;
 
         // Route through fromEpochParts(): it performs the Instant range check
         // (throwing RangeError for |epochNs| > 8.64e21) AND preserves the
