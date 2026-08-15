@@ -24,8 +24,6 @@ use Temporal\Spec\PlainDateTime;
  */
 final class DateTimeArithmetic
 {
-    private function __construct() {}
-
     /**
      * Adds ($sign × $dur) to $dt.
      *

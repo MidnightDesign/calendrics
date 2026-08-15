@@ -25,8 +25,6 @@ use Temporal\Spec\PlainDateTime;
  */
 final class DateTimeParse
 {
-    private function __construct() {}
-
     /**
      * Parses an ISO 8601 string into a PlainDateTime.
      *

@@ -31,8 +31,6 @@ use Temporal\Spec\PlainDateTime;
  */
 final class DateTimeDifference
 {
-    private function __construct() {}
-
     /**
      * Computes the difference between $temporalDate and $other for since()/until().
      *

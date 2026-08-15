@@ -29,8 +29,6 @@ final class TimeOfDay
     public const int NS_PER_HOUR = 3_600_000_000_000;
     public const int NS_PER_MINUTE = 60_000_000_000;
 
-    private function __construct() {}
-
     /**
      * Converts wall-clock time fields to total nanoseconds since midnight.
      */

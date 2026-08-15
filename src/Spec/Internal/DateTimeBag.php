@@ -24,8 +24,6 @@ use Temporal\Spec\PlainDateTime;
  */
 final class DateTimeBag
 {
-    private function __construct() {}
-
     /**
      * Creates a PlainDateTime from a property-bag array.
      *
