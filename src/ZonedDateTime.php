@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Temporal;
 
-use Temporal\Spec\Internal\DateTimeFields;
+use Temporal\Spec\Internal\PhpDateTimeInterop;
 use Temporal\Trait\HasDayOfMonthProperties;
 use Temporal\Trait\HasDayOfMonthSpec;
 use Temporal\Trait\HasEpochProperties;
@@ -246,7 +246,7 @@ final class ZonedDateTime implements
         // @mago-ignore analysis:mixed-argument
         $tzId = $dt->getTimezone()->getName();
 
-        return new self(DateTimeFields::epochNanoseconds($dt), $tzId);
+        return new self(PhpDateTimeInterop::epochNanoseconds($dt), $tzId);
     }
 
     // -------------------------------------------------------------------------
@@ -587,7 +587,7 @@ final class ZonedDateTime implements
         $tzId = $this->spec->timeZoneId;
         \assert($tzId !== '', description: 'spec layer guarantees a non-empty time zone id');
 
-        return DateTimeFields::toDateTime($this->spec->epochNanoseconds, new \DateTimeZone($tzId));
+        return PhpDateTimeInterop::toDateTime($this->spec->epochNanoseconds, new \DateTimeZone($tzId));
     }
 
     /**

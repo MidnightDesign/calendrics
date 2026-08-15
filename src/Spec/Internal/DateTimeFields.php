@@ -5,94 +5,197 @@ declare(strict_types=1);
 namespace Temporal\Spec\Internal;
 
 use Temporal\Exception\RangeError;
+use Temporal\Exception\TypeError;
+use Temporal\Spec\Internal\Calendar\CalendarFactory;
+use Temporal\Spec\PlainDateTime;
 
 /**
- * Internal helpers for converting between epoch-nanosecond integers and PHP's
- * `\DateTimeInterface`/`\DateTimeImmutable`.
+ * Construction of a `PlainDateTime` from a property bag of calendar fields.
  *
- * Used by `Temporal\Instant::{fromDateTime,toDateTime}` and
- * `Temporal\ZonedDateTime::{fromDateTime,toDateTime}`. The other porcelain
- * `fromDateTime()` factories (`Temporal\PlainDateTime`, `Temporal\PlainDate`,
- * `Temporal\PlainTime`) extract individual calendar fields directly from the
- * source `\DateTimeInterface` and do not go through this helper.
+ * This is TC39 InterpretTemporalDateTimeFields: the bag names a date in *calendar*
+ * terms (`year` or `era`+`eraYear`; `month` or `monthCode`; `day`) plus optional time
+ * fields, and the interesting work is reconciling the redundant spellings — an
+ * era-based year against a plain one, an ordinal month against a month code — before
+ * the calendar maps them to an ISO date. The field *read order* is observable through
+ * accessor side effects, so checks run in the spec's sequence: a present `monthCode`'s
+ * type and syntax are validated before `year` is even coerced.
  *
- * Although the namespace is `Temporal\Spec\Internal\`, this helper isn't
- * strictly spec-layer machinery — it's placed here to keep all internal-only
- * helpers in one namespace. As with everything in `Temporal\Spec\Internal\`,
- * it is not part of the public BC contract: signatures, behavior, and
- * existence may change between any two releases.
+ * `overflow` only decides regulation: `constrain` clamps both the calendar fields (via
+ * the calendar protocol) and the time fields; `reject` lets the out-of-range value
+ * surface as a RangeError.
+ *
+ * @internal
  */
 final class DateTimeFields
 {
-    /** Not instantiable.
-     * @psalm-suppress UnusedConstructor
+    /**
+     * The calendar fields a PlainDateTime is built from, as passed to
+     * PrepareCalendarFields. `era`/`eraYear` are CalendarExtraFields, added by
+     * {@see FieldBag} only for calendars that have eras.
+     *
+     * @var list<string>
      */
-    private function __construct() {}
+    public const array CALENDAR_FIELDS = [
+        'year',
+        'month',
+        'monthCode',
+        'day',
+        'hour',
+        'minute',
+        'second',
+        'millisecond',
+        'microsecond',
+        'nanosecond',
+    ];
 
     /**
-     * Returns the epoch nanosecond count of `$dt` with sub-microsecond bits
-     * zeroed.
+     * Creates a PlainDateTime from a property-bag array.
      *
-     * PHP's `\DateTimeInterface` carries microsecond precision via the `u`
-     * format specifier, so the lowest three decimal digits of the result are
-     * always zero. This matches the loss-of-precision contract documented on
-     * the porcelain `fromDateTime()` factories.
+     * Required: year, (month or monthCode), day.
+     * Optional: hour, minute, second, millisecond, microsecond, nanosecond.
      *
-     * @throws RangeError if `$dt`'s instant lies outside the
-     *         int64 nanosecond range (roughly the years 1678–2262 around
-     *         the Unix epoch).
+     * @param array<array-key,mixed> $bag
+     * @param string                 $overflow 'constrain' (clamp) or 'reject' (throw on out-of-range).
+     * @throws TypeError if required fields are missing or have wrong type.
+     * @throws RangeError if the datetime is invalid.
      */
-    public static function epochNanoseconds(\DateTimeInterface $dt): int
+    public static function fromBag(array $bag, string $overflow = 'constrain'): PlainDateTime
     {
-        $ts = $dt->getTimestamp();
-        // PHP's int64 nanosecond range covers ~±292 years around the Unix
-        // epoch. Beyond that, `$ts × NS_PER_SECOND` overflows to float and
-        // the `int` return type would raise a TypeError before the porcelain
-        // factory could surface a meaningful range error.
-        // The threshold is one less than intdiv(PHP_INT_MAX, NS_PER_SECOND)
-        // = 9_223_372_036 so that the full product plus the maximum
-        // microsecond contribution (999_999 × 1_000 = 999_999_000) stays
-        // within int64: 9_223_372_035 × 10⁹ + 999_999_000 < PHP_INT_MAX.
-        $tsMax = 9_223_372_035;
-        if ($ts > $tsMax || $ts < -$tsMax) {
-            throw new RangeError(sprintf(
-                "DateTime '%s' is outside the representable int64 nanosecond range.",
-                $dt->format(\DateTimeInterface::RFC3339),
-            ));
+        // Validate calendar key if present.
+        $calendarId = null;
+        if (array_key_exists('calendar', $bag)) {
+            $calendarId = CalendarFactory::resolveBagCalendar($bag['calendar'], 'PlainDateTime');
         }
 
-        return ($ts * 1_000_000_000) + ((int) $dt->format('u') * 1_000);
-    }
+        $hasEraAndEraYear = CalendarMath::hasEraAndEraYear($bag, $calendarId, 'PlainDateTime');
+        $calendarSupportsEras = CalendarMath::supportsEras($calendarId);
 
-    /**
-     * Builds a `\DateTimeImmutable` for the given epoch nanoseconds, displayed
-     * in `$tz`.
-     *
-     * PHP's native date-time types only carry microsecond precision, so the
-     * sub-microsecond bits of `$epochNanoseconds` (the lowest three decimal
-     * digits) are dropped. This matches the loss-of-precision contract
-     * documented on the porcelain `toDateTime()` methods.
-     *
-     * Because this helper lives in `Temporal\Spec\Internal\`, it is not part
-     * of the public BC contract and may change between any two releases.
-     */
-    public static function toDateTime(int $epochNanoseconds, \DateTimeZone $tz): \DateTimeImmutable
-    {
-        $us = intdiv(num1: $epochNanoseconds, num2: 1_000);
-        $secs = intdiv(num1: $us, num2: 1_000_000);
-        $usOfSec = $us % 1_000_000;
-        if ($usOfSec < 0) {
-            $usOfSec += 1_000_000;
-            $secs -= 1;
+        if (!array_key_exists('year', $bag) && (!$hasEraAndEraYear || !$calendarSupportsEras)) {
+            throw new TypeError('PlainDateTime property bag must have a year field.');
+        }
+        if (!array_key_exists('month', $bag) && !array_key_exists('monthCode', $bag)) {
+            throw new TypeError('PlainDateTime property bag must have a month or monthCode field.');
+        }
+        if (!array_key_exists('day', $bag)) {
+            throw new TypeError('PlainDateTime property bag must have a day field.');
         }
 
-        $dt = \DateTimeImmutable::createFromFormat(
-            'U.u',
-            sprintf('%d.%06d', $secs, $usOfSec),
-            new \DateTimeZone('UTC'),
-        );
-        \assert($dt !== false, description: 'createFromFormat U.u with integer-formatted input must succeed');
+        $calendar = $calendarId !== null && $calendarId !== 'iso8601' ? CalendarFactory::get($calendarId) : null;
 
-        return $dt->setTimezone($tz);
+        // Per TC39 ToMonthCode, a present monthCode's TYPE (must be a string) is
+        // checked first, then its *syntactic* well-formedness (M + 2 digits + optional
+        // L) — both before the year field's type is coerced. Only its *suitability*
+        // (valid value for this calendar) is checked afterwards. Routing through
+        // MonthCode::validate realigns this path with PlainDate/PlainYearMonth's
+        // type-then-syntax order, so a non-string monthCode throws TypeError and an
+        // ill-formed string throws RangeError before a bad year would throw.
+        $monthCodeValidated = null;
+        if (array_key_exists('monthCode', $bag)) {
+            $monthCodeValidated = MonthCode::validate($bag['monthCode']);
+        }
+
+        // Extract year from the bag, or resolve from era + eraYear.
+        $year = 0;
+        if (array_key_exists('year', $bag)) {
+            /** @var mixed $yearRaw */
+            $yearRaw = $bag['year'];
+            if ($yearRaw === null) {
+                throw new TypeError('PlainDateTime property bag year field must not be undefined.');
+            }
+            $year = CalendarMath::toFiniteInt($yearRaw, 'PlainDateTime year');
+        }
+
+        // Resolve era + eraYear if present (overrides year for era-based calendars).
+        if ($calendar !== null && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
+            $resolved = CalendarMath::resolveYearFromEra($calendar, $bag['era'], $bag['eraYear'], 'PlainDateTime');
+            if ($resolved !== null) {
+                $year = $resolved;
+            }
+        }
+
+        // Resolve month from monthCode or month field.
+        $month = null;
+        $monthCode = null;
+        $hasMonth = array_key_exists('month', $bag);
+        $hasMonthCode = array_key_exists('monthCode', $bag);
+
+        if ($monthCodeValidated !== null) {
+            $monthCode = $monthCodeValidated;
+            $month = $calendar !== null
+                ? $calendar->monthCodeToMonth($monthCode, $year)
+                : CalendarMath::monthCodeToMonth($monthCode);
+        }
+
+        if ($hasMonth) {
+            /** @var mixed $monthRaw */
+            $monthRaw = $bag['month'] ?? null;
+            if ($monthRaw === null) {
+                throw new TypeError('PlainDateTime property bag month field must not be undefined.');
+            }
+            $newMonth = CalendarMath::toFiniteInt($monthRaw, 'PlainDateTime month');
+            if ($hasMonthCode && $newMonth !== $month) {
+                throw new RangeError('Conflicting month and monthCode fields.');
+            }
+            $month = $newMonth;
+        }
+
+        /** @var int $month */
+
+        /** @var mixed $dayRaw */
+        $dayRaw = $bag['day'];
+        if ($dayRaw === null) {
+            throw new TypeError('PlainDateTime property bag day field must not be undefined.');
+        }
+        $day = CalendarMath::toFiniteInt($dayRaw, 'PlainDateTime day');
+
+        // Time fields default to 0 when absent.
+        $h = CalendarMath::extractIntField($bag, 'hour', 0, 'PlainDateTime');
+        $min = CalendarMath::extractIntField($bag, 'minute', 0, 'PlainDateTime');
+        $sec = CalendarMath::extractIntField($bag, 'second', 0, 'PlainDateTime');
+        $ms = CalendarMath::extractIntField($bag, 'millisecond', 0, 'PlainDateTime');
+        $us = CalendarMath::extractIntField($bag, 'microsecond', 0, 'PlainDateTime');
+        $ns = CalendarMath::extractIntField($bag, 'nanosecond', 0, 'PlainDateTime');
+
+        if ($month < 1) {
+            throw new RangeError("Invalid PlainDateTime: month {$month} must be at least 1.");
+        }
+        if ($day < 1) {
+            throw new RangeError("Invalid PlainDateTime: day {$day} must be at least 1.");
+        }
+
+        // Non-ISO calendar: resolve calendar fields to ISO via the calendar protocol.
+        if ($calendar !== null) {
+            if ($monthCode !== null) {
+                [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($year, $monthCode, $day, $overflow);
+            } else {
+                [$isoY, $isoM, $isoD] = $calendar->calendarToIso($year, $month, $day, $overflow);
+            }
+            if ($overflow === 'constrain') {
+                $h = max(0, min(23, $h));
+                $min = max(0, min(59, $min));
+                $sec = max(0, min(59, $sec));
+                $ms = max(0, min(999, $ms));
+                $us = max(0, min(999, $us));
+                $ns = max(0, min(999, $ns));
+            }
+            return new PlainDateTime($isoY, $isoM, $isoD, $h, $min, $sec, $ms, $us, $ns, $calendarId);
+        }
+
+        if ($overflow === 'constrain') {
+            /**
+             * @psalm-suppress UnnecessaryVarAnnotation — Mago can't narrow min()
+             */
+            $month = min(12, $month);
+            $maxDay = CalendarMath::calcDaysInMonth($year, $month);
+            $day = min($maxDay, $day);
+            $h = max(0, min(23, $h));
+            $min = max(0, min(59, $min));
+            $sec = max(0, min(59, $sec));
+            $ms = max(0, min(999, $ms));
+            $us = max(0, min(999, $us));
+            $ns = max(0, min(999, $ns));
+        }
+
+        return new PlainDateTime($year, $month, $day, $h, $min, $sec, $ms, $us, $ns, $calendarId ?? 'iso8601');
     }
 }

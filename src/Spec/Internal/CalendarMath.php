@@ -368,6 +368,43 @@ final class CalendarMath
     }
 
     /**
+     * Converts time-of-day fields to total nanoseconds since midnight.
+     */
+    public static function timeToNs(int $h, int $min, int $sec, int $ms, int $us, int $ns): int
+    {
+        return (
+            ($h * 3_600_000_000_000)
+            + ($min * 60_000_000_000)
+            + ($sec * 1_000_000_000)
+            + ($ms * 1_000_000)
+            + ($us * 1_000)
+            + $ns
+        );
+    }
+
+    /**
+     * Splits nanoseconds since midnight (0 ≤ $timeNs < 86,400,000,000,000) back
+     * into time-of-day fields.
+     *
+     * @return array{int, int, int, int, int, int} [hour, minute, second, ms, us, ns]
+     */
+    public static function nsToTime(int $timeNs): array
+    {
+        $h = intdiv(num1: $timeNs, num2: 3_600_000_000_000);
+        $rem = $timeNs % 3_600_000_000_000;
+        $min = intdiv(num1: $rem, num2: 60_000_000_000);
+        $rem %= 60_000_000_000;
+        $sec = intdiv(num1: $rem, num2: 1_000_000_000);
+        $rem %= 1_000_000_000;
+        $ms = intdiv(num1: $rem, num2: 1_000_000);
+        $rem %= 1_000_000;
+        $us = intdiv(num1: $rem, num2: 1_000);
+        $ns = $rem % 1_000;
+
+        return [$h, $min, $sec, $ms, $us, $ns];
+    }
+
+    /**
      * Validates and returns the integer value of a `roundingIncrement` option.
      *
      * Accepts int, float, string, or bool. Returns the truncated integer value
