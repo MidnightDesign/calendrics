@@ -403,7 +403,7 @@ final class DurationRounding
         // largestUnit >= days, keep whole days intact and round only the sub-day portion.
         // This differs from PlainDate behavior (which rounds the total nanoseconds).
         if (($zdtRelativeTo || $zdtInfoRound !== null) && $suNormResolved !== 'days' && $luIdx >= 6) {
-            $roundedSubDayNs = TimeOfDay::roundPositive($subDayNs, $nsIncrement, $roundingMode);
+            $roundedSubDayNs = EpochRounding::roundAsIfPositive($subDayNs, $nsIncrement, $roundingMode);
             // If rounding carried the sub-day portion beyond one full day, add extra days.
             // Use DST-aware day length when available.
             if ($zdtInfoRound !== null) {
@@ -520,7 +520,7 @@ final class DurationRounding
             $dayNsActual = abs($actualDaysSec) * 1_000_000_000;
             if ($absD <= 106_750) {
                 $totalNsInt = $dayNsActual + $subDayNs;
-                $roundedNsInt = TimeOfDay::roundPositive($totalNsInt, $nsIncrement, $roundingMode);
+                $roundedNsInt = EpochRounding::roundAsIfPositive($totalNsInt, $nsIncrement, $roundingMode);
                 if (((float) $roundedNsInt / 1_000_000_000.0) >= 9_007_199_254_740_992.0) {
                     throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
                 }
@@ -550,7 +550,7 @@ final class DurationRounding
         if ($absD <= 106_750) {
             $totalNsInt = ($absD * 86_400_000_000_000) + $subDayNs;
             // Round the total nanoseconds (int path).
-            $roundedNsInt = TimeOfDay::roundPositive($totalNsInt, $nsIncrement, $roundingMode);
+            $roundedNsInt = EpochRounding::roundAsIfPositive($totalNsInt, $nsIncrement, $roundingMode);
             // Validate rounded result is within MaxTimeDuration (MAX_SAFE_INT seconds).
             // MaxTimeDuration = 9_007_199_254_740_991 seconds + 999_999_999 ns.
             // 9_007_199_254_740_992 * 1e9 exceeds MaxTimeDuration, so use >=.
@@ -903,7 +903,7 @@ final class DurationRounding
 
             $totalWu =
                 ($absD * $dC) + ($absH * $hC) + ($absM * $mC) + ($absS * $sC) + ($absMs * $msC) + ($absUs * $usC);
-            $roundedWu = TimeOfDay::roundPositive($totalWu, $incWu, $roundingMode);
+            $roundedWu = EpochRounding::roundAsIfPositive($totalWu, $incWu, $roundingMode);
 
             // Decompose roundedWu back into fields.
             // First separate the sub-ms parts (us, ns are always zero at this point since
@@ -1387,7 +1387,7 @@ final class DurationRounding
         // Round the signed total nanoseconds.
         // TC39 uses signed (ApplyUnsignedRoundingMode on signed fractional value), so for negative
         // durations floor rounds toward -∞ (larger abs) and ceil rounds toward zero (smaller abs).
-        // Since TimeOfDay::roundPositive works on absolute values, swap floor↔ceil and halfFloor↔halfCeil
+        // Since EpochRounding::roundAsIfPositive works on absolute values, swap floor↔ceil and halfFloor↔halfCeil
         // when the duration is negative so the absolute-value rounding matches signed semantics.
         $sign = $totalNs >= 0 ? 1 : -1;
         $absNs = abs($totalNs);
@@ -1503,7 +1503,7 @@ final class DurationRounding
                     $sign,
                 );
                 // Round only the sub-day remainder.
-                $roundedSubDayNs = TimeOfDay::roundPositive($preSubDayNs, $nsIncrement, $signedMode);
+                $roundedSubDayNs = EpochRounding::roundAsIfPositive($preSubDayNs, $nsIncrement, $signedMode);
                 // Check if the rounded value overflows the current day's length.
                 $afterPreDaysDate = $calDateEnd->modify(sprintf('%+d days', $sign * $preDays));
                 $adY = (int) $afterPreDaysDate->format('Y');
@@ -1524,7 +1524,7 @@ final class DurationRounding
                 $roundedAbsDays = $preDays + $extraDays;
                 // If time overflowed into an extra day, re-round the new remainder.
                 if ($extraDays > 0) {
-                    $absSubDayNs = TimeOfDay::roundPositive($absSubDayNs, $nsIncrement, $signedMode);
+                    $absSubDayNs = EpochRounding::roundAsIfPositive($absSubDayNs, $nsIncrement, $signedMode);
                     $afterAllDaysDate = $calDateEnd->modify(sprintf('%+d days', $sign * $roundedAbsDays));
                     $aaY = (int) $afterAllDaysDate->format('Y');
                     $aaM = (int) $afterAllDaysDate->format('n');
@@ -1549,7 +1549,7 @@ final class DurationRounding
                 $roundedDays = $sign * ($roundedAbsDays + abs($calendarDays));
                 $subDayNs = $sign * $absSubDayNs;
             } else {
-                $roundedAbsNs = TimeOfDay::roundPositive($absNs, $nsIncrement, $signedMode);
+                $roundedAbsNs = EpochRounding::roundAsIfPositive($absNs, $nsIncrement, $signedMode);
                 $roundedNs = $sign * $roundedAbsNs;
                 $roundedDays = intdiv(num1: $roundedNs, num2: $nsPerDay);
                 $subDayNs = $roundedNs - ($roundedDays * $nsPerDay);

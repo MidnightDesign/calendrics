@@ -9,11 +9,11 @@ use Temporal\Exception\RangeError;
 use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\CalendarMath;
 use Temporal\Spec\Internal\EpochLimits;
+use Temporal\Spec\Internal\EpochRounding;
 use Temporal\Spec\Internal\FieldBag;
 use Temporal\Spec\Internal\IsoFraction;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
-use Temporal\Spec\Internal\TimeOfDay;
 
 /**
  * A wall-clock time without a date or time zone.
@@ -473,7 +473,7 @@ final class PlainTime implements Stringable
 
         $nsIncrement = $nsPerUnit * $increment;
         // Round $this->ns (always non-negative) using the given mode.
-        $rounded = TimeOfDay::roundPositive($this->ns, $nsIncrement, $roundingMode);
+        $rounded = EpochRounding::roundAsIfPositive($this->ns, $nsIncrement, $roundingMode);
         // Wrap modulo one day (rounded could reach exactly NS_PER_DAY).
         $rounded %= self::NS_PER_DAY;
         return self::fromNs($rounded);
@@ -567,7 +567,7 @@ final class PlainTime implements Stringable
         };
 
         // Round the nanoseconds (always non-negative).
-        $nsToFormat = TimeOfDay::roundPositive($this->ns, $nsIncrement, $roundingMode);
+        $nsToFormat = EpochRounding::roundAsIfPositive($this->ns, $nsIncrement, $roundingMode);
         // Wrap modulo one day (rounding could reach exactly NS_PER_DAY for ceil-like modes).
         $nsToFormat %= self::NS_PER_DAY;
 

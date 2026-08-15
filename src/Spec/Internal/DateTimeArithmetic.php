@@ -10,27 +10,28 @@ use Temporal\Spec\Internal\Calendar\CalendarFactory;
 use Temporal\Spec\PlainDateTime;
 
 /**
- * Adding a `Duration` to a `PlainDateTime`.
+ * The `add()` / `subtract()` engine for `PlainDateTime`.
  *
- * Without a time zone every day is exactly 86 400 seconds, so unlike the zoned engine
- * the time part can be collapsed into whole days up front. The collapse is done one
- * unit at a time — hours to days, then the remainder carried into minutes, and so on —
- * because a Duration's individual fields may each be near int64 range and a single
- * combined multiplication would overflow. The extracted days join the calendar part
- * (years, months, weeks, days), which the calendar applies to the date; the sub-day
- * remainder is then re-added to the wall-clock time, carrying at most one more day.
+ * A plain datetime has no zone, so unlike the zoned flavor there is only one notion of
+ * a day here — exactly 24 hours — and the whole computation is: balance the duration's
+ * time units into whole days plus a sub-day remainder, add the remainder to the wall
+ * clock (carrying any overflow day), then hand years/months/days to the calendar
+ * protocol for date arithmetic.
+ *
+ * The balancing walks unit by unit (hours → minutes → … → nanoseconds), extracting
+ * whole days at each step, so that a duration with huge individual fields (each up to
+ * ~2⁵³) never needs the full nanosecond total in one int64.
  *
  * @internal
  */
 final class DateTimeArithmetic
 {
     /**
-     * Adds ($sign × $dur) to $dt.
+     * Adds $sign × $dur to $dt.
      *
-     * @param int $sign 1 for `add()`, -1 for `subtract()`.
-     * @param array<array-key, mixed>|object $options Options bag; `overflow` is read.
-     * @throws RangeError if the result leaves the representable range, or if `overflow` is
-     *                    `'reject'` and the calendar part lands on a day the month lacks.
+     * @param int $sign +1 for add(), −1 for subtract()
+     * @param array<array-key, mixed>|object $options
+     * @throws RangeError if the result is outside the representable range.
      */
     public static function add(PlainDateTime $dt, int $sign, Duration $dur, array|object $options): PlainDateTime
     {
@@ -89,8 +90,8 @@ final class DateTimeArithmetic
 
         // Reconstruct time-of-day from the accumulated remainders.
         // $nsRem is the total sub-day nanoseconds; it may be negative when the
-        // duration is negative. Normalize to [0, NS_PER_DAY) using floor-div.
-        $currentTimeNs = TimeOfDay::toNs(
+        // duration is negative. Normalise to [0, NS_PER_DAY) using floor-div.
+        $currentTimeNs = CalendarMath::timeToNs(
             $dt->hour,
             $dt->minute,
             $dt->second,
@@ -102,11 +103,11 @@ final class DateTimeArithmetic
 
         // Carry overflow days from the time component.
         if ($newTimeNs < 0) {
-            $overflowDays = (int) floor($newTimeNs / TimeOfDay::NS_PER_DAY);
-            $newTimeNs -= $overflowDays * TimeOfDay::NS_PER_DAY;
+            $overflowDays = (int) floor($newTimeNs / EpochLimits::NS_PER_DAY);
+            $newTimeNs -= $overflowDays * EpochLimits::NS_PER_DAY;
         } else {
-            $overflowDays = intdiv(num1: $newTimeNs, num2: TimeOfDay::NS_PER_DAY);
-            $newTimeNs %= TimeOfDay::NS_PER_DAY;
+            $overflowDays = intdiv(num1: $newTimeNs, num2: EpochLimits::NS_PER_DAY);
+            $newTimeNs %= EpochLimits::NS_PER_DAY;
         }
 
         $days += $overflowDays;
@@ -131,7 +132,7 @@ final class DateTimeArithmetic
             throw new RangeError('PlainDateTime arithmetic result is outside the representable range.');
         }
 
-        [$h, $min, $sec, $msR, $usR, $nsR] = TimeOfDay::decompose($newTimeNs);
+        [$h, $min, $sec, $msR, $usR, $nsR] = CalendarMath::nsToTime($newTimeNs);
 
         return new PlainDateTime($newYear, $newMonth, $newDay, $h, $min, $sec, $msR, $usR, $nsR, $dt->calendarId);
     }

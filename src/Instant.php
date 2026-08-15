@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Temporal;
 
-use Temporal\Spec\Internal\DateTimeFields;
+use Temporal\Spec\Internal\PhpDateTimeInterop;
 use Temporal\Trait\HasEpochProperties;
 use Temporal\Trait\HasEpochSpec;
 use Temporal\Trait\HasLocalizedFormatting;
@@ -75,7 +75,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      */
     public static function fromDateTime(\DateTimeInterface $dt): self
     {
-        return new self(DateTimeFields::epochNanoseconds($dt));
+        return new self(PhpDateTimeInterop::epochNanoseconds($dt));
     }
 
     /**
@@ -89,7 +89,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      */
     public function toDateTime(?\DateTimeZone $tz = null): \DateTimeImmutable
     {
-        return DateTimeFields::toDateTime($this->spec->epochNanoseconds, $tz ?? new \DateTimeZone('UTC'));
+        return PhpDateTimeInterop::toDateTime($this->spec->epochNanoseconds, $tz ?? new \DateTimeZone('UTC'));
     }
 
     /**

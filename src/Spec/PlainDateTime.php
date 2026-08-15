@@ -10,15 +10,15 @@ use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\Calendar\CalendarFactory;
 use Temporal\Spec\Internal\CalendarMath;
 use Temporal\Spec\Internal\DateTimeArithmetic;
-use Temporal\Spec\Internal\DateTimeBag;
 use Temporal\Spec\Internal\DateTimeDifference;
+use Temporal\Spec\Internal\DateTimeFields;
 use Temporal\Spec\Internal\DateTimeParse;
 use Temporal\Spec\Internal\EpochLimits;
+use Temporal\Spec\Internal\EpochRounding;
 use Temporal\Spec\Internal\FieldBag;
 use Temporal\Spec\Internal\MonthCode;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
-use Temporal\Spec\Internal\TimeOfDay;
 use Temporal\Spec\Internal\TimeZoneHelper;
 
 /**
@@ -33,26 +33,6 @@ use Temporal\Spec\Internal\TimeZoneHelper;
 final class PlainDateTime implements Stringable
 {
     use TemporalSerde;
-
-    /**
-     * The calendar fields a PlainDateTime is built from, as passed to
-     * PrepareCalendarFields. `era`/`eraYear` are CalendarExtraFields, added by
-     * {@see FieldBag} only for calendars that have eras.
-     *
-     * @var list<string>
-     */
-    private const array CALENDAR_FIELDS = [
-        'year',
-        'month',
-        'monthCode',
-        'day',
-        'hour',
-        'minute',
-        'second',
-        'millisecond',
-        'microsecond',
-        'nanosecond',
-    ];
 
     // -------------------------------------------------------------------------
     // Virtual (get-only) properties
@@ -409,9 +389,9 @@ final class PlainDateTime implements Stringable
             Options::overflowFromValue($options);
             return $result;
         }
-        $item = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, [], 'PlainDateTime');
+        $item = FieldBag::forCalendarType($item, DateTimeFields::CALENDAR_FIELDS, [], 'PlainDateTime');
         $overflow = Options::overflowFromValue($options);
-        return DateTimeBag::fromBag($item, $overflow);
+        return DateTimeFields::fromBag($item, $overflow);
     }
 
     /**
@@ -438,8 +418,22 @@ final class PlainDateTime implements Stringable
             return $a->isoDay <=> $b->isoDay;
         }
         // Compare time fields: convert each to nanoseconds since midnight.
-        $aNs = TimeOfDay::toNs($a->hour, $a->minute, $a->second, $a->millisecond, $a->microsecond, $a->nanosecond);
-        $bNs = TimeOfDay::toNs($b->hour, $b->minute, $b->second, $b->millisecond, $b->microsecond, $b->nanosecond);
+        $aNs = CalendarMath::timeToNs(
+            $a->hour,
+            $a->minute,
+            $a->second,
+            $a->millisecond,
+            $a->microsecond,
+            $a->nanosecond,
+        );
+        $bNs = CalendarMath::timeToNs(
+            $b->hour,
+            $b->minute,
+            $b->second,
+            $b->millisecond,
+            $b->microsecond,
+            $b->nanosecond,
+        );
         return $aNs <=> $bNs;
     }
 
@@ -476,7 +470,7 @@ final class PlainDateTime implements Stringable
             throw new TypeError('PlainDateTime::with() argument must not be a Temporal object.');
         }
 
-        $fields = FieldBag::forPartial($fields, self::CALENDAR_FIELDS, $this->calendarId);
+        $fields = FieldBag::forPartial($fields, DateTimeFields::CALENDAR_FIELDS, $this->calendarId);
 
         if (array_key_exists('calendar', $fields) || array_key_exists('timeZone', $fields)) {
             throw new TypeError('PlainDateTime::with() fields must not contain a calendar or timeZone property.');
@@ -842,12 +836,12 @@ final class PlainDateTime implements Stringable
         // ns-per-unit and max increment (exclusive) for each unit.
         // For 'day', max = 1 (only increment 1 is valid).
         $unitMap = [
-            'day' => [TimeOfDay::NS_PER_DAY, 2], // only increment=1 is valid for day
-            'days' => [TimeOfDay::NS_PER_DAY, 2],
-            'hour' => [TimeOfDay::NS_PER_HOUR, 24],
-            'hours' => [TimeOfDay::NS_PER_HOUR, 24],
-            'minute' => [TimeOfDay::NS_PER_MINUTE, 60],
-            'minutes' => [TimeOfDay::NS_PER_MINUTE, 60],
+            'day' => [EpochLimits::NS_PER_DAY, 2], // only increment=1 is valid for day
+            'days' => [EpochLimits::NS_PER_DAY, 2],
+            'hour' => [EpochLimits::NS_PER_HOUR, 24],
+            'hours' => [EpochLimits::NS_PER_HOUR, 24],
+            'minute' => [EpochLimits::NS_PER_MINUTE, 60],
+            'minutes' => [EpochLimits::NS_PER_MINUTE, 60],
             'second' => [EpochLimits::NS_PER_SECOND, 60],
             'seconds' => [EpochLimits::NS_PER_SECOND, 60],
             'millisecond' => [EpochLimits::NS_PER_MILLISECOND, 1_000],
@@ -884,7 +878,7 @@ final class PlainDateTime implements Stringable
 
         // Total ns since epoch midnight: use Julian Day Number to count days.
         $jdn = CalendarMath::toJulianDay($this->isoYear, $this->isoMonth, $this->isoDay);
-        $timeNs = TimeOfDay::toNs(
+        $timeNs = CalendarMath::timeToNs(
             $this->hour,
             $this->minute,
             $this->second,
@@ -898,11 +892,11 @@ final class PlainDateTime implements Stringable
         $nsIncrement = $nsPerUnit * $increment;
 
         // Round time-of-day ns (always non-negative) using the given mode.
-        $roundedTimeNs = TimeOfDay::roundPositive($timeNs, $nsIncrement, $roundingMode);
+        $roundedTimeNs = EpochRounding::roundAsIfPositive($timeNs, $nsIncrement, $roundingMode);
 
         // Determine how many days of overflow result from rounding (0 or 1).
-        $overflowDays = intdiv(num1: $roundedTimeNs, num2: TimeOfDay::NS_PER_DAY);
-        $newTimeNs = $roundedTimeNs % TimeOfDay::NS_PER_DAY;
+        $overflowDays = intdiv(num1: $roundedTimeNs, num2: EpochLimits::NS_PER_DAY);
+        $newTimeNs = $roundedTimeNs % EpochLimits::NS_PER_DAY;
 
         $newJdn = $jdn + $overflowDays;
 
@@ -915,7 +909,7 @@ final class PlainDateTime implements Stringable
 
         [$newYear, $newMonth, $newDay] = CalendarMath::fromJulianDay($newJdn);
 
-        [$h, $min, $sec, $ms, $us, $ns] = TimeOfDay::decompose($newTimeNs);
+        [$h, $min, $sec, $ms, $us, $ns] = CalendarMath::nsToTime($newTimeNs);
 
         return new self($newYear, $newMonth, $newDay, $h, $min, $sec, $ms, $us, $ns);
     }
@@ -1025,7 +1019,7 @@ final class PlainDateTime implements Stringable
         }
 
         // Round time-of-day nanoseconds.
-        $timeNs = TimeOfDay::toNs(
+        $timeNs = CalendarMath::timeToNs(
             $this->hour,
             $this->minute,
             $this->second,
@@ -1034,11 +1028,11 @@ final class PlainDateTime implements Stringable
             $this->nanosecond,
         );
 
-        $roundedTimeNs = $increment === 1 ? $timeNs : TimeOfDay::roundPositive($timeNs, $increment, $roundMode);
+        $roundedTimeNs = $increment === 1 ? $timeNs : EpochRounding::roundAsIfPositive($timeNs, $increment, $roundMode);
 
         // Determine overflow days from rounding (0 or 1).
-        $overflowDays = intdiv(num1: $roundedTimeNs, num2: TimeOfDay::NS_PER_DAY);
-        $newTimeNs = $roundedTimeNs % TimeOfDay::NS_PER_DAY;
+        $overflowDays = intdiv(num1: $roundedTimeNs, num2: EpochLimits::NS_PER_DAY);
+        $newTimeNs = $roundedTimeNs % EpochLimits::NS_PER_DAY;
 
         // Apply overflow days to date via Julian Day Number.
         $jdn = CalendarMath::toJulianDay($this->isoYear, $this->isoMonth, $this->isoDay) + $overflowDays;
@@ -1056,8 +1050,14 @@ final class PlainDateTime implements Stringable
 
         [$year, $month, $day] = CalendarMath::fromJulianDay($jdn);
 
-        [$hour, $min, $sec, $subMs, $subUs, $subNsRem] = TimeOfDay::decompose($newTimeNs);
-        $subNs = ($subMs * EpochLimits::NS_PER_MILLISECOND) + ($subUs * EpochLimits::NS_PER_MICROSECOND) + $subNsRem;
+        $hour = intdiv(num1: $newTimeNs, num2: EpochLimits::NS_PER_HOUR);
+        $rem = $newTimeNs % EpochLimits::NS_PER_HOUR;
+        $min = intdiv(num1: $rem, num2: EpochLimits::NS_PER_MINUTE);
+        $rem %= EpochLimits::NS_PER_MINUTE;
+        $sec = intdiv(num1: $rem, num2: EpochLimits::NS_PER_SECOND);
+        $rem %= EpochLimits::NS_PER_SECOND;
+
+        $subNs = $rem;
 
         // Format date part.
         if ($year < 0) {

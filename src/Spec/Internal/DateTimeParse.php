@@ -8,18 +8,18 @@ use Temporal\Exception\RangeError;
 use Temporal\Spec\PlainDateTime;
 
 /**
- * The ISO 8601 grammar for `PlainDateTime.from(string)`.
+ * The ISO 8601 grammar for `PlainDateTime` strings.
  *
- * A plain date-time string is a date, an optional time after a T/t/space separator, and
- * optional bracket annotations. Two rules distinguish it from the zoned grammar: a UTC
- * designator (`Z`) is rejected outright — a plain date-time has no time zone for it to
- * refer to — while a numeric UTC offset is parsed and then *ignored*, because RFC 9557
- * allows a producer to state one without the plain type being able to represent it.
+ * A PlainDateTime string is a date, optionally followed by a wall-clock time and
+ * bracket annotations. The grammar's quirks all stem from what a *plain* datetime must
+ * not carry: a UTC designator `Z` is rejected outright (it would name an instant, not
+ * a wall clock), while a numeric UTC offset is parsed and then deliberately ignored —
+ * TC39 treats it as advisory garnish on a timezone-less value.
  *
- * The time section accepts extended (`HH:MM[:SS]`), basic (`HHMM[SS]`), and bare-hour
- * forms, but never a mix: the separator style chosen for the first component must be
- * kept for the rest, which is why the pattern has three mutually exclusive branches
- * instead of optional colons.
+ * The time section admits three mutually exclusive spellings — extended `HH:MM[:SS]`,
+ * basic `HHMM[SS]`, and bare `HH` — matched as separate alternatives so that mixed
+ * separator styles (`HH:MMSS`) fail to parse rather than being read permissively.
+ * A date-only string is also accepted; its time defaults to midnight.
  *
  * @internal
  */

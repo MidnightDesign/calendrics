@@ -734,7 +734,7 @@ final class ZonedDifference
             }
         }
 
-        [$h, $min, $sec, $msR, $usR, $nsR] = TimeOfDay::decompose($absTimeNs);
+        [$h, $min, $sec, $msR, $usR, $nsR] = CalendarMath::nsToTime($absTimeNs);
 
         return new Duration(
             years: $outputSign * $span->years,
