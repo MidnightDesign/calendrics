@@ -69,9 +69,10 @@ final class EpochRounding
      * sign convention regardless of the original value's sign.
      *
      * Package-internal seam: {@see Temporal\Spec\ZonedDateTime}, {@see Temporal\Spec\Instant},
-     * {@see Temporal\Spec\PlainDateTime}, {@see Temporal\Spec\PlainTime}, and
-     * {@see DateTimeDifference} call this for their non-negative as-if-positive nanosecond
-     * rounding rather than re-implementing it. Not part of any public surface.
+     * {@see Temporal\Spec\PlainDateTime}, {@see Temporal\Spec\PlainTime},
+     * {@see DateTimeDifference}, and {@see DurationRounding} call this for their
+     * non-negative as-if-positive nanosecond rounding rather than re-implementing it.
+     * Not part of any public surface.
      *
      * @throws RangeError for unknown rounding modes.
      */
