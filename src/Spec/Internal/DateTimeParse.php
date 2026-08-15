@@ -25,9 +25,6 @@ use Temporal\Spec\PlainDateTime;
  */
 final class DateTimeParse
 {
-    private const int NS_PER_MS = 1_000_000;
-    private const int NS_PER_US = 1_000;
-
     /**
      * Parses an ISO 8601 string into a PlainDateTime.
      *
@@ -168,9 +165,9 @@ final class DateTimeParse
 
         // Decompose sub-second nanoseconds.
         $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
-        $ms = intdiv(num1: $subNs, num2: self::NS_PER_MS);
-        $us = intdiv(num1: $subNs % self::NS_PER_MS, num2: self::NS_PER_US);
-        $ns = $subNs % self::NS_PER_US;
+        $ms = intdiv(num1: $subNs, num2: EpochLimits::NS_PER_MILLISECOND);
+        $us = intdiv(num1: $subNs % EpochLimits::NS_PER_MILLISECOND, num2: EpochLimits::NS_PER_MICROSECOND);
+        $ns = $subNs % EpochLimits::NS_PER_MICROSECOND;
 
         return new PlainDateTime(
             $year,

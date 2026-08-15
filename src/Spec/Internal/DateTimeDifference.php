@@ -38,12 +38,6 @@ use Temporal\Spec\PlainDateTime;
  */
 final class DateTimeDifference
 {
-    private const int NS_PER_HOUR = 3_600_000_000_000;
-    private const int NS_PER_MINUTE = 60_000_000_000;
-    private const int NS_PER_MS = 1_000_000;
-    private const int NS_PER_US = 1_000;
-    private const int NS_PER_DAY = 86_400_000_000_000;
-
     /**
      * Computes the rounded Duration between $temporalDate and $other.
      *
@@ -301,7 +295,7 @@ final class DateTimeDifference
         // Borrow one day from the date component when the time part is negative.
         if ($timeDiffNs < 0) {
             $dateDiff--;
-            $timeDiffNs += self::NS_PER_DAY;
+            $timeDiffNs += EpochLimits::NS_PER_DAY;
         }
         // Both $dateDiff and $timeDiffNs are now non-negative.
 
@@ -464,11 +458,11 @@ final class DateTimeDifference
 
             // smallestUnit is a time unit but largestUnit is a calendar unit.
             $nsPerSmallest = match ($normSmallest) {
-                'hour' => self::NS_PER_HOUR,
-                'minute' => self::NS_PER_MINUTE,
+                'hour' => EpochLimits::NS_PER_HOUR,
+                'minute' => EpochLimits::NS_PER_MINUTE,
                 'second' => EpochLimits::NS_PER_SECOND,
-                'millisecond' => self::NS_PER_MS,
-                'microsecond' => self::NS_PER_US,
+                'millisecond' => EpochLimits::NS_PER_MILLISECOND,
+                'microsecond' => EpochLimits::NS_PER_MICROSECOND,
                 default => 1,
             };
             /** @psalm-var int<1, 1000> $roundingIncrement */
@@ -487,8 +481,8 @@ final class DateTimeDifference
             $absTimeNs = EpochRounding::roundAsIfPositive($timeDiffNs, $nsIncrement, $effTimeMode);
 
             // Handle day overflow from rounding time (e.g., 23:59 rounds up to 24:00).
-            $overflowDays = intdiv(num1: $absTimeNs, num2: self::NS_PER_DAY);
-            $absTimeNs %= self::NS_PER_DAY;
+            $overflowDays = intdiv(num1: $absTimeNs, num2: EpochLimits::NS_PER_DAY);
+            $absTimeNs %= EpochLimits::NS_PER_DAY;
 
             // When time overflow produces extra days, recompute the calendar diff
             // from the updated position to properly rebalance months/years.
@@ -549,14 +543,14 @@ final class DateTimeDifference
         }
 
         // largestUnit is a time unit (hour or smaller): accumulate all days into ns.
-        $totalAbsNs = ($dateDiff * self::NS_PER_DAY) + $timeDiffNs;
+        $totalAbsNs = ($dateDiff * EpochLimits::NS_PER_DAY) + $timeDiffNs;
 
         $nsPerSmallest = match ($normSmallest) {
-            'hour' => self::NS_PER_HOUR,
-            'minute' => self::NS_PER_MINUTE,
+            'hour' => EpochLimits::NS_PER_HOUR,
+            'minute' => EpochLimits::NS_PER_MINUTE,
             'second' => EpochLimits::NS_PER_SECOND,
-            'millisecond' => self::NS_PER_MS,
-            'microsecond' => self::NS_PER_US,
+            'millisecond' => EpochLimits::NS_PER_MILLISECOND,
+            'microsecond' => EpochLimits::NS_PER_MICROSECOND,
             default => 1,
         };
         /** @psalm-var int<1, 1000> $roundingIncrement */
@@ -697,7 +691,7 @@ final class DateTimeDifference
      */
     private static function roundDaysWithTime(int $days, int $timeNs, int $increment, string $mode, int $sign = 1): int
     {
-        $progress = $timeNs > 0 ? (float) $timeNs / (float) self::NS_PER_DAY : 0.0;
+        $progress = $timeNs > 0 ? (float) $timeNs / (float) EpochLimits::NS_PER_DAY : 0.0;
         $roundUp = CalendarMath::applyCalendarRoundingProgress($days, $progress, $increment, $mode, $sign);
         $q = intdiv(num1: $days, num2: $increment);
         return $roundUp ? ($q + 1) * $increment : $q * $increment;
@@ -732,8 +726,10 @@ final class DateTimeDifference
         $intervalDays = abs($nextJdn - $anchorJdn);
 
         // Total fractional progress: remaining days + remaining time as fraction of a day.
-        $totalRemNs = ($remainingDays * self::NS_PER_DAY) + $remainingTimeNs;
-        $progress = $intervalDays > 0 ? (float) $totalRemNs / ((float) $intervalDays * (float) self::NS_PER_DAY) : 0.0;
+        $totalRemNs = ($remainingDays * EpochLimits::NS_PER_DAY) + $remainingTimeNs;
+        $progress = $intervalDays > 0
+            ? (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY)
+            : 0.0;
 
         $roundUp = CalendarMath::applyCalendarRoundingProgress($totalMonths, $progress, $increment, $mode, $sign);
 
@@ -775,8 +771,10 @@ final class DateTimeDifference
         $remMonths = $totalMonths - ($floorCount * 12);
         $monthsJdn = self::addSignedMonths($receiver, $dir * (($floorCount * 12) + $remMonths));
         $remDaysFromMonths = abs($monthsJdn - $anchorJdn);
-        $totalRemNs = (($remDaysFromMonths + $remainingDays) * self::NS_PER_DAY) + $remainingTimeNs;
-        $progress = $intervalDays > 0 ? (float) $totalRemNs / ((float) $intervalDays * (float) self::NS_PER_DAY) : 0.0;
+        $totalRemNs = (($remDaysFromMonths + $remainingDays) * EpochLimits::NS_PER_DAY) + $remainingTimeNs;
+        $progress = $intervalDays > 0
+            ? (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY)
+            : 0.0;
 
         $roundUp = CalendarMath::applyCalendarRoundingProgress($years, $progress, $increment, $mode, $sign);
 
