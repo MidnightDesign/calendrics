@@ -8,5 +8,5 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-$instance = \Temporal\Spec\ZonedDateTime::fromInstantParts(8640000000000, 0, 'UTC');
+$instance = \Temporal\Spec\ZonedDateTime::fromEpochParts(8640000000000, 0, 'UTC');
 Assert::throws(\RangeException::class, function () use (&$instance) { return $instance->round(['smallestUnit' => 'day']); }, 'Upper bound for rounding is out of range');

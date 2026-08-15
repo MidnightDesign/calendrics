@@ -101,7 +101,7 @@ final class ZonedParse
         // the offset is matched against the zone below.
         $inlineOffsetHasSeconds = false;
         if ($hasInlineOffset) {
-            [$inlineSign, $inlineAbsSec] = self::parseOffset($offsetRaw);
+            [$inlineSign, $inlineAbsSec] = IsoOffset::parts($offsetRaw);
             $inlineOffsetSec = $inlineSign * $inlineAbsSec;
             $inlineOffsetHasSeconds =
                 preg_match('/^[+\-]\d{2}:\d{2}:\d{2}/', $offsetRaw) === 1
@@ -170,7 +170,7 @@ final class ZonedParse
             throw new RangeError("ZonedDateTime string \"{$text}\" is outside the representable nanosecond range.");
         }
 
-        return ZonedDateTime::createFromEpochParts($epochSec, $subNs, $tzId, $calendarId ?? 'iso8601');
+        return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId, $calendarId ?? 'iso8601');
     }
 
     /**
@@ -355,56 +355,5 @@ final class ZonedParse
         }
 
         return [$tzId, $calendarId];
-    }
-
-    /**
-     * Parses a UTC-offset lexeme (`Z`, `±HH`, `±HH:MM`, `±HHMM`, `±HH:MM:SS`, `±HHMMSS`,
-     * any of the last two with a fraction) into its parts.
-     *
-     * @return array{-1|1, int<0, 86399>, int<0, 999999999>} [sign, absSeconds, fractionalNanoseconds]
-     */
-    private static function parseOffset(string $offset): array
-    {
-        if ($offset === 'Z' || $offset === 'z') {
-            return [1, 0, 0];
-        }
-
-        $sign = $offset[0] === '+' ? 1 : -1;
-        $rest = substr(string: $offset, offset: 1);
-
-        $hours = (int) substr(string: $rest, offset: 0, length: 2);
-        $rest = substr(string: $rest, offset: 2);
-        $minutes = 0;
-        $seconds = 0;
-        $fracNs = 0;
-
-        if ($rest !== '') {
-            if ($rest[0] === ':') {
-                $minutes = (int) substr(string: $rest, offset: 1, length: 2);
-                $rest = substr(string: $rest, offset: 3);
-                if (str_starts_with($rest, ':')) {
-                    $seconds = (int) substr(string: $rest, offset: 1, length: 2);
-                    $rest = substr(string: $rest, offset: 3);
-                    if (str_starts_with($rest, '.') || str_starts_with($rest, ',')) {
-                        $fracNs = IsoFraction::toNanoseconds($rest);
-                    }
-                }
-            } else {
-                $minutes = (int) substr(string: $rest, offset: 0, length: 2);
-                $rest = substr(string: $rest, offset: 2);
-                if (strlen($rest) >= 2) {
-                    $seconds = (int) substr(string: $rest, offset: 0, length: 2);
-                    $rest = substr(string: $rest, offset: 2);
-                    if (str_starts_with($rest, '.') || str_starts_with($rest, ',')) {
-                        $fracNs = IsoFraction::toNanoseconds($rest);
-                    }
-                }
-            }
-        }
-
-        /** @var int<0, 86399> $absSec — the grammar caps each component, so the sum stays under a day */
-        $absSec = ($hours * 3600) + ($minutes * 60) + $seconds;
-
-        return [$sign, $absSec, $fracNs];
     }
 }

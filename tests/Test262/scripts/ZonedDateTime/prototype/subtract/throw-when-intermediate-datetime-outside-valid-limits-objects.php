@@ -11,5 +11,5 @@ use Temporal\Tests\Test262\JsUndefined;
 // Folded (BigInt 8640000000000000000000 exceeds int64): nsMaxInstant
 // Folded (BigInt -8640000000000000000000 exceeds int64): nsMinInstant
 // Folded (BigInt -8640000000000000000000 exceeds int64): epochNs
-$zdt = \Temporal\Spec\ZonedDateTime::fromInstantParts(-8640000000000, 0, 'UTC');
+$zdt = \Temporal\Spec\ZonedDateTime::fromEpochParts(-8640000000000, 0, 'UTC');
 Assert::throws(\RangeException::class, function () use (&$zdt) { return $zdt->subtract((object) ['days' => 1]); }, '');

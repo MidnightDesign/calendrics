@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-$zdt = \Temporal\Spec\ZonedDateTime::fromInstantParts(-8640000000000, 0, 'UTC');
+$zdt = \Temporal\Spec\ZonedDateTime::fromEpochParts(-8640000000000, 0, 'UTC');
 $temporalZonedDateTimeLike = ['offset' => '+01'];
 $options = ['offset' => 'use'];
 Assert::throws(\RangeException::class, function () use (&$zdt, &$temporalZonedDateTimeLike, &$options) { return $zdt->with($temporalZonedDateTimeLike, $options); }, '');

@@ -292,7 +292,7 @@ function epochNsToFloorParts(epNsBig) {
  * Render `new Instant(epochNs)` / `new ZonedDateTime(epochNs, tz[, cal])` for an
  * over-int64 epoch as a lossless true-parts factory call. `rest` is the already
  * transpiled trailing argument list (tz[, cal]) for ZonedDateTime, or '' for
- * Instant. The fromEpochParts / fromInstantParts seams are @internal but the
+ * Instant. Both classes' fromEpochParts seams are @internal but the
  * generated scripts are excluded from the static analyzers and PHP does not
  * enforce @internal at runtime, so this is safe in transpiled output.
  */
@@ -301,8 +301,8 @@ function emitOverInt64Ctor(cls, epNsBig, rest) {
   if (cls === 'Instant') {
     return `\\Temporal\\Spec\\Instant::fromEpochParts(${epochSec}, ${subNs})`;
   }
-  // ZonedDateTime: fromInstantParts(epochSec, subNs, tz[, cal])
-  return `\\Temporal\\Spec\\ZonedDateTime::fromInstantParts(${epochSec}, ${subNs}, ${rest})`;
+  // ZonedDateTime: fromEpochParts(epochSec, subNs, tz[, cal])
+  return `\\Temporal\\Spec\\ZonedDateTime::fromEpochParts(${epochSec}, ${subNs}, ${rest})`;
 }
 
 /**

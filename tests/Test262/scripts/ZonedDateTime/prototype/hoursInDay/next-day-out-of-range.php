@@ -8,5 +8,5 @@ declare(strict_types=1);
 
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
-$z = \Temporal\Spec\ZonedDateTime::fromInstantParts(8640000000000, 0, 'UTC');
+$z = \Temporal\Spec\ZonedDateTime::fromEpochParts(8640000000000, 0, 'UTC');
 Assert::throws(\RangeException::class, function () use (&$z) { return $z->hoursInDay; }, 'Next day boundary is out of range');
