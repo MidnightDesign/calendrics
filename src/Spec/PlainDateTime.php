@@ -9,12 +9,16 @@ use Temporal\Exception\RangeError;
 use Temporal\Exception\TypeError;
 use Temporal\Spec\Internal\Calendar\CalendarFactory;
 use Temporal\Spec\Internal\CalendarMath;
+use Temporal\Spec\Internal\DateTimeArithmetic;
+use Temporal\Spec\Internal\DateTimeBag;
+use Temporal\Spec\Internal\DateTimeDifference;
+use Temporal\Spec\Internal\DateTimeParse;
 use Temporal\Spec\Internal\EpochLimits;
 use Temporal\Spec\Internal\FieldBag;
-use Temporal\Spec\Internal\IsoFraction;
 use Temporal\Spec\Internal\MonthCode;
 use Temporal\Spec\Internal\Options;
 use Temporal\Spec\Internal\TemporalSerde;
+use Temporal\Spec\Internal\TimeOfDay;
 use Temporal\Spec\Internal\TimeZoneHelper;
 
 /**
@@ -49,12 +53,6 @@ final class PlainDateTime implements Stringable
         'microsecond',
         'nanosecond',
     ];
-
-    private const int NS_PER_HOUR = 3_600_000_000_000;
-    private const int NS_PER_MINUTE = 60_000_000_000;
-    private const int NS_PER_MS = 1_000_000;
-    private const int NS_PER_US = 1_000;
-    private const int NS_PER_DAY = 86_400_000_000_000;
 
     // -------------------------------------------------------------------------
     // Virtual (get-only) properties
@@ -407,13 +405,13 @@ final class PlainDateTime implements Stringable
             );
         }
         if (is_string($item)) {
-            $result = self::fromString($item);
+            $result = DateTimeParse::parse($item);
             Options::overflowFromValue($options);
             return $result;
         }
         $item = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, [], 'PlainDateTime');
         $overflow = Options::overflowFromValue($options);
-        return self::fromPropertyBag($item, $overflow);
+        return DateTimeBag::fromBag($item, $overflow);
     }
 
     /**
@@ -440,8 +438,8 @@ final class PlainDateTime implements Stringable
             return $a->isoDay <=> $b->isoDay;
         }
         // Compare time fields: convert each to nanoseconds since midnight.
-        $aNs = self::timeToNs($a->hour, $a->minute, $a->second, $a->millisecond, $a->microsecond, $a->nanosecond);
-        $bNs = self::timeToNs($b->hour, $b->minute, $b->second, $b->millisecond, $b->microsecond, $b->nanosecond);
+        $aNs = TimeOfDay::toNs($a->hour, $a->minute, $a->second, $a->millisecond, $a->microsecond, $a->nanosecond);
+        $bNs = TimeOfDay::toNs($b->hour, $b->minute, $b->second, $b->millisecond, $b->microsecond, $b->nanosecond);
         return $aNs <=> $bNs;
     }
 
@@ -754,7 +752,7 @@ final class PlainDateTime implements Stringable
     public function add(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
-        return $this->addDuration(1, $dur, $options);
+        return DateTimeArithmetic::add($this, 1, $dur, $options);
     }
 
     /**
@@ -767,7 +765,7 @@ final class PlainDateTime implements Stringable
     public function subtract(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
-        return $this->addDuration(-1, $dur, $options);
+        return DateTimeArithmetic::add($this, -1, $dur, $options);
     }
 
     /**
@@ -787,7 +785,7 @@ final class PlainDateTime implements Stringable
                 "Cannot compute since() between different calendars: \"{$this->calendarId}\" and \"{$o->calendarId}\".",
             );
         }
-        return self::diffDateTime($this, $o, 'since', $options);
+        return DateTimeDifference::between($this, $o, 'since', $options);
     }
 
     /**
@@ -805,7 +803,7 @@ final class PlainDateTime implements Stringable
                 "Cannot compute until() between different calendars: \"{$this->calendarId}\" and \"{$o->calendarId}\".",
             );
         }
-        return self::diffDateTime($this, $o, 'until', $options);
+        return DateTimeDifference::between($this, $o, 'until', $options);
     }
 
     /**
@@ -844,18 +842,18 @@ final class PlainDateTime implements Stringable
         // ns-per-unit and max increment (exclusive) for each unit.
         // For 'day', max = 1 (only increment 1 is valid).
         $unitMap = [
-            'day' => [self::NS_PER_DAY, 2], // only increment=1 is valid for day
-            'days' => [self::NS_PER_DAY, 2],
-            'hour' => [self::NS_PER_HOUR, 24],
-            'hours' => [self::NS_PER_HOUR, 24],
-            'minute' => [self::NS_PER_MINUTE, 60],
-            'minutes' => [self::NS_PER_MINUTE, 60],
+            'day' => [TimeOfDay::NS_PER_DAY, 2], // only increment=1 is valid for day
+            'days' => [TimeOfDay::NS_PER_DAY, 2],
+            'hour' => [TimeOfDay::NS_PER_HOUR, 24],
+            'hours' => [TimeOfDay::NS_PER_HOUR, 24],
+            'minute' => [TimeOfDay::NS_PER_MINUTE, 60],
+            'minutes' => [TimeOfDay::NS_PER_MINUTE, 60],
             'second' => [EpochLimits::NS_PER_SECOND, 60],
             'seconds' => [EpochLimits::NS_PER_SECOND, 60],
-            'millisecond' => [self::NS_PER_MS, 1_000],
-            'milliseconds' => [self::NS_PER_MS, 1_000],
-            'microsecond' => [self::NS_PER_US, 1_000],
-            'microseconds' => [self::NS_PER_US, 1_000],
+            'millisecond' => [EpochLimits::NS_PER_MILLISECOND, 1_000],
+            'milliseconds' => [EpochLimits::NS_PER_MILLISECOND, 1_000],
+            'microsecond' => [EpochLimits::NS_PER_MICROSECOND, 1_000],
+            'microseconds' => [EpochLimits::NS_PER_MICROSECOND, 1_000],
             'nanosecond' => [1, 1_000],
             'nanoseconds' => [1, 1_000],
         ];
@@ -886,7 +884,7 @@ final class PlainDateTime implements Stringable
 
         // Total ns since epoch midnight: use Julian Day Number to count days.
         $jdn = CalendarMath::toJulianDay($this->isoYear, $this->isoMonth, $this->isoDay);
-        $timeNs = self::timeToNs(
+        $timeNs = TimeOfDay::toNs(
             $this->hour,
             $this->minute,
             $this->second,
@@ -900,11 +898,11 @@ final class PlainDateTime implements Stringable
         $nsIncrement = $nsPerUnit * $increment;
 
         // Round time-of-day ns (always non-negative) using the given mode.
-        $roundedTimeNs = self::roundPositiveNs($timeNs, $nsIncrement, $roundingMode);
+        $roundedTimeNs = TimeOfDay::roundPositive($timeNs, $nsIncrement, $roundingMode);
 
         // Determine how many days of overflow result from rounding (0 or 1).
-        $overflowDays = intdiv(num1: $roundedTimeNs, num2: self::NS_PER_DAY);
-        $newTimeNs = $roundedTimeNs % self::NS_PER_DAY;
+        $overflowDays = intdiv(num1: $roundedTimeNs, num2: TimeOfDay::NS_PER_DAY);
+        $newTimeNs = $roundedTimeNs % TimeOfDay::NS_PER_DAY;
 
         $newJdn = $jdn + $overflowDays;
 
@@ -917,16 +915,7 @@ final class PlainDateTime implements Stringable
 
         [$newYear, $newMonth, $newDay] = CalendarMath::fromJulianDay($newJdn);
 
-        $h = intdiv(num1: $newTimeNs, num2: self::NS_PER_HOUR);
-        $rem = $newTimeNs % self::NS_PER_HOUR;
-        $min = intdiv(num1: $rem, num2: self::NS_PER_MINUTE);
-        $rem %= self::NS_PER_MINUTE;
-        $sec = intdiv(num1: $rem, num2: EpochLimits::NS_PER_SECOND);
-        $rem %= EpochLimits::NS_PER_SECOND;
-        $ms = intdiv(num1: $rem, num2: self::NS_PER_MS);
-        $rem %= self::NS_PER_MS;
-        $us = intdiv(num1: $rem, num2: self::NS_PER_US);
-        $ns = $rem % self::NS_PER_US;
+        [$h, $min, $sec, $ms, $us, $ns] = TimeOfDay::decompose($newTimeNs);
 
         return new self($newYear, $newMonth, $newDay, $h, $min, $sec, $ms, $us, $ns);
     }
@@ -1036,7 +1025,7 @@ final class PlainDateTime implements Stringable
         }
 
         // Round time-of-day nanoseconds.
-        $timeNs = self::timeToNs(
+        $timeNs = TimeOfDay::toNs(
             $this->hour,
             $this->minute,
             $this->second,
@@ -1045,11 +1034,11 @@ final class PlainDateTime implements Stringable
             $this->nanosecond,
         );
 
-        $roundedTimeNs = $increment === 1 ? $timeNs : self::roundPositiveNs($timeNs, $increment, $roundMode);
+        $roundedTimeNs = $increment === 1 ? $timeNs : TimeOfDay::roundPositive($timeNs, $increment, $roundMode);
 
         // Determine overflow days from rounding (0 or 1).
-        $overflowDays = intdiv(num1: $roundedTimeNs, num2: self::NS_PER_DAY);
-        $newTimeNs = $roundedTimeNs % self::NS_PER_DAY;
+        $overflowDays = intdiv(num1: $roundedTimeNs, num2: TimeOfDay::NS_PER_DAY);
+        $newTimeNs = $roundedTimeNs % TimeOfDay::NS_PER_DAY;
 
         // Apply overflow days to date via Julian Day Number.
         $jdn = CalendarMath::toJulianDay($this->isoYear, $this->isoMonth, $this->isoDay) + $overflowDays;
@@ -1067,14 +1056,8 @@ final class PlainDateTime implements Stringable
 
         [$year, $month, $day] = CalendarMath::fromJulianDay($jdn);
 
-        $hour = intdiv(num1: $newTimeNs, num2: self::NS_PER_HOUR);
-        $rem = $newTimeNs % self::NS_PER_HOUR;
-        $min = intdiv(num1: $rem, num2: self::NS_PER_MINUTE);
-        $rem %= self::NS_PER_MINUTE;
-        $sec = intdiv(num1: $rem, num2: EpochLimits::NS_PER_SECOND);
-        $rem %= EpochLimits::NS_PER_SECOND;
-
-        $subNs = $rem;
+        [$hour, $min, $sec, $subMs, $subUs, $subNsRem] = TimeOfDay::decompose($newTimeNs);
+        $subNs = ($subMs * EpochLimits::NS_PER_MILLISECOND) + ($subUs * EpochLimits::NS_PER_MICROSECOND) + $subNsRem;
 
         // Format date part.
         if ($year < 0) {
@@ -1214,7 +1197,10 @@ final class PlainDateTime implements Stringable
         $wallSec = ($epochDays * 86_400) + ($this->hour * 3600) + ($this->minute * 60) + $this->second;
         $epochSec = TimeZoneHelper::wallSecToEpochSec($wallSec, $normalTzId, $disambiguation);
 
-        $subNs = ($this->millisecond * self::NS_PER_MS) + ($this->microsecond * self::NS_PER_US) + $this->nanosecond;
+        $subNs =
+            ($this->millisecond * EpochLimits::NS_PER_MILLISECOND)
+            + ($this->microsecond * EpochLimits::NS_PER_MICROSECOND)
+            + $this->nanosecond;
 
         // Route through fromEpochParts(): it performs the Instant range check
         // (throwing RangeError for |epochNs| > 8.64e21) AND preserves the
@@ -1244,1257 +1230,6 @@ final class PlainDateTime implements Stringable
             $this->nanosecond,
             $calId,
         );
-    }
-
-    // -------------------------------------------------------------------------
-    // Private helpers
-    // -------------------------------------------------------------------------
-
-    /**
-     * Parses an ISO 8601 string into a PlainDateTime.
-     *
-     * Accepts:
-     *   - Full datetime: date T time [offset?] [annotations?]
-     *       Time formats: HH:MM[:SS[.frac]] (extended) or HHMM[SS[.frac]] (basic)
-     *       Separator style must be consistent within time (no mixing).
-     *       UTC offset (±HH:MM etc.) is accepted and ignored.
-     *       UTC designator Z is rejected (PlainDateTime has no timezone).
-     *   - Date-only: YYYY-MM-DD or ±YYYYYY-MM-DD [annotations?] — time defaults to 00:00:00.
-     *   - Bracket annotations: validated per TC39 rules.
-     *
-     * @throws RangeError for invalid or out-of-range values.
-     */
-    private static function fromString(string $s): self
-    {
-        if ($s === '') {
-            throw new RangeError('PlainDateTime::from() received an empty string.');
-        }
-        // Reject non-ASCII minus sign (U+2212).
-        if (str_contains($s, "\u{2212}")) {
-            throw new RangeError("PlainDateTime::from() cannot parse \"{$s}\": non-ASCII minus sign is not allowed.");
-        }
-        // Reject more than 9 fractional-second digits.
-        if (preg_match('/[.,]\d{10,}/', $s) === 1) {
-            throw new RangeError(
-                "PlainDateTime::from() cannot parse \"{$s}\": fractional seconds may have at most 9 digits.",
-            );
-        }
-
-        // UTC offset sub-pattern (Z excluded — captured separately).
-        $offsetHH = '(?:[01]\d|2[0-3])';
-        $offsetMM = '[0-5]\d';
-        $offsetSS = '[0-5]\d';
-        $offsetNonZ = sprintf(
-            '[+-]%s(?::%s(?::%s(?:[.,]\d+)?)?|%s(?:%s(?:[.,]\d+)?)?)?',
-            $offsetHH,
-            $offsetMM,
-            $offsetSS,
-            $offsetMM,
-            $offsetSS,
-        );
-
-        // Full datetime pattern (T/t/space separator required).
-        // Time section: three mutually exclusive branches to enforce separator consistency:
-        //   extended = HH:MM[:SS[.frac]]   (groups 3–6)
-        //   basic    = HHMM[SS[.frac]]     (groups 7–10)
-        //   hour-only = HH                 (group 13)
-        // Group 11 captures a Z designator (which is then rejected).
-        // Group 12 captures bracket annotations.
-        // groups: 1=year, 2=dateRest, 3-6=ext time, 7-10=basic time, 13=hour-only, 11=Z, 12=annotations
-        $dtPattern = sprintf(
-            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})[Tt ](?:(\d{2}):(\d{2})(?::(\d{2})([.,]\d+)?)?|(\d{2})(\d{2})(?:(\d{2})([.,]\d+)?)?|(\d{2}))(Z)?(?:%s)?((?:\[[^\]]*\])*)$/i',
-            $offsetNonZ,
-        );
-
-        // Date-only pattern: YYYY-MM-DD or ±YYYYYY-MM-DD or YYYYMMDD, plus optional annotations.
-        // Groups: 1=year, 2=dateRest, 3=annotations.
-        $dateOnlyPattern = '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})((?:\[[^\]]*\])*)$/i';
-
-        /** @var list<string> $m */
-        $m = [];
-        $hourNum = 0;
-        $minNum = 0;
-        $secNum = 0;
-        $fracRaw = '';
-
-        if (preg_match($dtPattern, $s, $m) === 1) {
-            // UTC designator Z is not allowed for PlainDateTime.
-            if ($m[12] !== '') {
-                throw new RangeError("PlainDateTime::from() cannot parse \"{$s}\": UTC designator (Z) is not allowed.");
-            }
-            $yearRaw = $m[1];
-            $dateRest = $m[2];
-            $annotations = $m[13];
-            // Determine which time branch matched (extended uses group 3, basic uses group 7, hour-only uses group 11).
-            if ($m[3] !== '') {
-                // Extended format: HH:MM[:SS[.frac]]
-                $hourNum = (int) $m[3];
-                $minNum = (int) $m[4];
-                $secNum = $m[5] !== '' ? (int) $m[5] : 0;
-                $fracRaw = $m[6];
-            } elseif ($m[7] !== '') {
-                // Basic format: HHMM[SS[.frac]]
-                $hourNum = (int) $m[7];
-                $minNum = (int) $m[8];
-                $secNum = $m[9] !== '' ? (int) $m[9] : 0;
-                $fracRaw = $m[10];
-            } else {
-                // Hour-only format: HH
-                $hourNum = (int) $m[11];
-                $minNum = 0;
-                $secNum = 0;
-                $fracRaw = '';
-            }
-            // Leap second 60 → 59.
-            if ($secNum === 60) {
-                $secNum = 59;
-            }
-            // Validate time ranges.
-            if ($hourNum > 23) {
-                throw new RangeError("PlainDateTime::from() cannot parse \"{$s}\": hour {$hourNum} out of range.");
-            }
-            if ($minNum > 59) {
-                throw new RangeError("PlainDateTime::from() cannot parse \"{$s}\": minute {$minNum} out of range.");
-            }
-            if ($secNum > 59) {
-                throw new RangeError("PlainDateTime::from() cannot parse \"{$s}\": second {$secNum} out of range.");
-            }
-        } elseif (preg_match($dateOnlyPattern, $s, $m) === 1) {
-            // Date-only string: time defaults to midnight (all zeros).
-            $yearRaw = $m[1];
-            $dateRest = $m[2];
-            $annotations = $m[3];
-        } else {
-            throw new RangeError("PlainDateTime::from() cannot parse \"{$s}\": invalid ISO 8601 datetime string.");
-        }
-
-        // Reject minus-zero extended year (-000000).
-        if (preg_match('/^-0{6}$/', $yearRaw) === 1) {
-            throw new RangeError(
-                "PlainDateTime::from() cannot parse \"{$s}\": cannot use negative zero as extended year.",
-            );
-        }
-
-        // Parse date components.
-        if (!str_starts_with($dateRest, '-')) {
-            $month = (int) substr(string: $dateRest, offset: 0, length: 2);
-            $day = (int) substr(string: $dateRest, offset: 2, length: 2);
-        } else {
-            $month = (int) substr(string: $dateRest, offset: 1, length: 2);
-            $day = (int) substr(string: $dateRest, offset: 4, length: 2);
-        }
-        $year = (int) $yearRaw;
-
-        // Validate bracket annotations and extract calendar ID.
-        $calendarId = CalendarMath::validateAnnotations($annotations, $s);
-
-        // Decompose sub-second nanoseconds.
-        $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
-        $ms = intdiv(num1: $subNs, num2: self::NS_PER_MS);
-        $us = intdiv(num1: $subNs % self::NS_PER_MS, num2: self::NS_PER_US);
-        $ns = $subNs % self::NS_PER_US;
-
-        return new self($year, $month, $day, $hourNum, $minNum, $secNum, $ms, $us, $ns, $calendarId ?? 'iso8601');
-    }
-
-    /**
-     * Creates a PlainDateTime from a property-bag array.
-     *
-     * Required: year, (month or monthCode), day.
-     * Optional: hour, minute, second, millisecond, microsecond, nanosecond.
-     *
-     * @param array<array-key,mixed> $bag
-     * @param string                 $overflow 'constrain' (clamp) or 'reject' (throw on out-of-range).
-     * @throws TypeError if required fields are missing or have wrong type.
-     * @throws RangeError if the datetime is invalid.
-     */
-    private static function fromPropertyBag(array $bag, string $overflow = 'constrain'): self
-    {
-        // Validate calendar key if present.
-        $calendarId = null;
-        if (array_key_exists('calendar', $bag)) {
-            $calendarId = CalendarFactory::resolveBagCalendar($bag['calendar'], 'PlainDateTime');
-        }
-
-        $hasEraAndEraYear = CalendarMath::hasEraAndEraYear($bag, $calendarId, 'PlainDateTime');
-        $calendarSupportsEras = CalendarMath::supportsEras($calendarId);
-
-        if (!array_key_exists('year', $bag) && (!$hasEraAndEraYear || !$calendarSupportsEras)) {
-            throw new TypeError('PlainDateTime property bag must have a year field.');
-        }
-        if (!array_key_exists('month', $bag) && !array_key_exists('monthCode', $bag)) {
-            throw new TypeError('PlainDateTime property bag must have a month or monthCode field.');
-        }
-        if (!array_key_exists('day', $bag)) {
-            throw new TypeError('PlainDateTime property bag must have a day field.');
-        }
-
-        $calendar = $calendarId !== null && $calendarId !== 'iso8601' ? CalendarFactory::get($calendarId) : null;
-
-        // Per TC39 ToMonthCode, a present monthCode's TYPE (must be a string) is
-        // checked first, then its *syntactic* well-formedness (M + 2 digits + optional
-        // L) — both before the year field's type is coerced. Only its *suitability*
-        // (valid value for this calendar) is checked afterwards. Routing through
-        // MonthCode::validate realigns this path with PlainDate/PlainYearMonth's
-        // type-then-syntax order, so a non-string monthCode throws TypeError and an
-        // ill-formed string throws RangeError before a bad year would throw.
-        $monthCodeValidated = null;
-        if (array_key_exists('monthCode', $bag)) {
-            $monthCodeValidated = MonthCode::validate($bag['monthCode']);
-        }
-
-        // Extract year from the bag, or resolve from era + eraYear.
-        $year = 0;
-        if (array_key_exists('year', $bag)) {
-            /** @var mixed $yearRaw */
-            $yearRaw = $bag['year'];
-            if ($yearRaw === null) {
-                throw new TypeError('PlainDateTime property bag year field must not be undefined.');
-            }
-            $year = CalendarMath::toFiniteInt($yearRaw, 'PlainDateTime year');
-        }
-
-        // Resolve era + eraYear if present (overrides year for era-based calendars).
-        if ($calendar !== null && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
-            $resolved = CalendarMath::resolveYearFromEra($calendar, $bag['era'], $bag['eraYear'], 'PlainDateTime');
-            if ($resolved !== null) {
-                $year = $resolved;
-            }
-        }
-
-        // Resolve month from monthCode or month field.
-        $month = null;
-        $monthCode = null;
-        $hasMonth = array_key_exists('month', $bag);
-        $hasMonthCode = array_key_exists('monthCode', $bag);
-
-        if ($monthCodeValidated !== null) {
-            $monthCode = $monthCodeValidated;
-            $month = $calendar !== null
-                ? $calendar->monthCodeToMonth($monthCode, $year)
-                : CalendarMath::monthCodeToMonth($monthCode);
-        }
-
-        if ($hasMonth) {
-            /** @var mixed $monthRaw */
-            $monthRaw = $bag['month'] ?? null;
-            if ($monthRaw === null) {
-                throw new TypeError('PlainDateTime property bag month field must not be undefined.');
-            }
-            $newMonth = CalendarMath::toFiniteInt($monthRaw, 'PlainDateTime month');
-            if ($hasMonthCode && $newMonth !== $month) {
-                throw new RangeError('Conflicting month and monthCode fields.');
-            }
-            $month = $newMonth;
-        }
-
-        /** @var int $month */
-
-        /** @var mixed $dayRaw */
-        $dayRaw = $bag['day'];
-        if ($dayRaw === null) {
-            throw new TypeError('PlainDateTime property bag day field must not be undefined.');
-        }
-        $day = CalendarMath::toFiniteInt($dayRaw, 'PlainDateTime day');
-
-        // Time fields default to 0 when absent.
-        $h = CalendarMath::extractIntField($bag, 'hour', 0, 'PlainDateTime');
-        $min = CalendarMath::extractIntField($bag, 'minute', 0, 'PlainDateTime');
-        $sec = CalendarMath::extractIntField($bag, 'second', 0, 'PlainDateTime');
-        $ms = CalendarMath::extractIntField($bag, 'millisecond', 0, 'PlainDateTime');
-        $us = CalendarMath::extractIntField($bag, 'microsecond', 0, 'PlainDateTime');
-        $ns = CalendarMath::extractIntField($bag, 'nanosecond', 0, 'PlainDateTime');
-
-        if ($month < 1) {
-            throw new RangeError("Invalid PlainDateTime: month {$month} must be at least 1.");
-        }
-        if ($day < 1) {
-            throw new RangeError("Invalid PlainDateTime: day {$day} must be at least 1.");
-        }
-
-        // Non-ISO calendar: resolve calendar fields to ISO via the calendar protocol.
-        if ($calendar !== null) {
-            if ($monthCode !== null) {
-                [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($year, $monthCode, $day, $overflow);
-            } else {
-                [$isoY, $isoM, $isoD] = $calendar->calendarToIso($year, $month, $day, $overflow);
-            }
-            if ($overflow === 'constrain') {
-                $h = max(0, min(23, $h));
-                $min = max(0, min(59, $min));
-                $sec = max(0, min(59, $sec));
-                $ms = max(0, min(999, $ms));
-                $us = max(0, min(999, $us));
-                $ns = max(0, min(999, $ns));
-            }
-            return new self($isoY, $isoM, $isoD, $h, $min, $sec, $ms, $us, $ns, $calendarId);
-        }
-
-        if ($overflow === 'constrain') {
-            /**
-             * @psalm-suppress UnnecessaryVarAnnotation — Mago can't narrow min()
-             */
-            $month = min(12, $month);
-            $maxDay = CalendarMath::calcDaysInMonth($year, $month);
-            $day = min($maxDay, $day);
-            $h = max(0, min(23, $h));
-            $min = max(0, min(59, $min));
-            $sec = max(0, min(59, $sec));
-            $ms = max(0, min(999, $ms));
-            $us = max(0, min(999, $us));
-            $ns = max(0, min(999, $ns));
-        }
-
-        return new self($year, $month, $day, $h, $min, $sec, $ms, $us, $ns, $calendarId ?? 'iso8601');
-    }
-
-    /**
-     * Core implementation for since() and until().
-     *
-     * TC39 CalendarDateUntil is always called as (temporalDate, other). For
-     * "since", the final result is negated.
-     *
-     * @param string $operation 'since' or 'until'
-     * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
-     */
-    private static function diffDateTime(
-        self $temporalDate,
-        self $other,
-        string $operation,
-        array|object|null $options,
-    ): Duration {
-        /** @var list<string> $validUnits */
-        static $validUnits = [
-            'auto',
-            'day',
-            'days',
-            'week',
-            'weeks',
-            'month',
-            'months',
-            'year',
-            'years',
-            'hour',
-            'hours',
-            'minute',
-            'minutes',
-            'second',
-            'seconds',
-            'millisecond',
-            'milliseconds',
-            'microsecond',
-            'microseconds',
-            'nanosecond',
-            'nanoseconds',
-        ];
-        /** @var array<string, int> $unitRank */
-        static $unitRank = [
-            'year' => 9,
-            'years' => 9,
-            'month' => 8,
-            'months' => 8,
-            'week' => 7,
-            'weeks' => 7,
-            'day' => 6,
-            'days' => 6,
-            'auto' => 6,
-            'hour' => 5,
-            'hours' => 5,
-            'minute' => 4,
-            'minutes' => 4,
-            'second' => 3,
-            'seconds' => 3,
-            'millisecond' => 2,
-            'milliseconds' => 2,
-            'microsecond' => 1,
-            'microseconds' => 1,
-            'nanosecond' => 0,
-            'nanoseconds' => 0,
-        ];
-
-        $largestUnit = 'day'; // default per TC39 PlainDateTime spec
-        $largestUnitExplicit = false;
-        $smallestUnit = null;
-        $roundingMode = 'trunc';
-        $roundingIncrement = 1;
-
-        if ($options !== null) {
-            $opts = Options::requireObject($options, [
-                'largestUnit',
-                'roundingIncrement',
-                'roundingMode',
-                'smallestUnit',
-            ]);
-
-            if (array_key_exists('largestUnit', $opts)) {
-                /** @var mixed $lu */
-                $lu = $opts['largestUnit'];
-                if ($lu !== null) {
-                    $lu = Options::coerceEnumOption($lu, 'largestUnit');
-                }
-                if (is_string($lu)) {
-                    if (!in_array($lu, $validUnits, strict: true)) {
-                        throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
-                    }
-                    $largestUnit = $lu;
-                    $largestUnitExplicit = true;
-                }
-            }
-
-            if (array_key_exists('roundingIncrement', $opts)) {
-                /** @var mixed $ri */
-                $ri = $opts['roundingIncrement'];
-                if ($ri !== null) {
-                    $roundingIncrement = CalendarMath::validateRoundingIncrement($ri);
-                }
-            }
-
-            if (array_key_exists('roundingMode', $opts)) {
-                /** @var mixed $rm */
-                $rm = $opts['roundingMode'];
-                if ($rm !== null) {
-                    $rm = Options::coerceEnumOption($rm, 'roundingMode');
-                }
-                if (is_string($rm)) {
-                    $roundingMode = Options::roundingMode($rm);
-                }
-            }
-
-            if (array_key_exists('smallestUnit', $opts)) {
-                /** @var mixed $su */
-                $su = $opts['smallestUnit'];
-                if ($su !== null) {
-                    $su = Options::coerceEnumOption($su, 'smallestUnit');
-                }
-                if (is_string($su)) {
-                    if (!in_array($su, $validUnits, strict: true)) {
-                        throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
-                    }
-                    $smallestUnit = $su;
-                }
-            }
-        }
-
-        if ($smallestUnit === null) {
-            $smallestUnit = 'nanosecond';
-        }
-
-        // Normalize plural/auto to canonical singular.
-        $normLargest = match ($largestUnit) {
-            'years' => 'year',
-            'months' => 'month',
-            'weeks' => 'week',
-            'days', 'auto' => 'day',
-            'hours' => 'hour',
-            'minutes' => 'minute',
-            'seconds' => 'second',
-            'milliseconds' => 'millisecond',
-            'microseconds' => 'microsecond',
-            'nanoseconds' => 'nanosecond',
-            default => $largestUnit,
-        };
-        $normSmallest = match ($smallestUnit) {
-            'years' => 'year',
-            'months' => 'month',
-            'weeks' => 'week',
-            'days', 'auto' => 'day',
-            'hours' => 'hour',
-            'minutes' => 'minute',
-            'seconds' => 'second',
-            'milliseconds' => 'millisecond',
-            'microseconds' => 'microsecond',
-            'nanoseconds' => 'nanosecond',
-            default => $smallestUnit,
-        };
-
-        $suRank = $unitRank[$normSmallest];
-        $luRank = $unitRank[$normLargest];
-
-        if ($suRank > $luRank) {
-            if ($largestUnitExplicit) {
-                throw new RangeError(
-                    "smallestUnit \"{$normSmallest}\" cannot be larger than largestUnit \"{$normLargest}\".",
-                );
-            }
-            $normLargest = $normSmallest;
-            $luRank = $suRank;
-        }
-
-        // Validate roundingIncrement for time units: must divide evenly into next higher unit.
-        if ($roundingIncrement > 1) {
-            /** @var array<string, int> $maxIncrementMap */
-            static $maxIncrementMap = [
-                'hour' => 24,
-                'minute' => 60,
-                'second' => 60,
-                'millisecond' => 1000,
-                'microsecond' => 1000,
-                'nanosecond' => 1000,
-            ];
-            $maxInc = $maxIncrementMap[$normSmallest] ?? 0;
-            if ($maxInc > 0 && ($roundingIncrement >= $maxInc || ($maxInc % $roundingIncrement) !== 0)) {
-                throw new RangeError(
-                    "roundingIncrement {$roundingIncrement} does not divide evenly into the next highest unit for \"{$normSmallest}\".",
-                );
-            }
-        }
-
-        // Compute the raw date and time differences: other − temporalDate.
-        // Positive when other > temporalDate (the "until" direction).
-        $tdJdn = CalendarMath::toJulianDay($temporalDate->isoYear, $temporalDate->isoMonth, $temporalDate->isoDay);
-        $otherJdn = CalendarMath::toJulianDay($other->isoYear, $other->isoMonth, $other->isoDay);
-        $tdNs = self::timeToNs(
-            $temporalDate->hour,
-            $temporalDate->minute,
-            $temporalDate->second,
-            $temporalDate->millisecond,
-            $temporalDate->microsecond,
-            $temporalDate->nanosecond,
-        );
-        $otherNs = self::timeToNs(
-            $other->hour,
-            $other->minute,
-            $other->second,
-            $other->millisecond,
-            $other->microsecond,
-            $other->nanosecond,
-        );
-
-        $dateDiff = $otherJdn - $tdJdn;
-        $timeDiffNs = $otherNs - $tdNs;
-
-        // The overall sign is determined by the combined date+time diff.
-        $sign = 0;
-        if ($dateDiff > 0 || $dateDiff === 0 && $timeDiffNs > 0) {
-            $sign = 1;
-        } elseif ($dateDiff < 0 || $timeDiffNs < 0) {
-            $sign = -1;
-        }
-
-        // For "since", negate the output sign per TC39 spec.
-        $outputSign = $operation === 'since' ? -$sign : $sign;
-
-        // Work in the positive direction; assign earlier/later.
-        if ($sign >= 0) {
-            $earlier = $temporalDate;
-            $later = $other;
-        } else {
-            $earlier = $other;
-            $later = $temporalDate;
-        }
-        $earlierJdn = CalendarMath::toJulianDay($earlier->isoYear, $earlier->isoMonth, $earlier->isoDay);
-        $dateDiff = CalendarMath::toJulianDay($later->isoYear, $later->isoMonth, $later->isoDay) - $earlierJdn;
-        $timeDiffNs =
-            self::timeToNs(
-                $later->hour,
-                $later->minute,
-                $later->second,
-                $later->millisecond,
-                $later->microsecond,
-                $later->nanosecond,
-            )
-            - self::timeToNs(
-                $earlier->hour,
-                $earlier->minute,
-                $earlier->second,
-                $earlier->millisecond,
-                $earlier->microsecond,
-                $earlier->nanosecond,
-            );
-
-        // Borrow one day from the date component when the time part is negative.
-        if ($timeDiffNs < 0) {
-            $dateDiff--;
-            $timeDiffNs += self::NS_PER_DAY;
-        }
-        // Both $dateDiff and $timeDiffNs are now non-negative.
-
-        $isCalendarLargest = $luRank >= 6; // day or above
-
-        if ($isCalendarLargest) {
-            // The adjusted other date after borrowing: earlierJdn + dateDiff.
-            $adjOtherJdn = $earlierJdn + $dateDiff;
-            [$adjY2, $adjM2, $adjD2] = CalendarMath::fromJulianDay($adjOtherJdn);
-            $calId = $temporalDate->calendarId;
-            $nonIsoAdjJdn = 0;
-
-            if ($normLargest === 'day') {
-                $days = $dateDiff;
-                [$years, $months, $weeks] = [0, 0, 0];
-            } elseif ($normLargest === 'week') {
-                $weeks = intdiv(num1: $dateDiff, num2: 7);
-                $days = $dateDiff - ($weeks * 7);
-                [$years, $months] = [0, 0];
-            } else {
-                if ($calId !== 'iso8601') {
-                    // For non-ISO calendars, use CalendarDateUntil(temporalDate,
-                    // adjustedOther) in (this, other) order per TC39 spec.
-                    // Compute the adjusted other JDN by borrowing from the date
-                    // component when the time difference and date difference have
-                    // different signs.
-                    $rawDateDiff = $otherJdn - $tdJdn;
-                    $rawTimeDiff = $otherNs - $tdNs;
-                    $nonIsoAdjJdn = $otherJdn;
-                    if ($rawDateDiff !== 0 && $rawTimeDiff !== 0) {
-                        $dateSign = $rawDateDiff > 0 ? 1 : -1;
-                        $timeSign = $rawTimeDiff > 0 ? 1 : -1;
-                        if ($dateSign !== $timeSign) {
-                            // Borrow one day in the direction of the date diff.
-                            $nonIsoAdjJdn = $otherJdn - $dateSign;
-                        }
-                    }
-                    [$adjY2b, $adjM2b, $adjD2b] = CalendarMath::fromJulianDay($nonIsoAdjJdn);
-                    $cal = CalendarFactory::get($calId);
-                    [$years, $months, , $days] = $cal->dateUntil(
-                        $temporalDate->isoYear,
-                        $temporalDate->isoMonth,
-                        $temporalDate->isoDay,
-                        $adjY2b,
-                        $adjM2b,
-                        $adjD2b,
-                        $normLargest,
-                    );
-                    // Take absolute values — the output sign is applied later.
-                    $years = abs($years);
-                    $months = abs($months);
-                    $days = abs($days);
-                } else {
-                    // ISO calendar: calendarDiff expects (smaller, larger).
-                    $receiverIsLater = $sign < 0;
-                    [$years, $months, $days] = self::calendarDiff(
-                        $earlier->isoYear,
-                        $earlier->isoMonth,
-                        $earlier->isoDay,
-                        $adjY2,
-                        $adjM2,
-                        $adjD2,
-                        $receiverIsLater,
-                    );
-                    // Convert years to months when largestUnit is 'month'.
-                    if ($normLargest === 'month') {
-                        $months = ($years * 12) + $months;
-                        $years = 0;
-                    }
-                }
-                $weeks = 0;
-            }
-
-            $isSmallestCalendar = in_array($normSmallest, ['year', 'month', 'week', 'day'], strict: true);
-
-            // The receiver (temporalDate) is the later date when sign < 0.
-            $receiverIsLater = $sign < 0;
-
-            if ($isSmallestCalendar) {
-                // Calendar-unit rounding: zero out time and round the calendar part.
-                if ($normSmallest === 'year') {
-                    $totalMonths = ($years * 12) + $months;
-                    $roundedYears = self::roundCalendarYears(
-                        $years,
-                        $totalMonths,
-                        $days,
-                        $timeDiffNs,
-                        $temporalDate,
-                        $roundingIncrement,
-                        $roundingMode,
-                        $receiverIsLater,
-                        $outputSign,
-                    );
-                    return new Duration(years: $outputSign * $roundedYears);
-                }
-                if ($normSmallest === 'month') {
-                    $totalMonths = ($years * 12) + $months;
-                    $roundedMonths = self::roundCalendarMonths(
-                        $totalMonths,
-                        $days,
-                        $timeDiffNs,
-                        $temporalDate,
-                        $roundingIncrement,
-                        $roundingMode,
-                        $receiverIsLater,
-                        $outputSign,
-                    );
-                    if ($normLargest === 'year') {
-                        $roundedYears = intdiv(num1: $roundedMonths, num2: 12);
-                        $roundedMonths -= $roundedYears * 12;
-                        return new Duration(years: $outputSign * $roundedYears, months: $outputSign * $roundedMonths);
-                    }
-                    return new Duration(months: $outputSign * $roundedMonths);
-                }
-                if ($normSmallest === 'week') {
-                    $totalDays = ($weeks * 7) + $days;
-                    $weekIncrement = $roundingIncrement * 7;
-                    $roundedDays = self::roundDaysWithTime(
-                        $totalDays,
-                        $timeDiffNs,
-                        $weekIncrement,
-                        $roundingMode,
-                        $outputSign,
-                    );
-                    // Preserve the years/months from the date difference. Per TC39
-                    // NudgeToCalendarUnit (unit=week), the years+months portion is held fixed
-                    // (AdjustDateDurationRecord(duration.[[Date]], 0, 0)) and only the
-                    // weeks+days remainder is rounded. With largestUnit=month/year these can be
-                    // nonzero; dropping them lost a whole month (e.g. P1M weeks..months → 0).
-                    // For largestUnit=week they are already 0, so this is a no-op there.
-                    return new Duration(
-                        years: $outputSign * $years,
-                        months: $outputSign * $months,
-                        weeks: $outputSign * intdiv(num1: $roundedDays, num2: 7),
-                    );
-                }
-                // normSmallest === 'day'
-                $roundedDays = self::roundDaysWithTime(
-                    $days,
-                    $timeDiffNs,
-                    $roundingIncrement,
-                    $roundingMode,
-                    $outputSign,
-                );
-                if ($normLargest === 'day') {
-                    return new Duration(days: $outputSign * $roundedDays);
-                }
-                if ($normLargest === 'week') {
-                    $totalDays = ($weeks * 7) + $roundedDays;
-                    $roundedWeeks = intdiv(num1: $totalDays, num2: 7);
-                    $remDays = $totalDays - ($roundedWeeks * 7);
-                    return new Duration(weeks: $outputSign * $roundedWeeks, days: $outputSign * $remDays);
-                }
-                return new Duration(
-                    years: $outputSign * $years,
-                    months: $outputSign * $months,
-                    days: $outputSign * $roundedDays,
-                );
-            }
-
-            // smallestUnit is a time unit but largestUnit is a calendar unit.
-            $nsPerSmallest = match ($normSmallest) {
-                'hour' => self::NS_PER_HOUR,
-                'minute' => self::NS_PER_MINUTE,
-                'second' => EpochLimits::NS_PER_SECOND,
-                'millisecond' => self::NS_PER_MS,
-                'microsecond' => self::NS_PER_US,
-                default => 1,
-            };
-            /** @psalm-var int<1, 1000> $roundingIncrement */
-            $nsIncrement = $nsPerSmallest * $roundingIncrement;
-            // For negative output diffs, flip floor/ceil.
-            $effTimeMode = $roundingMode;
-            if ($outputSign < 0) {
-                $effTimeMode = match ($roundingMode) {
-                    'floor' => 'ceil',
-                    'ceil' => 'floor',
-                    'halfFloor' => 'halfCeil',
-                    'halfCeil' => 'halfFloor',
-                    default => $roundingMode,
-                };
-            }
-            $absTimeNs = self::roundPositiveNs($timeDiffNs, $nsIncrement, $effTimeMode);
-
-            // Handle day overflow from rounding time (e.g., 23:59 rounds up to 24:00).
-            $overflowDays = intdiv(num1: $absTimeNs, num2: self::NS_PER_DAY);
-            $absTimeNs %= self::NS_PER_DAY;
-
-            // When time overflow produces extra days, recompute the calendar diff
-            // from the updated position to properly rebalance months/years.
-            if ($overflowDays > 0 && $normLargest !== 'day' && $normLargest !== 'week') {
-                // Overflow from time rounding: recompute calendar diff.
-                if ($calId !== 'iso8601') {
-                    // Non-ISO: shift nonIsoAdjJdn by overflow in the diff direction.
-                    $tc39Jdn2 = $nonIsoAdjJdn + ($sign >= 0 ? $overflowDays : -$overflowDays);
-                    [$adjY3, $adjM3, $adjD3] = CalendarMath::fromJulianDay($tc39Jdn2);
-                    [$years, $months, , $days] = CalendarFactory::get($calId)->dateUntil(
-                        $temporalDate->isoYear,
-                        $temporalDate->isoMonth,
-                        $temporalDate->isoDay,
-                        $adjY3,
-                        $adjM3,
-                        $adjD3,
-                        $normLargest,
-                    );
-                    $years = abs($years);
-                    $months = abs($months);
-                    $days = abs($days);
-                } else {
-                    // ISO: add overflow to the swap-based adjOtherJdn.
-                    $isoAdjJdn2 = $adjOtherJdn + $overflowDays;
-                    [$adjY3, $adjM3, $adjD3] = CalendarMath::fromJulianDay($isoAdjJdn2);
-                    [$years, $months, $days] = self::calendarDiff(
-                        $earlier->isoYear,
-                        $earlier->isoMonth,
-                        $earlier->isoDay,
-                        $adjY3,
-                        $adjM3,
-                        $adjD3,
-                        $sign < 0,
-                    );
-                    if ($normLargest === 'month') {
-                        $months = ($years * 12) + $months;
-                        $years = 0;
-                    }
-                }
-            } else {
-                $days += $overflowDays;
-            }
-
-            $h = intdiv(num1: $absTimeNs, num2: self::NS_PER_HOUR);
-            $rem = $absTimeNs % self::NS_PER_HOUR;
-            $min = intdiv(num1: $rem, num2: self::NS_PER_MINUTE);
-            $rem %= self::NS_PER_MINUTE;
-            $sec = intdiv(num1: $rem, num2: EpochLimits::NS_PER_SECOND);
-            $rem %= EpochLimits::NS_PER_SECOND;
-            $ms = intdiv(num1: $rem, num2: self::NS_PER_MS);
-            $rem %= self::NS_PER_MS;
-            $us = intdiv(num1: $rem, num2: self::NS_PER_US);
-            $ns = $rem % self::NS_PER_US;
-
-            return new Duration(
-                years: $outputSign * $years,
-                months: $outputSign * $months,
-                weeks: $outputSign * $weeks,
-                days: $outputSign * $days,
-                hours: $outputSign * $h,
-                minutes: $outputSign * $min,
-                seconds: $outputSign * $sec,
-                milliseconds: $outputSign * $ms,
-                microseconds: $outputSign * $us,
-                nanoseconds: $outputSign * $ns,
-            );
-        }
-
-        // largestUnit is a time unit (hour or smaller): accumulate all days into ns.
-        $totalAbsNs = ($dateDiff * self::NS_PER_DAY) + $timeDiffNs;
-
-        $nsPerSmallest = match ($normSmallest) {
-            'hour' => self::NS_PER_HOUR,
-            'minute' => self::NS_PER_MINUTE,
-            'second' => EpochLimits::NS_PER_SECOND,
-            'millisecond' => self::NS_PER_MS,
-            'microsecond' => self::NS_PER_US,
-            default => 1,
-        };
-        /** @psalm-var int<1, 1000> $roundingIncrement */
-        $nsIncrement = $nsPerSmallest * $roundingIncrement;
-        // For negative output diffs, flip floor/ceil so they retain their directional meaning.
-        $effectiveRoundMode = $roundingMode;
-        if ($outputSign < 0) {
-            $effectiveRoundMode = match ($roundingMode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $roundingMode,
-            };
-        }
-        $roundedAbsNs = self::roundPositiveNs($totalAbsNs, $nsIncrement, $effectiveRoundMode);
-
-        // Decompose based on largest unit (no conversion to higher units).
-        /** @var array<string, int> $timeUnitNs */
-        static $timeUnitNs = [
-            'hour' => 3_600_000_000_000,
-            'minute' => 60_000_000_000,
-            'second' => 1_000_000_000,
-            'millisecond' => 1_000_000,
-            'microsecond' => 1_000,
-            'nanosecond' => 1,
-        ];
-        /** @var list<'hour'|'minute'|'second'|'millisecond'|'microsecond'|'nanosecond'> $timeUnitOrder */
-        static $timeUnitOrder = ['hour', 'minute', 'second', 'millisecond', 'microsecond', 'nanosecond'];
-
-        $rem = $roundedAbsNs;
-        $h = 0;
-        $min = 0;
-        $sec = 0;
-        $ms = 0;
-        $us = 0;
-        $ns = 0;
-        $started = false;
-        foreach ($timeUnitOrder as $unit) {
-            if ($unit === $normLargest) {
-                $started = true;
-            }
-            if (!$started) {
-                continue;
-            }
-            $perUnit = $timeUnitNs[$unit];
-            $val = intdiv(num1: $rem, num2: $perUnit);
-            $rem %= $perUnit;
-            match ($unit) {
-                'hour' => $h = $val,
-                'minute' => $min = $val,
-                'second' => $sec = $val,
-                'millisecond' => $ms = $val,
-                'microsecond' => $us = $val,
-                'nanosecond' => $ns = $val,
-            };
-        }
-
-        return new Duration(
-            hours: $outputSign * $h,
-            minutes: $outputSign * $min,
-            seconds: $outputSign * $sec,
-            milliseconds: $outputSign * $ms,
-            microseconds: $outputSign * $us,
-            nanoseconds: $outputSign * $ns,
-        );
-    }
-
-    /**
-     * Shared implementation for add() and subtract().
-     *
-     * Time units are balanced into nanoseconds, then converted to overflow days.
-     * Day + calendar units are applied to the date part using PlainDate-style arithmetic.
-     *
-     * @param array<array-key, mixed>|object $options
-     */
-    private function addDuration(int $sign, Duration $dur, array|object $options): self
-    {
-        // GetOptionsObject + GetTemporalOverflowOption: omitted ([]) and a bag without
-        // 'overflow' default to 'constrain'; an explicit null / non-object primitive /
-        // Symbol sentinel => TypeError; an 'overflow' value is coerced/validated (an
-        // explicit `overflow => null` value => RangeError).
-        $overflow = Options::overflowFromValue($options);
-
-        $years = $sign * (int) $dur->years;
-        $months = $sign * (int) $dur->months;
-        $days = $sign * (((int) $dur->weeks * 7) + (int) $dur->days);
-
-        // Balance time units to nanoseconds, then extract whole days.
-        $hours = $sign * (int) $dur->hours;
-        $minutes = $sign * (int) $dur->minutes;
-        $seconds = $sign * (int) $dur->seconds;
-        $ms = $sign * (int) $dur->milliseconds;
-        $us = $sign * (int) $dur->microseconds;
-        $ns = $sign * (int) $dur->nanoseconds;
-
-        // Balance time units using the same step-by-step carry approach as PlainDate,
-        // to avoid int64 overflow with large Duration field values.
-        // Each step extracts whole days and passes the remainder to the next smaller unit.
-
-        // hours → full days + remainder hours
-        $hDays = intdiv(num1: $hours, num2: 24);
-        $hRem = $hours % 24;
-
-        // carry + minutes → full days + remainder minutes
-        $totalMin = ($hRem * 60) + $minutes;
-        $mDays = intdiv(num1: $totalMin, num2: 1_440);
-        $mRem = $totalMin % 1_440;
-
-        // carry + seconds → full days + remainder seconds
-        $totalSec = ($mRem * 60) + $seconds;
-        $sDays = intdiv(num1: $totalSec, num2: 86_400);
-        $sRem = $totalSec % 86_400;
-
-        // carry + milliseconds → full days + remainder ms
-        $totalMs = ($sRem * 1_000) + $ms;
-        $msDays = intdiv(num1: $totalMs, num2: 86_400_000);
-        $msRem = $totalMs % 86_400_000;
-
-        // carry + microseconds → full days + remainder μs
-        $totalUs = ($msRem * 1_000) + $us;
-        $usDays = intdiv(num1: $totalUs, num2: 86_400_000_000);
-        $usRem = $totalUs % 86_400_000_000;
-
-        // carry + nanoseconds → full days + remainder ns
-        $totalNs = ($usRem * 1_000) + $ns;
-        $nsDays = intdiv(num1: $totalNs, num2: 86_400_000_000_000);
-        $nsRem = $totalNs % 86_400_000_000_000;
-
-        $days += $hDays + $mDays + $sDays + $msDays + $usDays + $nsDays;
-
-        // Reconstruct time-of-day from the accumulated remainders.
-        // $nsRem is the total sub-day nanoseconds; it may be negative when the
-        // duration is negative. Normalise to [0, NS_PER_DAY) using floor-div.
-        $currentTimeNs = self::timeToNs(
-            $this->hour,
-            $this->minute,
-            $this->second,
-            $this->millisecond,
-            $this->microsecond,
-            $this->nanosecond,
-        );
-        $newTimeNs = $currentTimeNs + $nsRem;
-
-        // Carry overflow days from the time component.
-        if ($newTimeNs < 0) {
-            $overflowDays = (int) floor($newTimeNs / self::NS_PER_DAY);
-            $newTimeNs -= $overflowDays * self::NS_PER_DAY;
-        } else {
-            $overflowDays = intdiv(num1: $newTimeNs, num2: self::NS_PER_DAY);
-            $newTimeNs %= self::NS_PER_DAY;
-        }
-
-        $days += $overflowDays;
-
-        // Delegate date arithmetic to the calendar protocol.
-        $cal = CalendarFactory::get($this->calendarId);
-        [$newYear, $newMonth, $newDay] = $cal->dateAdd(
-            $this->isoYear,
-            $this->isoMonth,
-            $this->isoDay,
-            $years,
-            $months,
-            0,
-            $days,
-            $overflow,
-        );
-
-        $minJdn = CalendarMath::toJulianDay(-271_821, 4, 19);
-        $maxJdn = CalendarMath::toJulianDay(275_760, 9, 13);
-        $jdn = CalendarMath::toJulianDay($newYear, $newMonth, $newDay);
-        if ($jdn < $minJdn || $jdn > $maxJdn) {
-            throw new RangeError('PlainDateTime arithmetic result is outside the representable range.');
-        }
-
-        // Decompose new time.
-        $h = intdiv(num1: $newTimeNs, num2: self::NS_PER_HOUR);
-        $rem = $newTimeNs % self::NS_PER_HOUR;
-        $min = intdiv(num1: $rem, num2: self::NS_PER_MINUTE);
-        $rem %= self::NS_PER_MINUTE;
-        $sec = intdiv(num1: $rem, num2: EpochLimits::NS_PER_SECOND);
-        $rem %= EpochLimits::NS_PER_SECOND;
-        $msR = intdiv(num1: $rem, num2: self::NS_PER_MS);
-        $rem %= self::NS_PER_MS;
-        $usR = intdiv(num1: $rem, num2: self::NS_PER_US);
-        $nsR = $rem % self::NS_PER_US;
-
-        return new self($newYear, $newMonth, $newDay, $h, $min, $sec, $msR, $usR, $nsR, $this->calendarId);
-    }
-
-    /**
-     * Converts time fields to total nanoseconds since midnight.
-     */
-    private static function timeToNs(int $h, int $min, int $sec, int $ms, int $us, int $ns): int
-    {
-        return (
-            ($h * self::NS_PER_HOUR)
-            + ($min * self::NS_PER_MINUTE)
-            + ($sec * EpochLimits::NS_PER_SECOND)
-            + ($ms * self::NS_PER_MS)
-            + ($us * self::NS_PER_US)
-            + $ns
-        );
-    }
-
-    /**
-     * Calendar-aware year/month/day breakdown between two dates, as used by since()/until().
-     *
-     * @param int<1, 12> $m1
-     * @param int<1, 12> $m2
-     * @return array{0: int, 1: int, 2: int}
-     */
-    private static function calendarDiff(
-        int $y1,
-        int $m1,
-        int $d1,
-        int $y2,
-        int $m2,
-        int $d2,
-        bool $receiverIsY2 = true,
-    ): array {
-        // Both call sites pass (y1,m1,d1) = the earlier endpoint and (y2,m2,d2)
-        // derived from earlierJdn + a non-negative day count, so (y2,m2,d2) is always
-        // >= (y1,m1,d1) lexicographically. The diff is therefore always non-negative and
-        // the swap path a smaller second operand would need is unreachable here.
-        $years = $y2 - $y1;
-        $months = $m2 - $m1;
-
-        if ($months < 0) {
-            $years--;
-            $months += 12;
-        }
-
-        if ($d2 < $d1) {
-            if ($months > 0) {
-                $months--;
-            } else {
-                $years--;
-                $months = 11;
-            }
-        }
-
-        if ($receiverIsY2) {
-            $anchorMonth = $m2 - $months;
-            $anchorYear = $y2 - $years;
-            if ($anchorMonth <= 0) {
-                $anchorYear--;
-                $anchorMonth += 12;
-            }
-            $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
-            $anchorDay = min($d2, $anchorMaxDay);
-            $days =
-                CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay)
-                - CalendarMath::toJulianDay($y1, $m1, $d1);
-        } else {
-            $anchorMonth = $m1 + $months;
-            $anchorYear = $y1 + $years;
-            if ($anchorMonth > 12) {
-                $anchorYear++;
-                $anchorMonth -= 12;
-            }
-            $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
-            $anchorDay = min($d1, $anchorMaxDay);
-            $days =
-                CalendarMath::toJulianDay($y2, $m2, $d2)
-                - CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay);
-        }
-
-        return [$years, $months, $days];
-    }
-
-    /**
-     * Rounds days (non-negative) plus remaining time-of-day nanoseconds using the given
-     * rounding mode. The time ns acts as fractional progress toward the next day.
-     */
-    private static function roundDaysWithTime(int $days, int $timeNs, int $increment, string $mode, int $sign = 1): int
-    {
-        $progress = $timeNs > 0 ? (float) $timeNs / (float) self::NS_PER_DAY : 0.0;
-        $roundUp = CalendarMath::applyCalendarRoundingProgress($days, $progress, $increment, $mode, $sign);
-        $q = intdiv(num1: $days, num2: $increment);
-        return $roundUp ? ($q + 1) * $increment : $q * $increment;
-    }
-
-    /**
-     * Calendar-aware rounding for months (NudgeToCalendarUnit, unit=months).
-     *
-     * Rounds $totalMonths (non-negative) + $remainingDays + $remainingTimeNs to the
-     * nearest $increment months, anchored from the later date.
-     *
-     * @throws RangeError if the rounded date is out of the valid ISO range.
-     */
-    private static function roundCalendarMonths(
-        int $totalMonths,
-        int $remainingDays,
-        int $remainingTimeNs,
-        self $receiver,
-        int $increment,
-        string $mode,
-        bool $receiverIsLater,
-        int $sign = 1,
-    ): int {
-        $dir = $receiverIsLater ? -1 : 1;
-
-        // floor-count (rounded down to nearest multiple of increment).
-        $floorCount = intdiv(num1: $totalMonths, num2: $increment) * $increment;
-
-        $anchorJdn = self::addSignedMonths($receiver, $dir * $floorCount);
-        $nextJdn = self::addSignedMonths($receiver, $dir * ($floorCount + $increment));
-
-        $intervalDays = abs($nextJdn - $anchorJdn);
-
-        // Total fractional progress: remaining days + remaining time as fraction of a day.
-        $totalRemNs = ($remainingDays * self::NS_PER_DAY) + $remainingTimeNs;
-        $progress = $intervalDays > 0 ? (float) $totalRemNs / ((float) $intervalDays * (float) self::NS_PER_DAY) : 0.0;
-
-        $roundUp = CalendarMath::applyCalendarRoundingProgress($totalMonths, $progress, $increment, $mode, $sign);
-
-        $roundedAbsMonths = $roundUp ? $floorCount + $increment : $floorCount;
-
-        // Validate: the rounded result must not exceed the valid PlainDate range.
-        self::addSignedMonths($receiver, $dir * $roundedAbsMonths);
-
-        return $roundedAbsMonths;
-    }
-
-    /**
-     * Calendar-aware rounding for years (NudgeToCalendarUnit, unit=years).
-     *
-     * @throws RangeError if the rounded date is out of the valid ISO range.
-     */
-    private static function roundCalendarYears(
-        int $years,
-        int $totalMonths,
-        int $remainingDays,
-        int $remainingTimeNs,
-        self $receiver,
-        int $increment,
-        string $mode,
-        bool $receiverIsLater,
-        int $sign = 1,
-    ): int {
-        $dir = $receiverIsLater ? -1 : 1;
-
-        $floorCount = intdiv(num1: $years, num2: $increment) * $increment;
-
-        // For year rounding, we go by year increments (12 months each).
-        $anchorJdn = self::addSignedMonths($receiver, $dir * $floorCount * 12);
-        $nextJdn = self::addSignedMonths($receiver, $dir * ($floorCount + $increment) * 12);
-
-        $intervalDays = abs($nextJdn - $anchorJdn);
-
-        // Compute the total distance from anchor (floorCount years) to actual position.
-        $remMonths = $totalMonths - ($floorCount * 12);
-        $monthsJdn = self::addSignedMonths($receiver, $dir * (($floorCount * 12) + $remMonths));
-        $remDaysFromMonths = abs($monthsJdn - $anchorJdn);
-        $totalRemNs = (($remDaysFromMonths + $remainingDays) * self::NS_PER_DAY) + $remainingTimeNs;
-        $progress = $intervalDays > 0 ? (float) $totalRemNs / ((float) $intervalDays * (float) self::NS_PER_DAY) : 0.0;
-
-        $roundUp = CalendarMath::applyCalendarRoundingProgress($years, $progress, $increment, $mode, $sign);
-
-        $roundedAbsYears = $roundUp ? $floorCount + $increment : $floorCount;
-
-        // Validate range.
-        self::addSignedMonths($receiver, $dir * $roundedAbsYears * 12);
-
-        return $roundedAbsYears;
-    }
-
-    /**
-     * Adds $signedMonths months to $receiver's date and returns the resulting Julian Day Number.
-     *
-     * @throws RangeError if the resulting date is outside the valid ISO range.
-     */
-    private static function addSignedMonths(self $receiver, int $signedMonths): int
-    {
-        $cal = CalendarFactory::get($receiver->calendarId);
-        [$y, $m, $d] = $cal->dateAdd(
-            $receiver->isoYear,
-            $receiver->isoMonth,
-            $receiver->isoDay,
-            0,
-            $signedMonths,
-            0,
-            0,
-            'constrain',
-        );
-
-        $jdn = CalendarMath::toJulianDay($y, $m, $d);
-        $minJdn = CalendarMath::toJulianDay(-271_821, 4, 19);
-        $maxJdn = CalendarMath::toJulianDay(275_760, 9, 13);
-        if ($jdn < $minJdn || $jdn > $maxJdn) {
-            throw new RangeError('Rounded PlainDateTime is outside the representable range.');
-        }
-
-        return $jdn;
-    }
-
-    /**
-     * Rounds a non-negative nanosecond value to the nearest multiple of $increment.
-     *
-     * @throws RangeError for unknown rounding modes.
-     */
-    private static function roundPositiveNs(int $ns, int $increment, string $mode): int
-    {
-        $q = intdiv(num1: $ns, num2: $increment);
-        $rem = $ns - ($q * $increment);
-        $r1 = $q * $increment; // floor multiple
-        $r2 = $r1 + $increment; // ceil multiple
-        if ($mode === 'halfEven') {
-            $cmp = $rem * 2;
-            if ($cmp < $increment) {
-                return $r1;
-            }
-            if ($cmp > $increment) {
-                return $r2;
-            }
-            return ($q % 2) === 0 ? $r1 : $r2;
-        }
-        return match ($mode) {
-            'trunc', 'floor' => $r1,
-            'ceil', 'expand' => $rem === 0 ? $r1 : $r2,
-            'halfExpand', 'halfCeil' => ($rem * 2) >= $increment ? $r2 : $r1,
-            'halfTrunc', 'halfFloor' => ($rem * 2) > $increment ? $r2 : $r1,
-            default => throw new RangeError("Invalid roundingMode \"{$mode}\"."),
-        };
     }
 
     #[\Override]

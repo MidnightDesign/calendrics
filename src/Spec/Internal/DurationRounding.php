@@ -403,7 +403,7 @@ final class DurationRounding
         // largestUnit >= days, keep whole days intact and round only the sub-day portion.
         // This differs from PlainDate behavior (which rounds the total nanoseconds).
         if (($zdtRelativeTo || $zdtInfoRound !== null) && $suNormResolved !== 'days' && $luIdx >= 6) {
-            $roundedSubDayNs = self::roundNsPositive($subDayNs, $nsIncrement, $roundingMode);
+            $roundedSubDayNs = TimeOfDay::roundPositive($subDayNs, $nsIncrement, $roundingMode);
             // If rounding carried the sub-day portion beyond one full day, add extra days.
             // Use DST-aware day length when available.
             if ($zdtInfoRound !== null) {
@@ -520,7 +520,7 @@ final class DurationRounding
             $dayNsActual = abs($actualDaysSec) * 1_000_000_000;
             if ($absD <= 106_750) {
                 $totalNsInt = $dayNsActual + $subDayNs;
-                $roundedNsInt = self::roundNsPositive($totalNsInt, $nsIncrement, $roundingMode);
+                $roundedNsInt = TimeOfDay::roundPositive($totalNsInt, $nsIncrement, $roundingMode);
                 if (((float) $roundedNsInt / 1_000_000_000.0) >= 9_007_199_254_740_992.0) {
                     throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
                 }
@@ -550,7 +550,7 @@ final class DurationRounding
         if ($absD <= 106_750) {
             $totalNsInt = ($absD * 86_400_000_000_000) + $subDayNs;
             // Round the total nanoseconds (int path).
-            $roundedNsInt = self::roundNsPositive($totalNsInt, $nsIncrement, $roundingMode);
+            $roundedNsInt = TimeOfDay::roundPositive($totalNsInt, $nsIncrement, $roundingMode);
             // Validate rounded result is within MaxTimeDuration (MAX_SAFE_INT seconds).
             // MaxTimeDuration = 9_007_199_254_740_991 seconds + 999_999_999 ns.
             // 9_007_199_254_740_992 * 1e9 exceeds MaxTimeDuration, so use >=.
@@ -732,41 +732,6 @@ final class DurationRounding
     }
 
     /**
-     * Rounds a non-negative nanosecond total to the given increment using the specified rounding mode.
-     *
-     * @param int    $ns        Non-negative nanoseconds.
-     * @param int    $increment Rounding increment in nanoseconds (>= 1).
-     * @param string $mode      TC39 rounding mode name.
-     * @return int Rounded nanoseconds (a multiple of $increment).
-     * @throws RangeError for unknown rounding modes.
-     */
-    private static function roundNsPositive(int $ns, int $increment, string $mode): int
-    {
-        $q = intdiv(num1: $ns, num2: $increment);
-        $d1 = $ns - ($q * $increment); // remainder, >= 0
-        $r2 = $q + 1;
-        if ($mode === 'halfEven') {
-            $cmp = $d1 * 2;
-            if ($cmp < $increment) {
-                $rounded = $q;
-            } elseif ($cmp > $increment) {
-                $rounded = $r2;
-            } else {
-                $rounded = ($q % 2) === 0 ? $q : $r2;
-            }
-        } else {
-            $rounded = match ($mode) {
-                'trunc', 'floor' => $q,
-                'ceil', 'expand' => $d1 === 0 ? $q : $r2,
-                'halfExpand', 'halfCeil' => ($d1 * 2) >= $increment ? $r2 : $q,
-                'halfTrunc', 'halfFloor' => ($d1 * 2) > $increment ? $r2 : $q,
-                default => throw new RangeError("Invalid roundingMode \"{$mode}\"."),
-            };
-        }
-        return $rounded * $increment;
-    }
-
-    /**
      * Accumulates exact-integer time fields into a single target-unit representation.
      *
      * Takes already-balanced fields (each within its normal range: h<24, m<60, etc.)
@@ -938,7 +903,7 @@ final class DurationRounding
 
             $totalWu =
                 ($absD * $dC) + ($absH * $hC) + ($absM * $mC) + ($absS * $sC) + ($absMs * $msC) + ($absUs * $usC);
-            $roundedWu = self::roundNsPositive($totalWu, $incWu, $roundingMode);
+            $roundedWu = TimeOfDay::roundPositive($totalWu, $incWu, $roundingMode);
 
             // Decompose roundedWu back into fields.
             // First separate the sub-ms parts (us, ns are always zero at this point since
@@ -1422,7 +1387,7 @@ final class DurationRounding
         // Round the signed total nanoseconds.
         // TC39 uses signed (ApplyUnsignedRoundingMode on signed fractional value), so for negative
         // durations floor rounds toward -∞ (larger abs) and ceil rounds toward zero (smaller abs).
-        // Since roundNsPositive works on absolute values, swap floor↔ceil and halfFloor↔halfCeil
+        // Since TimeOfDay::roundPositive works on absolute values, swap floor↔ceil and halfFloor↔halfCeil
         // when the duration is negative so the absolute-value rounding matches signed semantics.
         $sign = $totalNs >= 0 ? 1 : -1;
         $absNs = abs($totalNs);
@@ -1538,7 +1503,7 @@ final class DurationRounding
                     $sign,
                 );
                 // Round only the sub-day remainder.
-                $roundedSubDayNs = self::roundNsPositive($preSubDayNs, $nsIncrement, $signedMode);
+                $roundedSubDayNs = TimeOfDay::roundPositive($preSubDayNs, $nsIncrement, $signedMode);
                 // Check if the rounded value overflows the current day's length.
                 $afterPreDaysDate = $calDateEnd->modify(sprintf('%+d days', $sign * $preDays));
                 $adY = (int) $afterPreDaysDate->format('Y');
@@ -1559,7 +1524,7 @@ final class DurationRounding
                 $roundedAbsDays = $preDays + $extraDays;
                 // If time overflowed into an extra day, re-round the new remainder.
                 if ($extraDays > 0) {
-                    $absSubDayNs = self::roundNsPositive($absSubDayNs, $nsIncrement, $signedMode);
+                    $absSubDayNs = TimeOfDay::roundPositive($absSubDayNs, $nsIncrement, $signedMode);
                     $afterAllDaysDate = $calDateEnd->modify(sprintf('%+d days', $sign * $roundedAbsDays));
                     $aaY = (int) $afterAllDaysDate->format('Y');
                     $aaM = (int) $afterAllDaysDate->format('n');
@@ -1584,7 +1549,7 @@ final class DurationRounding
                 $roundedDays = $sign * ($roundedAbsDays + abs($calendarDays));
                 $subDayNs = $sign * $absSubDayNs;
             } else {
-                $roundedAbsNs = self::roundNsPositive($absNs, $nsIncrement, $signedMode);
+                $roundedAbsNs = TimeOfDay::roundPositive($absNs, $nsIncrement, $signedMode);
                 $roundedNs = $sign * $roundedAbsNs;
                 $roundedDays = intdiv(num1: $roundedNs, num2: $nsPerDay);
                 $subDayNs = $roundedNs - ($roundedDays * $nsPerDay);

@@ -31,21 +31,21 @@ threshold = 140
 level = "error"
 threshold = 35
 
-# PlainDateTime now carries the highest class-level cyclomatic complexity (just under
-# 280), dominated by the TC39 parse/round/diff matrix across 9 rounding modes and the
-# signed branches. Duration and ZonedDateTime used to sit near 700 and were brought under
-# this by moving their engines into Temporal\Spec\Internal\ collaborators — so treat this
-# as a ratchet, not a ceiling: it should only ever move down.
+# Spec\Duration now carries the highest class-level cyclomatic complexity (just under
+# 250); PlainDateTime dropped to ~146 when its parse/bag/add/diff engines moved into
+# Temporal\Spec\Internal\ collaborators, the same move that earlier brought Duration and
+# ZonedDateTime down from near 700 — so treat this as a ratchet, not a ceiling: it
+# should only ever move down.
 [linter.rules.cyclomatic-complexity]
 level = "warning"
-threshold = 300
+threshold = 250
 
-# Kan-defect measures control-flow density; the highest remaining score is between 12 and
-# 16, again on the classes that still hold a full TC39 algorithm inline. Same ratchet rule
-# as above.
+# Kan-defect measures control-flow density; the highest remaining score is just under 15
+# (IntlCalendarBridge), again on the classes that still hold a full TC39 algorithm
+# inline. Same ratchet rule as above.
 [linter.rules.kan-defect]
 level = "warning"
-threshold = 20.0
+threshold = 15.0
 
 # Duration.assertDuration-style test helpers assert all 10 Duration fields in a
 # single call; ZonedDateTime::with() accepts 13 TC39-spec date/time/calendar

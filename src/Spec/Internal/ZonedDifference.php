@@ -734,15 +734,7 @@ final class ZonedDifference
             }
         }
 
-        $h = intdiv(num1: $absTimeNs, num2: self::NS_PER_HOUR);
-        $rem = $absTimeNs % self::NS_PER_HOUR;
-        $min = intdiv(num1: $rem, num2: self::NS_PER_MINUTE);
-        $rem %= self::NS_PER_MINUTE;
-        $sec = intdiv(num1: $rem, num2: EpochLimits::NS_PER_SECOND);
-        $rem %= EpochLimits::NS_PER_SECOND;
-        $msR = intdiv(num1: $rem, num2: EpochLimits::NS_PER_MILLISECOND);
-        $rem %= EpochLimits::NS_PER_MILLISECOND;
-        $usR = intdiv(num1: $rem, num2: EpochLimits::NS_PER_MICROSECOND);
+        [$h, $min, $sec, $msR, $usR, $nsR] = TimeOfDay::decompose($absTimeNs);
 
         return new Duration(
             years: $outputSign * $span->years,
@@ -754,7 +746,7 @@ final class ZonedDifference
             seconds: $outputSign * $sec,
             milliseconds: $outputSign * $msR,
             microseconds: $outputSign * $usR,
-            nanoseconds: $outputSign * ($rem % EpochLimits::NS_PER_MICROSECOND),
+            nanoseconds: $outputSign * $nsR,
         );
     }
 
