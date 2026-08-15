@@ -68,11 +68,10 @@ final class EpochRounding
      * 'ceil'/'expand' toward +∞, and the half-modes break ties with the positive-
      * sign convention regardless of the original value's sign.
      *
-     * Package-internal seam: the epoch sibling classes ({@see Temporal\Spec\ZonedDateTime}
-     * and {@see Temporal\Spec\Instant}) call this for their non-negative as-if-positive
-     * nanosecond rounding rather than re-implementing it. Not part of any public surface.
-     *
-     * @internal Only for the Temporal\Spec epoch sibling classes.
+     * Package-internal seam: {@see Temporal\Spec\ZonedDateTime}, {@see Temporal\Spec\Instant},
+     * {@see Temporal\Spec\PlainDateTime}, and {@see DateTimeDifference} call this for their
+     * non-negative as-if-positive nanosecond rounding rather than re-implementing it. Not
+     * part of any public surface.
      *
      * @throws RangeError for unknown rounding modes.
      */
