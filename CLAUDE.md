@@ -57,8 +57,8 @@ PHPStan level 9, Psalm error level 1, Mago lint+format clean, 100% mutation kill
 Versioning and `CHANGELOG.md` are owned by [release-please](https://github.com/googleapis/release-please) (`.github/workflows/release-please.yml`, `release-please-config.json`, `.release-please-manifest.json`). Consequences when working here:
 
 - **`CHANGELOG.md` is generated. Do not hand-edit it**, and do not add an `Unreleased` section — release-please inserts each new entry between the preamble and the newest existing entry.
-- **PR titles are load-bearing.** PRs are squash-merged, so the PR title becomes the commit subject release-please parses. It must be a Conventional Commit (`feat:`, `fix:`, `refactor:`, `test:`, …); `feat!:` or a `BREAKING CHANGE:` footer marks a breaking change. See README's *Releases* section for the type → section → bump table.
-- Release type is `php`, which here only touches `CHANGELOG.md`: `composer.json` has no `version` key (correct for Packagist — do not add one) and there is no `VERSION` file, so the strategy's updaters for both are no-ops.
+- **PR titles are load-bearing.** Squash is the repository's only merge method, so the PR title becomes the commit subject release-please parses. It must be a Conventional Commit (`feat:`, `fix:`, `refactor:`, `test:`, …); `feat!:` or a `BREAKING CHANGE:` footer marks a breaking change. A subject that does not parse is skipped silently — no changelog entry, no bump. See README's *Releases* section for the type → section → bump table. Dependabot gets its prefixes from `.github/dependabot.yml`.
+- Release type is `php`, which writes no version number outside `.release-please-manifest.json`: `composer.json` has no `version` key (correct for Packagist — do not add one) and there is no `VERSION` file. The `VERSION` updater is therefore a no-op, but the `composer.json` one still re-serializes the file, so a release PR can carry a one-time reformat of it.
 - `bootstrap-sha` in the config pins the first run's starting point at the 0.2.0 handoff commit. It is ignored once a release-please PR has been merged and can be deleted then.
 
 ## Git worktrees
