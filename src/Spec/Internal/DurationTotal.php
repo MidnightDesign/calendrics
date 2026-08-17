@@ -220,27 +220,32 @@ final class DurationTotal
             return self::toIntIfWhole($result);
         }
 
-        // Compute in seconds. Combine sub-second fields into nanoseconds first, then divide
-        // by 1e9 once — this avoids accumulated float64 rounding error from separate divisions
-        // (e.g. 2ms/1000 + 31µs/1e6 gives 0.0020310000000000003 instead of 0.002031).
-        $subNs =
-            ((float) $d->milliseconds * 1_000_000.0) + ((float) $d->microseconds * 1_000.0) + (float) $d->nanoseconds;
-        $totalSec =
-            ((float) $d->days * 86_400.0)
-            + ((float) $d->hours * 3_600.0)
-            + ((float) $d->minutes * 60.0)
-            + (float) $d->seconds
-            + ($subNs / 1_000_000_000.0);
+        // Total on the exact value, carried as a (whole seconds, sub-second nanoseconds)
+        // pair the way DurationRounding does. The combined nanosecond count passes int64
+        // long before MaxTimeDuration, and float64's ulp up there is milliseconds wide,
+        // so summing into a float first and scaling afterwards drops digits the spec
+        // keeps — 8692288669465520513 ms came back a whole ulp out. Both halves of the
+        // pair stay inside int64, and the single conversion at the end is the one
+        // rounding TC39 allows.
+        $absNs = (int) abs((float) $d->nanoseconds);
+        $absUs = (int) abs((float) $d->microseconds);
+        $absMs = (int) abs((float) $d->milliseconds);
+        $absSec =
+            ((int) abs((float) $d->days) * 86_400)
+            + ((int) abs((float) $d->hours) * 3_600)
+            + ((int) abs((float) $d->minutes) * 60)
+            + (int) abs((float) $d->seconds);
 
-        $result = match ($unit) {
-            'days' => $totalSec / 86_400.0,
-            'hours' => $totalSec / 3_600.0,
-            'minutes' => $totalSec / 60.0,
-            'seconds' => $totalSec,
-            'milliseconds' => $totalSec * 1_000.0,
-            'microseconds' => $totalSec * 1_000_000.0,
-            'nanoseconds' => $totalSec * 1_000_000_000.0,
-        };
+        // Carry each sub-second field up separately: a single milliseconds field may hold
+        // enough to overflow int64 once multiplied out to nanoseconds.
+        $absUs += intdiv(num1: $absNs, num2: 1_000_000_000) * 1_000_000;
+        $absMs += intdiv(num1: $absUs, num2: 1_000_000) * 1_000;
+        $absSec += intdiv(num1: $absMs, num2: 1_000);
+        $subNs = (($absMs % 1_000) * 1_000_000) + (($absUs % 1_000_000) * 1_000) + ($absNs % 1_000_000_000);
+        $absSec += intdiv(num1: $subNs, num2: 1_000_000_000);
+        $subNs %= 1_000_000_000;
+
+        $result = (float) $d->sign * self::exactTotal($absSec, $subNs, $unit);
 
         // Return int when the result is a whole number (matches JS behavior where
         // e.g. 24 hours total('hours') is 24, not 24.0).
@@ -478,7 +483,9 @@ final class DurationTotal
             $current = $next;
         }
 
-        $remainingDays = $current->diff($end)->days;
+        // DateInterval::$days is int|false, false only for an interval not built by
+        // diff(); these always are.
+        $remainingDays = intval($current->diff($end)->days);
         // Use start-anchored r2 to match TC39 spec (daysUntil(r1, r2) where
         // r2 = start + (months+1) months, not current + 1 month).
         $r2 = AnchorMath::addMonthsClamped($start, $sign * ($months + 1));
@@ -486,7 +493,7 @@ final class DurationTotal
         // when the anchor sits near the limit; per TC39 RoundDuration this is a
         // RangeError.
         AnchorMath::assertCalendarBoundaryInRange($r2);
-        $daysInNextMonth = $current->diff($r2)->days;
+        $daysInNextMonth = intval($current->diff($r2)->days);
 
         if ($zdtInfo !== null) {
             // DST-aware: compute the actual epoch seconds spanning from $current to $r2
@@ -522,10 +529,19 @@ final class DurationTotal
             return self::toIntIfWhole($result);
         }
 
+        // months + (remainingDays + |fracNs| / nsPerDay) / daysInNextMonth, as one exact
+        // quotient. Summing the three terms as floats rounds three times, which lands a
+        // full ulp out on values like 1 + 11/31.
+        $absFracNs = $sign * $fracNs;
         $result =
-            (float) ($months * $sign)
-            + ((float) ($sign * $remainingDays) / (float) $daysInNextMonth)
-            + ((float) ($sign * $fracNs) / ((float) $nsPerDay * (float) $daysInNextMonth));
+            (float) $sign
+            * self::divideExact(
+                ((($months * $daysInNextMonth) + $remainingDays) * 86_400)
+                + intdiv(num1: $absFracNs, num2: 1_000_000_000),
+                $absFracNs % 1_000_000_000,
+                $daysInNextMonth * 86_400,
+                0,
+            );
 
         return self::toIntIfWhole($result);
     }
@@ -569,7 +585,9 @@ final class DurationTotal
             $current = $next;
         }
 
-        $remainingDays = $current->diff($end)->days;
+        // DateInterval::$days is int|false, false only for an interval not built by
+        // diff(); these always are.
+        $remainingDays = intval($current->diff($end)->days);
         // Use start-anchored r2 to match TC39 spec (daysUntil(r1, r2) where
         // r2 = start + (years+1) years, not current + 1 year).
         $r2 = AnchorMath::addYearsClamped($start, $sign * ($years + 1));
@@ -577,7 +595,7 @@ final class DurationTotal
         // when the anchor sits near the limit; per TC39 RoundDuration this is a
         // RangeError.
         AnchorMath::assertCalendarBoundaryInRange($r2);
-        $daysInNextYear = $current->diff($r2)->days;
+        $daysInNextYear = intval($current->diff($r2)->days);
         // Convert fracNs → ms → fracDays via two exact divisions.
         // Direct division fracNs / (nsPerDay * 365) loses precision (86400e9 * 365 > 2^53).
         // Dividing fracNs by 1e6 first (ns → ms) gives the same float64 as the JS test's
@@ -596,6 +614,83 @@ final class DurationTotal
 
     private static function toIntIfWhole(float $result): int|float
     {
+        // Past int64 the cast wraps rather than saturating, and every float that large is
+        // a whole number anyway, so there is nothing to gain by narrowing it.
+        if (abs($result) >= 9.223_372_036_854_776e18) {
+            return $result;
+        }
         return fmod(num1: $result, num2: 1.0) === 0.0 ? (int) $result : $result;
+    }
+
+    /**
+     * The non-negative exact value ($sec + $subNs / 1e9) seconds, expressed in $unit and
+     * narrowed to the nearest double exactly once.
+     *
+     * The quotient is assembled as a decimal string and handed to a single strtod, which
+     * is correctly rounded. Every unit length is a power of ten times a small factor
+     * (60, 3600, 86400), so the power of ten is a decimal-point shift and only the small
+     * factor needs dividing out — done digit by digit, which keeps the value exact
+     * however far past int64 it runs.
+     *
+     * @param 'days'|'hours'|'minutes'|'seconds'|'milliseconds'|'microseconds'|'nanoseconds' $unit
+     */
+    private static function exactTotal(int $sec, int $subNs, string $unit): float
+    {
+        // [seconds per unit, decimal places to shift the point right] for each unit.
+        [$divisor, $shift] = match ($unit) {
+            'days' => [86_400, 0],
+            'hours' => [3_600, 0],
+            'minutes' => [60, 0],
+            'seconds' => [1, 0],
+            'milliseconds' => [1, 3],
+            'microseconds' => [1, 6],
+            'nanoseconds' => [1, 9],
+        };
+
+        return self::divideExact($sec, $subNs, $divisor, $shift);
+    }
+
+    /**
+     * The non-negative exact value ($whole + $frac / 1e9) divided by $divisor, scaled by
+     * 10^$shift, narrowed to the nearest double exactly once. $frac must be in [0, 1e9).
+     *
+     * The quotient's decimal expansion is produced digit by digit and handed to a single
+     * strtod, which is correctly rounded. Building the value in float64 instead would
+     * round at every step, and the intermediate does not fit int64 anyway: a whole-second
+     * count near MaxTimeDuration expressed in nanoseconds needs 25 digits.
+     *
+     * The expansion is carried far enough past the point that truncating it cannot change
+     * which double it rounds to — the remaining tail is smaller than any ulp in range.
+     */
+    private static function divideExact(int $whole, int $frac, int $divisor, int $shift): float
+    {
+        // Exact digits of ($whole + $frac / 1e9) × 1e9, i.e. the value with the point nine
+        // places from the right.
+        $digits = $whole . str_pad(string: (string) $frac, length: 9, pad_string: '0', pad_type: STR_PAD_LEFT);
+        $pointFromRight = 9 - $shift;
+
+        if ($divisor > 1) {
+            $extra = 40;
+            $length = strlen($digits);
+            $quotient = '';
+            $remainder = 0;
+            for ($i = 0, $n = $length + $extra; $i < $n; $i++) {
+                $remainder = ($remainder * 10) + ($i < $length ? (int) $digits[$i] : 0);
+                $quotient .= intdiv(num1: $remainder, num2: $divisor);
+                $remainder %= $divisor;
+            }
+            $digits = $quotient;
+            $pointFromRight += $extra;
+        }
+
+        if ($pointFromRight <= 0) {
+            return floatval($digits . str_repeat('0', -$pointFromRight));
+        }
+        $digits = str_pad(string: $digits, length: $pointFromRight + 1, pad_string: '0', pad_type: STR_PAD_LEFT);
+        return floatval(sprintf(
+            '%s.%s',
+            substr(string: $digits, offset: 0, length: -$pointFromRight),
+            substr(string: $digits, offset: -$pointFromRight),
+        ));
     }
 }
