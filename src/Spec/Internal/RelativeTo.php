@@ -175,8 +175,9 @@ final class RelativeTo
 
     /**
      * Extracts the ISO year/month/day anchor from a validated relativeTo property
-     * bag. The bag is guaranteed to carry 'year', 'month' or 'monthCode', and 'day'
-     * (see {@see self::validatePropertyBag()}); its numeric fields have already been
+     * bag. The bag is guaranteed to name a year — as 'year' or, on a calendar with
+     * eras, as 'era' + 'eraYear' — plus 'month' or 'monthCode', and 'day' (see
+     * {@see self::validatePropertyBag()}); its numeric fields have already been
      * checked for Infinity/NaN, so each value only needs ToIntegerWithTruncation — an
      * int passes through unchanged, every other finite numeric/coercible value goes
      * through PHP's `(int)` cast, which truncates toward zero exactly as the spec
@@ -189,7 +190,7 @@ final class RelativeTo
      */
     public static function anchorYmd(array $bag): array
     {
-        $year = self::truncateToInteger($bag['year']);
+        $year = self::anchorYear($bag);
         if (array_key_exists('month', $bag)) {
             $month = self::truncateToInteger($bag['month']);
         } else {
@@ -203,15 +204,49 @@ final class RelativeTo
     }
 
     /**
+     * The year the anchor names: the 'year' field, or — on a calendar with eras —
+     * the year its 'era'/'eraYear' pair resolves to. Mirrors {@see DateFields::fromBag()},
+     * where a resolved era likewise wins over a 'year' handed in alongside it. The
+     * pair resolves to null when either half is null — PHP's spelling of JS
+     * `undefined`, which the spec reads as the field being absent.
+     *
+     * @param array<array-key,mixed> $bag
+     * @throws RangeError if 'eraYear' is not a finite number.
+     * @throws TypeError if 'era' cannot be coerced to a string.
+     */
+    private static function anchorYear(array $bag): int
+    {
+        $calendarId = self::bagCalendarId($bag);
+        if ($calendarId !== null && CalendarMath::supportsEras($calendarId)) {
+            $resolved = CalendarMath::resolveYearFromEra(
+                CalendarFactory::get($calendarId),
+                $bag['era'] ?? null,
+                $bag['eraYear'] ?? null,
+                'relativeTo',
+            );
+            if ($resolved !== null) {
+                return $resolved;
+            }
+        }
+
+        return self::truncateToInteger($bag['year']);
+    }
+
+    /**
      * Validates a relativeTo property bag.
      *
      * @param array<array-key,mixed> $rt
-     * @throws TypeError if required fields (year, month/monthCode, day) are missing.
+     * @throws TypeError if required fields (year or era+eraYear, month/monthCode, day) are missing.
      * @throws RangeError if a field value is out of range.
      */
     public static function validatePropertyBag(array $rt): void
     {
-        $hasYear = array_key_exists('year', $rt) || array_key_exists('era', $rt) && array_key_exists('eraYear', $rt);
+        // The calendar decides whether era/eraYear are fields at all, so it is read
+        // before the presence check — as TC39 does, running
+        // GetTemporalCalendarIdentifierWithISODefault ahead of PrepareCalendarFields.
+        $calendarId = self::bagCalendarId($rt);
+        $hasEraAndEraYear = CalendarMath::hasEraAndEraYear($rt, $calendarId, 'relativeTo');
+        $hasYear = array_key_exists('year', $rt) || $hasEraAndEraYear && CalendarMath::supportsEras($calendarId);
         $hasMonth = array_key_exists('month', $rt) || array_key_exists('monthCode', $rt);
         $hasDay = array_key_exists('day', $rt);
         if (!$hasYear || !$hasMonth || !$hasDay) {
@@ -238,25 +273,6 @@ final class RelativeTo
             if (is_float($v) && is_infinite($v)) {
                 throw new RangeError("relativeTo field \"{$field}\" must be a finite number.");
             }
-        }
-        if (array_key_exists('calendar', $rt)) {
-            // TC39 ToTemporalCalendarSlotValue: a calendar in a property bag may be:
-            //   - A Temporal object with a calendarId slot (fast-path: read the slot directly).
-            //   - A string or Stringable (coerce via ToString, then validate).
-            //   - Any other type → TypeError.
-            // Only an unknown calendar string is a RangeError (raised by canonicalize()).
-            /** @var mixed $calVal */
-            $calVal = $rt['calendar'];
-            // Fast path: Temporal objects carry their calendar as a string slot.
-            if (is_object($calVal) && property_exists($calVal, 'calendarId') && is_string($calVal->calendarId)) {
-                $calVal = $calVal->calendarId;
-            } elseif ($calVal instanceof \Stringable) {
-                $calVal = (string) $calVal;
-            }
-            if (!is_string($calVal)) {
-                throw new TypeError('relativeTo calendar must be a string.');
-            }
-            CalendarFactory::canonicalize($calVal);
         }
         // timeZone: if present must be a string; null or non-string → TypeError.
         if (array_key_exists('timeZone', $rt)) {
@@ -627,10 +643,43 @@ final class RelativeTo
     }
 
     /**
+     * The canonical id of the calendar a property bag names, or null when it names
+     * none (which leaves the anchor on ISO 8601).
+     *
+     * TC39 ToTemporalCalendarSlotValue: a calendar in a property bag may be
+     * a Temporal object with a calendarId slot (fast path: read the slot directly),
+     * or a string / Stringable (coerce via ToString, then validate). Any other type
+     * is a TypeError; only an unknown calendar string is a RangeError, raised by
+     * canonicalize().
+     *
+     * @param array<array-key,mixed> $bag
+     * @throws TypeError if the calendar field is present but not string-like.
+     * @throws RangeError if it names an unknown calendar.
+     */
+    private static function bagCalendarId(array $bag): ?string
+    {
+        if (!array_key_exists('calendar', $bag)) {
+            return null;
+        }
+        /** @var mixed $calVal */
+        $calVal = $bag['calendar'];
+        if (is_object($calVal) && property_exists($calVal, 'calendarId') && is_string($calVal->calendarId)) {
+            $calVal = $calVal->calendarId;
+        } elseif ($calVal instanceof \Stringable) {
+            $calVal = (string) $calVal;
+        }
+        if (!is_string($calVal)) {
+            throw new TypeError('relativeTo calendar must be a string.');
+        }
+
+        return CalendarFactory::canonicalize($calVal);
+    }
+
+    /**
      * TC39 ToIntegerWithTruncation for an already-finiteness-validated property-bag
      * field: an int passes through unchanged, every other finite numeric/coercible
      * value goes through PHP's `(int)` cast, which truncates toward zero exactly as
-     * the spec requires. Used only by {@see self::anchorYmd()}.
+     * the spec requires. Used only by {@see self::anchorYmd()} and {@see self::anchorYear()}.
      */
     private static function truncateToInteger(mixed $value): int
     {
