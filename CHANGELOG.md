@@ -7,6 +7,20 @@ All notable changes to this project are documented in this file. It is generated
 
 Until 1.0.0 the public API may change between minor versions.
 
+## [0.2.1](https://github.com/MidnightDesign/temporal-php/compare/v0.2.0...v0.2.1) (2026-08-17)
+
+
+### Bug Fixes
+
+* accept basic-format inline offsets in date-time-string time zone ids ([#89](https://github.com/MidnightDesign/temporal-php/issues/89)) ([056f2ba](https://github.com/MidnightDesign/temporal-php/commit/056f2bac80bd731abb6a1b22fbf04dc7dd8acdd4))
+* range-check Duration::round()'s relativeTo anchor for every spelling ([#82](https://github.com/MidnightDesign/temporal-php/issues/82)) ([9099d86](https://github.com/MidnightDesign/temporal-php/commit/9099d8649118379ef69f8de686b1b63dbcaa96e1)), closes [#56](https://github.com/MidnightDesign/temporal-php/issues/56)
+* resolve era/eraYear relativeTo anchors instead of rejecting them ([#84](https://github.com/MidnightDesign/temporal-php/issues/84)) ([80d60f8](https://github.com/MidnightDesign/temporal-php/commit/80d60f8b8b82c0b154b1ce4dc3bef16402c53da3)), closes [#58](https://github.com/MidnightDesign/temporal-php/issues/58)
+
+
+### Miscellaneous Chores
+
+* adopt release-please for versioning and changelog ([#85](https://github.com/MidnightDesign/temporal-php/issues/85)) ([07249e2](https://github.com/MidnightDesign/temporal-php/commit/07249e267f0569b375c4752d965314746ab00f88))
+
 ## [0.2.0](https://github.com/MidnightDesign/temporal-php/compare/v0.1.0...v0.2.0) (2026-08-17)
 
 
