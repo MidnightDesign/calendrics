@@ -9,7 +9,7 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $epochMillis = \Temporal\Tests\Test262\Js::dateUTC(1976, 10, 18, 15, 23, 30, 123);
-$epochNanos = 217_178_610_123 * 1_000_000 + 456_789;
+$epochNanos = 217_178_610_123_456_789;
 $zdt = new \Temporal\Spec\ZonedDateTime($epochNanos, '-08:00');
 Assert::assertTrue($zdt instanceof \Temporal\Spec\ZonedDateTime, '');
 Assert::sameValue((is_object($zdt) && !($zdt instanceof \Temporal\Tests\Test262\JsSymbol)), true, '');
