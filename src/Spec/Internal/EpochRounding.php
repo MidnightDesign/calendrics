@@ -23,7 +23,9 @@ final class EpochRounding
 {
     /**
      * Rounds a true (epochSec, subNs) pair to the nearest multiple of $increment
-     * nanoseconds. $subNs must be in [0, 1e9).
+     * nanoseconds. $subNs must be in [0, 1e9), and a sub-second $increment must divide
+     * a second evenly — as every TC39 rounding increment does, since each is validated
+     * to divide its next-larger unit.
      *
      * @return array{int, int} [epochSec, subNs] with subNs in [0, 1e9)
      * @throws RangeError for unknown rounding modes.
@@ -35,12 +37,21 @@ final class EpochRounding
         }
 
         if ($increment < EpochLimits::NS_PER_SECOND) {
-            // Strictly sub-second increment: round the sub-second portion in isolation
-            // and carry into seconds. A whole-second (or coarser) increment is excluded
-            // here on purpose — at exactly NS_PER_SECOND the result lands on a whole
-            // second, and the halfEven tie must break on the parity of that *second*,
-            // not the (always-zero) sub-second quotient, so it is handled below.
-            $roundedSubNs = self::roundAsIfPositive($subNs, $increment, $mode);
+            // Strictly sub-second increment: the increment divides a second evenly, so
+            // every multiple lands inside one second and the sub-second portion can be
+            // rounded on its own, carrying into seconds. A whole-second increment is
+            // excluded on purpose — its multiples are seconds, which the branch below
+            // handles in the seconds domain.
+            $q = intdiv($subNs, $increment);
+            $d1Ns = $subNs - ($q * $increment);
+            // What does not stay inside the second is the halfEven tie, which breaks on
+            // the parity of the floor multiple of the *whole* value — epochSec ×
+            // (NS_PER_SECOND / increment) + q. The sub-second quotient q alone gets it
+            // wrong whenever that multiplier is odd (an 8 ms increment, say, whose
+            // multiplier is 125). Only the parity of the product matters, so fold both
+            // operands down first and keep it clear of int64's ceiling.
+            $floorMultiple = ((intdiv(EpochLimits::NS_PER_SECOND, $increment) % 2) * ($epochSec % 2)) + $q;
+            $roundedSubNs = (self::shouldExpand($d1Ns, $increment, $mode, $floorMultiple) ? $q + 1 : $q) * $increment;
             if ($roundedSubNs >= EpochLimits::NS_PER_SECOND) {
                 $epochSec += intdiv($roundedSubNs, EpochLimits::NS_PER_SECOND);
                 $roundedSubNs %= EpochLimits::NS_PER_SECOND;
