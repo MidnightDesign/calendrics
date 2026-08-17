@@ -204,6 +204,50 @@ final class IntlFormatter
     }
 
     /**
+     * Formats an exact (epochSec, subNs) instant through $formatter.
+     *
+     * ICU renders sub-second digits from the calendar's millisecond field, which a
+     * whole-second timestamp leaves at zero, so `fractionalSecondDigits` would print
+     * `000`. Setting the field explicitly also keeps the millisecond exact across the
+     * whole representable range: a float timestamp — in seconds or in milliseconds —
+     * has an ulp wider than a millisecond near the ±273790-year limits.
+     */
+    public static function formatEpoch(
+        \IntlDateFormatter $formatter,
+        int $epochSec,
+        int $subNs,
+        string $timeZone,
+        string $locale,
+    ): string|false {
+        $calendar = self::intlCalendarFor(self::icuTimeZoneId($timeZone), $locale);
+        if ($calendar === null) {
+            return $formatter->format($epochSec);
+        }
+        $calendar->setTime((float) $epochSec * 1_000.0);
+        $calendar->set(\IntlCalendar::FIELD_MILLISECOND, intdiv(num1: $subNs, num2: 1_000_000));
+        return $formatter->format($calendar);
+    }
+
+    /**
+     * Whether $opts requests any individual date/time component or a dateStyle/timeStyle —
+     * i.e. whether the caller has said anything at all about what the output should contain.
+     *
+     * @param array<string, mixed> $opts
+     */
+    public static function requestsAnyComponent(array $opts): bool
+    {
+        if (($opts['dateStyle'] ?? null) !== null || ($opts['timeStyle'] ?? null) !== null) {
+            return true;
+        }
+        foreach (self::COMPONENT_OPTIONS as $opt) {
+            if (($opts[$opt] ?? null) !== null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Builds a configured IntlDateFormatter from a resolved locale, timezone, and options array.
      *
      * Reads `dateStyle` and `timeStyle` from $opts (each: "full"|"long"|"medium"|"short") and maps
@@ -227,19 +271,7 @@ final class IntlFormatter
             $locale = sprintf('%s@calendar=%s', $locale, $calendarOpt);
         }
 
-        // Convert fixed-offset timezone to ICU-compatible format (GMT±HH:MM).
-        // A zero offset (+00:00 / -00:00) maps to plain GMT. We compare against the
-        // original subject string rather than the captured digit groups: PHPStan's
-        // regex inference narrows \d{2} groups to a type that excludes leading-zero
-        // values like '00', which would make `$m[2] === '00'` look always-false.
-        $m = null;
-        if (preg_match('/^([+\-])(\d{2}):(\d{2})$/', $timeZone, $m) === 1) {
-            if ($timeZone === '+00:00' || $timeZone === '-00:00') {
-                $timeZone = 'GMT';
-            } else {
-                $timeZone = sprintf('GMT%s%s:%s', $m[1], $m[2], $m[3]);
-            }
-        }
+        $timeZone = self::icuTimeZoneId($timeZone);
 
         // Apply hourCycle as a Unicode locale extension
         /** @var mixed $hourCycleOpt */
@@ -443,6 +475,29 @@ final class IntlFormatter
     private static function intlCalendarFor(?string $timeZone, string $locale): ?\IntlCalendar
     {
         return \IntlCalendar::createInstance($timeZone, $locale);
+    }
+
+    /**
+     * Renders a time zone identifier in the dialect ICU parses.
+     *
+     * A fixed offset reaches us as ISO 8601 (`+01:00`), which ICU does not recognize as
+     * a zone at all; its custom-zone form is `GMT±HH:MM`, and a zero offset is plain
+     * `GMT`. IANA identifiers pass through untouched.
+     */
+    private static function icuTimeZoneId(string $timeZone): string
+    {
+        // Compare against the original subject string rather than the captured digit
+        // groups: PHPStan's regex inference narrows \d{2} groups to a type that excludes
+        // leading-zero values like '00', which would make `$m[2] === '00'` look
+        // always-false.
+        $m = null;
+        if (preg_match('/^([+\-])(\d{2}):(\d{2})$/', $timeZone, $m) !== 1) {
+            return $timeZone;
+        }
+        if ($timeZone === '+00:00' || $timeZone === '-00:00') {
+            return 'GMT';
+        }
+        return sprintf('GMT%s%s:%s', $m[1], $m[2], $m[3]);
     }
 
     /**

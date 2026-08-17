@@ -832,8 +832,8 @@ final class Instant implements Stringable
 
         $opts['_locale'] = $locale;
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts);
-        [$seconds] = $this->epochParts();
-        $result = $formatter->format($seconds);
+        [$seconds, $subNs] = $this->epochParts();
+        $result = IntlFormatter::formatEpoch($formatter, $seconds, $subNs, $timeZone, $locale);
 
         return $result !== false ? $result : $this->toString();
     }
