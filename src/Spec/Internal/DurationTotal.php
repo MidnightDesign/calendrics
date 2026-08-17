@@ -254,9 +254,9 @@ final class DurationTotal
 
     /**
      * Validates and resolves the `relativeTo` option for `Duration::total()`'s
-     * calendar paths. Returns the property-bag form of the anchor (with `year`,
-     * `month`/`monthCode`, `day` keys guaranteed) plus the ZonedDateTime info
-     * record when the original input was a ZDT.
+     * calendar paths. Returns the property-bag form of the anchor — one
+     * {@see RelativeTo::anchorYmd()} can read a year, month and day out of —
+     * plus the ZonedDateTime info record when the original input was a ZDT.
      *
      * @param mixed  $totalOf  the options bag passed to `total()` (string-form
      *     totalOf is invalid here — calendar units require an options object,
@@ -269,7 +269,7 @@ final class DurationTotal
      *     [resolvedBag, zdtInfo].
      * @throws RangeError if relativeTo is absent.
      * @throws \TypeError if relativeTo is null, not String/Object, or the
-     *     resolved bag lacks year, month/monthCode, or day.
+     *     resolved bag names no year, month/monthCode, or day.
      */
     private static function resolveRelativeTo(mixed $totalOf, string $missingMsg): array
     {
@@ -302,13 +302,6 @@ final class DurationTotal
             } else {
                 throw new TypeError('relativeTo must be a string or property bag.');
             }
-        }
-        // Both 'month' and 'monthCode' are valid month specifiers per TC39.
-        $hasYear = array_key_exists('year', $rt);
-        $hasMonth = array_key_exists('month', $rt) || array_key_exists('monthCode', $rt);
-        $hasDay = array_key_exists('day', $rt);
-        if (!$hasYear || !$hasMonth || !$hasDay) {
-            throw new TypeError('relativeTo property bag must have year, month/monthCode, and day fields.');
         }
         return [$rt, RelativeTo::resolveZdt($totalOf['relativeTo'])];
     }
