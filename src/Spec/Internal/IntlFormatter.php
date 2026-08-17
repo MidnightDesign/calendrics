@@ -204,6 +204,50 @@ final class IntlFormatter
     }
 
     /**
+     * Formats an exact (epochSec, subNs) instant through $formatter.
+     *
+     * ICU renders sub-second digits from the calendar's millisecond field, which a
+     * whole-second timestamp leaves at zero, so `fractionalSecondDigits` would print
+     * `000`. Setting the field explicitly also keeps the millisecond exact across the
+     * whole representable range: a float timestamp — in seconds or in milliseconds —
+     * has an ulp wider than a millisecond near the ±273790-year limits.
+     */
+    public static function formatEpoch(
+        \IntlDateFormatter $formatter,
+        int $epochSec,
+        int $subNs,
+        string $timeZone,
+        string $locale,
+    ): string|false {
+        $calendar = self::intlCalendarFor($timeZone, $locale);
+        if ($calendar === null) {
+            return $formatter->format($epochSec);
+        }
+        $calendar->setTime((float) $epochSec * 1_000.0);
+        $calendar->set(\IntlCalendar::FIELD_MILLISECOND, intdiv(num1: $subNs, num2: 1_000_000));
+        return $formatter->format($calendar);
+    }
+
+    /**
+     * Whether $opts requests any individual date/time component or a dateStyle/timeStyle —
+     * i.e. whether the caller has said anything at all about what the output should contain.
+     *
+     * @param array<string, mixed> $opts
+     */
+    public static function requestsAnyComponent(array $opts): bool
+    {
+        if (($opts['dateStyle'] ?? null) !== null || ($opts['timeStyle'] ?? null) !== null) {
+            return true;
+        }
+        foreach (self::COMPONENT_OPTIONS as $opt) {
+            if (($opts[$opt] ?? null) !== null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Builds a configured IntlDateFormatter from a resolved locale, timezone, and options array.
      *
      * Reads `dateStyle` and `timeStyle` from $opts (each: "full"|"long"|"medium"|"short") and maps
