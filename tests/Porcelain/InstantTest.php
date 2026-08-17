@@ -514,6 +514,45 @@ final class InstantTest extends TemporalTestCase
         static::assertSame('2020-01-01T05:30:00+05:30', $i->toString(timeZone: '+05:30'));
     }
 
+    public function testToStringWithIanaTimeZone(): void
+    {
+        $i = Instant::parse('1970-01-01T00:00:00Z');
+
+        static::assertSame('1969-12-31T19:00:00-05:00', $i->toString(timeZone: 'America/New_York'));
+    }
+
+    public function testToStringWithBracketIanaTimeZone(): void
+    {
+        $i = Instant::parse('1970-01-01T00:00:00Z');
+
+        static::assertSame(
+            '1969-12-31T19:00:00-05:00',
+            $i->toString(timeZone: '1970-01-01T00:00+00:00[America/New_York]'),
+        );
+    }
+
+    public function testToStringWithUnknownIanaTimeZoneThrows(): void
+    {
+        // A well-formed but unrecognized IANA name must be a RangeError, not a
+        // silent fall back to UTC — matching toZonedDateTime()'s behavior.
+        $i = Instant::parse('1970-01-01T00:00:00Z');
+
+        $this->expectException(RangeError::class);
+        $this->expectExceptionMessage('Invalid timeZone "Bogus/Zone"');
+        $i->toString(timeZone: 'Bogus/Zone');
+    }
+
+    public function testToStringWithUnknownBracketTimeZoneThrows(): void
+    {
+        // A bracket annotation names the zone explicitly; an unrecognized IANA name
+        // must throw rather than silently fall back to the inline offset.
+        $i = Instant::parse('1970-01-01T00:00:00Z');
+
+        $this->expectException(RangeError::class);
+        $this->expectExceptionMessage('Invalid timeZone "Bogus/Zone"');
+        $i->toString(timeZone: '1970-01-01T00:00+01:00[Bogus/Zone]');
+    }
+
     // -------------------------------------------------------------------------
     // __toString() / jsonSerialize()
     // -------------------------------------------------------------------------

@@ -751,12 +751,13 @@ final class Instant implements Stringable
             // IANA timezone in bracket: return null to signal epoch-dependent resolution.
             try {
                 new \DateTimeZone($bracket);
-                return null; // Caller will use ianaOffsetSeconds
-            } catch (\Exception $e) {
-                // Not a valid timezone; ignore the error and fall through to
-                // the inline-offset path below.
-                unset($e);
+            } catch (\Exception) {
+                // A bracket annotation names the time zone explicitly; a well-formed but
+                // unrecognized IANA identifier is a RangeError. It must not silently fall
+                // back to the inline offset — matching toZonedDateTimeISO()'s behavior.
+                throw new RangeError("Invalid timeZone \"{$bracket}\": not a recognized timezone identifier.");
             }
+            return null; // Caller will use ianaOffsetSeconds
         }
         // Datetime strings without bracket: use inline offset or Z.
         $om = null;
@@ -786,10 +787,14 @@ final class Instant implements Stringable
     {
         try {
             $phpTz = new \DateTimeZone($tz);
-            return $phpTz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
         } catch (\Exception) {
-            return 0;
+            // validateTimeZoneString() only checks syntax, so a well-formed but
+            // unrecognized IANA identifier reaches here. Per TC39 that is a RangeError,
+            // not a silent fall back to offset 0 — matching toZonedDateTimeISO().
+            throw new RangeError("Invalid timeZone \"{$tz}\": not a recognized timezone identifier.");
         }
+
+        return $phpTz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
     }
 
     #[\Override]
