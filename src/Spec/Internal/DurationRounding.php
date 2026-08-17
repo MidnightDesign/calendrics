@@ -498,15 +498,19 @@ final class DurationRounding
             return new Duration(0, 0, 0, $sign * $roundedAbsDays, 0, 0, 0, 0, 0, 0);
         }
 
-        // Compute totalNs as int when it fits in int64, float otherwise.
-        // Safe threshold: 106_750 * 86_400_000_000_000 + 86_399_999_999_999 < PHP_INT_MAX.
-        // Direct comparison (not a bool variable) lets Psalm narrow $absD's range inside the block.
-        // For ZDT IANA: convert days to actual nanoseconds using DST-aware day lengths.
+        // Round on the exact total, carried as a (whole seconds, sub-second nanoseconds)
+        // pair. The spec's TimeDuration is an exact nanosecond count that passes int64 long
+        // before it reaches MaxTimeDuration, and no single PHP number can hold it: int64
+        // wraps, while float64's ulp up there is milliseconds wide, so a rounded total
+        // decomposes back into sub-second junk the rounding was supposed to have erased.
+        // Splitting at the second keeps both halves inside int64 and the total exact.
+        $subSecNs = ($absMs * 1_000_000) + ($absUs * 1_000) + $absNs;
         if ($zdtInfoRound !== null && $absD > 0) {
-            // Pass the ZDT's actual epoch so that sub-minute offsets (e.g. Pacific/Niue
-            // -11:19:40 vs -11:20:00) are preserved instead of being re-resolved from
-            // the wall time via compatible disambiguation.
-            $actualDaysSec = (int) AnchorMath::zdtDaysToSec(
+            // A day in an IANA zone is whatever the zone says it is. Pass the ZDT's actual
+            // epoch so that sub-minute offsets (e.g. Pacific/Niue -11:19:40 vs -11:20:00)
+            // are preserved instead of being re-resolved from the wall time via compatible
+            // disambiguation.
+            $daysSec = abs((int) AnchorMath::zdtDaysToSec(
                 $zdtInfoRound['year'],
                 $zdtInfoRound['month'],
                 $zdtInfoRound['day'],
@@ -516,137 +520,51 @@ final class DurationRounding
                 $zdtInfoRound['tzId'],
                 $sign * $absD,
                 $zdtInfoRound['epochSec'],
-            );
-            $dayNsActual = abs($actualDaysSec) * 1_000_000_000;
-            if ($absD <= 106_750) {
-                $totalNsInt = $dayNsActual + $subDayNs;
-                $roundedNsInt = EpochRounding::roundAsIfPositive($totalNsInt, $nsIncrement, $roundingMode);
-                if (((float) $roundedNsInt / 1_000_000_000.0) >= 9_007_199_254_740_992.0) {
-                    throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
-                }
-                [$rDays, $rH, $rM, $rS, $rMs, $rUs, $rNs] = self::balanceNsToFields($roundedNsInt, $luIdx);
-            } else {
-                $totalNsFloat = (float) $dayNsActual + (float) $subDayNs;
-                $roundedNsFloat = self::roundNsFloat($totalNsFloat, (float) $nsIncrement, $roundingMode);
-                if (($roundedNsFloat / 1_000_000_000.0) >= 9_007_199_254_740_992.0) {
-                    throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
-                }
-                [$rDays, $rH, $rM, $rS, $rMs, $rUs, $rNs] = self::balanceNsToFields((int) $roundedNsFloat, $luIdx);
-            }
-            $signF = (float) $sign;
-            return new Duration(
-                0,
-                0,
-                0,
-                $signF * (float) $rDays,
-                $signF * (float) $rH,
-                $signF * (float) $rM,
-                $signF * (float) $rS,
-                $signF * (float) $rMs,
-                $signF * (float) $rUs,
-                $signF * (float) $rNs,
-            );
-        }
-        if ($absD <= 106_750) {
-            $totalNsInt = ($absD * 86_400_000_000_000) + $subDayNs;
-            // Round the total nanoseconds (int path).
-            $roundedNsInt = EpochRounding::roundAsIfPositive($totalNsInt, $nsIncrement, $roundingMode);
-            // Validate rounded result is within MaxTimeDuration (MAX_SAFE_INT seconds).
-            // MaxTimeDuration = 9_007_199_254_740_991 seconds + 999_999_999 ns.
-            // 9_007_199_254_740_992 * 1e9 exceeds MaxTimeDuration, so use >=.
-            if (((float) $roundedNsInt / 1_000_000_000.0) >= 9_007_199_254_740_992.0) {
-                throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
-            }
-            // Balance the rounded ns into fields up to largestUnit.
-            [$rDays, $rH, $rM, $rS, $rMs, $rUs, $rNs] = self::balanceNsToFields($roundedNsInt, $luIdx);
+            ));
         } else {
-            // Float path: totalNs > PHP_INT_MAX.
-            $totalNsFloat = ((float) $absD * 86_400_000_000_000.0) + (float) $subDayNs;
-            $roundedNsFloat = self::roundNsFloat($totalNsFloat, (float) $nsIncrement, $roundingMode);
-            // Validate rounded result.
-            if (($roundedNsFloat / 1_000_000_000.0) >= 9_007_199_254_740_992.0) {
-                throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
-            }
-            // When no rounding occurred (increment=1 or value was already aligned), use exact
-            // integer field accumulation to avoid PHP x87 extended-precision errors in balance.
-            if ($roundedNsFloat === $totalNsFloat) {
-                // Boundary check for largestUnit=nanoseconds: PHP's float arithmetic may round
-                // the total ns value DOWN where IEEE 754 requires rounding UP (ties-to-even).
-                // This happens when totalSeconds=MAX_SAFE_INT and subNs >= 463_129_088.
-                // The constant 463_129_088 = halfUlp(float64(MAX_SAFE_INT * 1e9)) − offset,
-                // where offset = exact(MAX_SAFE_INT * 1e9) − float64(MAX_SAFE_INT * 1e9).
-                // Derivation: float64(MAX_SAFE_INT * 1e9) = 9007199254740990926258176,
-                // exact = 9007199254740991000000000, offset = 73741824,
-                // halfUlp = 536870912, threshold = 536870912 − 73741824 = 463129088.
-                if ($luIdx === 0) {
-                    $totalSecondsExact = ($absD * 86_400) + ($absH * 3_600) + ($absM * 60) + $absS;
-                    $subNsExact = ($absMs * 1_000_000) + ($absUs * 1_000) + $absNs;
-                    if ($totalSecondsExact === 9_007_199_254_740_991 && $subNsExact >= 463_129_088) {
-                        throw new RangeError(
-                            'Duration time fields exceed the maximum representable range after rounding.',
-                        );
-                    }
-                }
-                [$rDays, $rH, $rM, $rS, $rMs, $rUs, $rNs] = self::accumulateFieldsToUnit(
-                    $absD,
-                    $absH,
-                    $absM,
-                    $absS,
-                    $absMs,
-                    $absUs,
-                    $absNs,
-                    $luIdx,
-                );
-                // After accumulation, the top field may have overflowed int64 and been promoted
-                // to float by PHP. When the float64-rounded value exceeds MaxTimeDuration, throw.
-                // This catches cases like seconds=MAX_SAFE_INT + ms=488 with largestUnit=nanoseconds
-                // where the nanoseconds field overflows int64 and rounds up past the limit.
-                // The divisors convert the top-field unit back to seconds for comparison.
-                $topField = match ($luIdx) {
-                    0 => $rNs,
-                    1 => $rUs,
-                    2 => $rMs,
-                    3 => $rS,
-                    4 => $rM,
-                    5 => $rH,
-                    default => $rDays,
-                };
-                /** @var array<int,float> $TOP_UNIT_TO_NS */
-                static $TOP_UNIT_TO_NS = [
-                    1_000_000_000.0, // ns: divide by 1e9 to get seconds
-                    1_000_000.0, // us: divide by 1e6
-                    1_000.0, // ms: divide by 1e3
-                    1.0, // s:  no conversion
-                    1.0 / 60.0, // min: multiply by 60 → skip (cannot exceed in minutes alone)
-                    1.0 / 3_600.0, // h
-                    1.0 / 86_400.0, // day
-                ];
-                if (is_float($topField) && (abs($topField) / $TOP_UNIT_TO_NS[$luIdx]) >= 9_007_199_254_740_992.0) {
-                    throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
-                }
-            } else {
-                // Rounding occurred in float path. Attempt exact integer arithmetic at the
-                // coarsest unit level that divides nsIncrement, to avoid float64 precision loss.
-                // The spec uses BigInt internally; we simulate by working in a larger unit
-                // (µs or ms) where the total fits in int64.
-                $result = self::tryRoundExact(
-                    $absD,
-                    $absH,
-                    $absM,
-                    $absS,
-                    $absMs,
-                    $absUs,
-                    $absNs,
-                    $nsIncrement,
-                    $roundingMode,
-                    $luIdx,
-                );
-                if ($result !== null) {
-                    [$rDays, $rH, $rM, $rS, $rMs, $rUs, $rNs] = $result;
-                } else {
-                    [$rDays, $rH, $rM, $rS, $rMs, $rUs, $rNs] = self::balanceNsFloatToFields($roundedNsFloat, $luIdx);
-                }
-            }
+            // The $totalAbsSec guard above already capped the total at 2^53 seconds, which
+            // bounds $absD at ~1.04e11 — well clear of int64 once multiplied out.
+            $daysSec = $absD * 86_400;
+        }
+        $totalSec = $daysSec + ($absH * 3_600) + ($absM * 60) + $absS;
+
+        [$roundedSec, $roundedSubNs] = EpochRounding::round($totalSec, $subSecNs, $nsIncrement, $roundingMode);
+
+        // MaxTimeDuration = 2^53 × 10^9 − 1 ns, so any whole second at or above 2^53 is out.
+        if ($roundedSec >= 9_007_199_254_740_992) {
+            throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
+        }
+
+        [$rDays, $rH, $rM, $rS, $rMs, $rUs, $rNs] = self::balanceSecondsToFields($roundedSec, $roundedSubNs, $luIdx);
+
+        // A field the spec stores as a float64 Number can round *up* past MaxTimeDuration
+        // even when the exact total sits below it — one ulp below the limit, largestUnit
+        // 'nanoseconds' puts ~9.0e24 into a single field whose ulp is over a second. When
+        // that store carries the value past the limit the Duration is invalid, so throw
+        // rather than hand back a field that no longer describes the rounded total. Only
+        // the top field can be large enough to matter; the divisors convert it back to
+        // seconds for the comparison.
+        $topField = match ($luIdx) {
+            0 => $rNs,
+            1 => $rUs,
+            2 => $rMs,
+            3 => $rS,
+            4 => $rM,
+            5 => $rH,
+            default => $rDays,
+        };
+        /** @var array<int,float> $TOP_UNIT_TO_NS */
+        static $TOP_UNIT_TO_NS = [
+            1_000_000_000.0, // ns: divide by 1e9 to get seconds
+            1_000_000.0, // us: divide by 1e6
+            1_000.0, // ms: divide by 1e3
+            1.0, // s:  no conversion
+            1.0 / 60.0, // min: multiply by 60 → skip (cannot exceed in minutes alone)
+            1.0 / 3_600.0, // h
+            1.0 / 86_400.0, // day
+        ];
+        if (is_float($topField) && (abs($topField) / $TOP_UNIT_TO_NS[$luIdx]) >= 9_007_199_254_740_992.0) {
+            throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
         }
 
         // Apply sign and return.
@@ -732,24 +650,59 @@ final class DurationRounding
     }
 
     /**
-     * Accumulates exact-integer time fields into a single target-unit representation.
+     * Balances an exact (whole seconds, sub-second nanoseconds) total into time fields
+     * up to largestUnit.
      *
-     * Takes already-balanced fields (each within its normal range: h<24, m<60, etc.)
-     * and accumulates them upward to largestUnitIdx using exact integer arithmetic.
-     * Field values that exceed 2^53 are cast to float64 to simulate JS number storage.
+     * The pair is the exact-arithmetic counterpart of {@see balanceNsToFields}: a total
+     * that reaches MaxTimeDuration has no combined nanosecond count that fits int64, but
+     * split at the second both halves do, all the way up.
      *
+     * Field values that exceed 2^53 (Number.MAX_SAFE_INTEGER) are cast to float to
+     * simulate JS's float64 storage behavior, matching spec-required precision loss.
+     *
+     * @param int $totalSec Total non-negative whole seconds.
+     * @param int $subNs Sub-second nanoseconds, in [0, 1e9).
+     * @param int $largestUnitIdx Unit index (0=ns, 1=us, 2=ms, 3=s, 4=min, 5=h, 6=day).
      * @return array{0: int|float, 1: int|float, 2: int|float, 3: int|float, 4: int|float, 5: int|float, 6: int|float}
      */
-    private static function accumulateFieldsToUnit(
-        int $absD,
-        int $absH,
-        int $absM,
-        int $absS,
-        int $absMs,
-        int $absUs,
-        int $absNs,
-        int $largestUnitIdx,
-    ): array {
+    private static function balanceSecondsToFields(int $totalSec, int $subNs, int $largestUnitIdx): array
+    {
+        $ns = $subNs % 1_000;
+        $us = intdiv(num1: $subNs, num2: 1_000) % 1_000;
+        $ms = intdiv(num1: $subNs, num2: 1_000_000);
+        $s = $totalSec % 60;
+        $m = intdiv(num1: $totalSec, num2: 60) % 60;
+        $h = intdiv(num1: $totalSec, num2: 3_600) % 24;
+        $days = intdiv(num1: $totalSec, num2: 86_400);
+
+        // Each step hands the whole total to the next-finer unit, so the last one to run
+        // is largestUnit and it holds everything coarser than itself.
+        if ($largestUnitIdx <= 5) {
+            $days = 0;
+            $h = intdiv(num1: $totalSec, num2: 3_600);
+        }
+        if ($largestUnitIdx <= 4) {
+            $h = 0;
+            $m = intdiv(num1: $totalSec, num2: 60);
+        }
+        if ($largestUnitIdx <= 3) {
+            $m = 0;
+            $s = $totalSec;
+        }
+        if ($largestUnitIdx <= 2) {
+            // 2^53 seconds in milliseconds still clears int64 by a factor of ~1.02.
+            $s = 0;
+            $ms = ($totalSec * 1_000) + intdiv(num1: $subNs, num2: 1_000_000);
+        }
+        if ($largestUnitIdx <= 1) {
+            $ms = 0;
+            $us = self::scaleSeconds($totalSec, 1_000_000, intdiv(num1: $subNs, num2: 1_000));
+        }
+        if ($largestUnitIdx === 0) {
+            $us = 0;
+            $ns = self::scaleSeconds($totalSec, 1_000_000_000, $subNs);
+        }
+
         $floatMax = 9_007_199_254_740_992;
         /** @return int|float */
         $f64 = static function (int|float $v) use ($floatMax): int|float {
@@ -758,206 +711,32 @@ final class DurationRounding
             }
             return $v >= $floatMax || $v <= -$floatMax ? (float) $v : $v;
         };
-
-        // Compute the result by distributing all fields into their positions relative to largestUnit.
-        // For the top field (largestUnit), accumulate all coarser units into it.
-        // For fields below largestUnit, keep the remainder within their normal range.
-
-        // All intermediates fit in int64 for valid durations with absD <= MaxTimeDuration days
-        // and fields within their normal ranges after balancing.
-
-        // Nanosecond remainder.
-        $ns = $absNs % 1_000;
-        $carryUs = intdiv(num1: $absNs, num2: 1_000) + $absUs;
-
-        // Microsecond level.
-        $us = $carryUs % 1_000;
-        $carryMs = intdiv(num1: $carryUs, num2: 1_000) + $absMs;
-
-        // Millisecond level.
-        $ms = $carryMs % 1_000;
-        $carryS = intdiv(num1: $carryMs, num2: 1_000) + $absS;
-
-        // Second level.
-        $s = $carryS % 60;
-        $carryM = intdiv(num1: $carryS, num2: 60) + $absM;
-
-        // Minute level.
-        $m = $carryM % 60;
-        $carryH = intdiv(num1: $carryM, num2: 60) + $absH;
-
-        // Hour level.
-        $h = $carryH % 24;
-        $days = intdiv(num1: $carryH, num2: 24) + $absD;
-
-        // Now: days, h(0-23), m(0-59), s(0-59), ms(0-999), us(0-999), ns(0-999).
-        // Bubble up: if largestUnit is smaller than 'day', fold days into h, etc.
-        if ($largestUnitIdx < 6) {
-            $h += $days * 24;
-            $days = 0;
-        }
-        if ($largestUnitIdx < 5) {
-            $m += $h * 60;
-            $h = 0;
-        }
-        if ($largestUnitIdx < 4) {
-            $s += $m * 60;
-            $m = 0;
-        }
-        if ($largestUnitIdx < 3) {
-            $ms += $s * 1_000;
-            $s = 0;
-        }
-        if ($largestUnitIdx < 2) {
-            $us += $ms * 1_000;
-            $ms = 0;
-        }
-        if ($largestUnitIdx < 1) {
-            $ns += $us * 1_000;
-            $us = 0;
-        }
 
         return [$f64($days), $f64($h), $f64($m), $f64($s), $f64($ms), $f64($us), $f64($ns)];
     }
 
     /**
-     * Attempts to round and balance using exact int64 arithmetic by working in a coarser unit.
+     * $sec × $mult + $add, exact while it fits int64 and float64 beyond. $mult is a power
+     * of ten and $add is less than it, so the two are simply digit groups of one number.
      *
-     * The spec uses BigInt for NormalizedTimeDuration. This method simulates that by finding
-     * the coarsest unit (µs or ms) whose per-unit nanosecond count evenly divides nsIncrement,
-     * computing the total in that unit as an exact int64, rounding, and balancing back to fields.
-     *
-     * Returns null if integer arithmetic is not feasible (totalInUnit overflows int64, or no
-     * suitable coarser unit evenly divides nsIncrement).
-     *
-     * @param int    $absD         Absolute days after balance.
-     * @param int    $absH         Absolute hours (0-23).
-     * @param int    $absM         Absolute minutes (0-59).
-     * @param int    $absS         Absolute seconds (0-59).
-     * @param int    $absMs        Absolute milliseconds (0-999).
-     * @param int    $absUs        Absolute microseconds (0-999).
-     * @param int    $absNs        Absolute nanoseconds (0-999).
-     * @param int    $nsIncrement  Rounding increment in nanoseconds.
-     * @param string $roundingMode TC39 rounding mode.
-     * @param int    $luIdx        Largest unit index (0=ns … 6=day).
-     * @return array{0:int|float,1:int|float,2:int|float,3:int|float,4:int|float,5:int|float,6:int|float}|null
+     * Only the microsecond and nanosecond totals can push a valid duration past int64,
+     * and by then they are orders of magnitude beyond 2^53 — where the spec stores the
+     * field as a float64 Number regardless, so nothing the result would have kept is lost.
+     * What does matter is rounding to that Number exactly once: multiplying and adding in
+     * float rounds twice and can land a whole ulp low, and one ulp up here is over a
+     * second — the difference between a duration inside MaxTimeDuration and one past it.
+     * Spelling the exact value out in digits and parsing it back rounds once, as the
+     * spec's single Number conversion does.
      */
-    private static function tryRoundExact(
-        int $absD,
-        int $absH,
-        int $absM,
-        int $absS,
-        int $absMs,
-        int $absUs,
-        int $absNs,
-        int $nsIncrement,
-        string $roundingMode,
-        int $luIdx,
-    ): ?array {
-        // The float path is taken because the total nanosecond count overflows int64.
-        // Attempt integer arithmetic at a coarser level (ms or µs) to avoid float64 precision loss.
-        // The spec uses BigInt; this is an approximation valid when nsIncrement is divisible by the
-        // working unit's nanosecond count and no sub-unit remainder exists.
-
-        $floatMax = 9_007_199_254_740_992;
-        /** @return int|float */
-        $f64 = static function (int|float $v) use ($floatMax): int|float {
-            if (is_float($v)) {
-                return $v;
-            }
-            return $v >= $floatMax || $v <= -$floatMax ? (float) $v : $v;
-        };
-
-        // Try ms level first (coarser), then µs level.
-        // Entry: [nsPerWorkUnit, d-coeff, h-coeff, m-coeff, s-coeff, ms-coeff, us-coeff-in-work-unit]
-        foreach ([
-            [1_000_000, 86_400_000,     3_600_000,     60_000,     1_000,     1,     0], // ms level
-            [1_000,     86_400_000_000, 3_600_000_000, 60_000_000, 1_000_000, 1_000, 1], // µs level
-        ] as [$nsPerWu, $dC, $hC, $mC, $sC, $msC, $usC]) {
-            if (($nsIncrement % $nsPerWu) !== 0) {
-                continue;
-            }
-            $incWu = intdiv(num1: $nsIncrement, num2: $nsPerWu);
-
-            // Verify that no precision is lost by working at this level.
-            // For ms: sub-ms fields (us, ns) must be zero.
-            // For µs: sub-µs field (ns) must be zero.
-            if ($nsPerWu === 1_000_000 && ($absUs !== 0 || $absNs !== 0)) {
-                continue;
-            }
-            if ($nsPerWu === 1_000 && $absNs !== 0) {
-                continue;
-            }
-
-            // Guard against int64 overflow in the total computation.
-            $floatTotal =
-                ((float) $absD * (float) $dC)
-                + ((float) $absH * (float) $hC)
-                + ((float) $absM * (float) $mC)
-                + ((float) $absS * (float) $sC)
-                + ((float) $absMs * (float) $msC)
-                + ((float) $absUs * (float) $usC);
-            if ($floatTotal >= (float) PHP_INT_MAX || $floatTotal <= (float) PHP_INT_MIN) {
-                continue;
-            }
-
-            $totalWu =
-                ($absD * $dC) + ($absH * $hC) + ($absM * $mC) + ($absS * $sC) + ($absMs * $msC) + ($absUs * $usC);
-            $roundedWu = EpochRounding::roundAsIfPositive($totalWu, $incWu, $roundingMode);
-
-            // Decompose roundedWu back into fields.
-            // First separate the sub-ms parts (us, ns are always zero at this point since
-            // the rounded value is a multiple of incWu which is >= 1 ms or >= 1 µs).
-            if ($nsPerWu === 1_000_000) {
-                // Working in ms: us and ns remainders are zero.
-                $rNs = 0;
-                $rUs = 0;
-                $rMs = $roundedWu % 1_000;
-                $carry = intdiv(num1: $roundedWu, num2: 1_000);
-            } else {
-                // Working in µs: ns remainder is zero. Separate us and ms.
-                $rNs = 0;
-                $rUs = $roundedWu % 1_000;
-                $rMs = intdiv(num1: $roundedWu, num2: 1_000) % 1_000;
-                $carry = intdiv(num1: $roundedWu, num2: 1_000_000);
-            }
-            $rS = $carry % 60;
-            $carry = intdiv(num1: $carry, num2: 60);
-            $rM = $carry % 60;
-            $carry = intdiv(num1: $carry, num2: 60);
-            $rH = $carry % 24;
-            $rD = intdiv(num1: $carry, num2: 24);
-
-            // Bubble up for largestUnit < day.
-            if ($luIdx < 6) {
-                $rH += $rD * 24;
-                $rD = 0;
-            }
-            if ($luIdx < 5) {
-                $rM += $rH * 60;
-                $rH = 0;
-            }
-            if ($luIdx < 4) {
-                $rS += $rM * 60;
-                $rM = 0;
-            }
-            if ($luIdx < 3) {
-                $rMs += $rS * 1_000;
-                $rS = 0;
-            }
-            if ($luIdx < 2) {
-                $rUs += $rMs * 1_000;
-                $rMs = 0;
-            }
-            if ($luIdx < 1) {
-                $rNs += $rUs * 1_000;
-                $rUs = 0;
-            }
-
-            return [$f64($rD), $f64($rH), $f64($rM), $f64($rS), $f64($rMs), $f64($rUs), $f64($rNs)];
+    private static function scaleSeconds(int $sec, int $mult, int $add): int|float
+    {
+        if ($sec <= intdiv(num1: PHP_INT_MAX - $add, num2: $mult)) {
+            return ($sec * $mult) + $add;
         }
-
-        return null;
+        $addDigits = strlen((string) $mult) - 1;
+        return floatval(
+            $sec . str_pad(string: (string) $add, length: $addDigits, pad_string: '0', pad_type: STR_PAD_LEFT),
+        );
     }
 
     /**
@@ -992,65 +771,6 @@ final class DurationRounding
             };
         }
         return $rounded * $increment;
-    }
-
-    /**
-     * Float-based balance of nanoseconds into time fields up to largestUnit.
-     * Produces float64-rounded field values, matching JS Number semantics.
-     *
-     * @param float $totalAbsNs Non-negative nanoseconds as float.
-     * @param int   $largestUnitIdx Unit index (0=ns, 1=us, 2=ms, 3=s, 4=min, 5=h, 6=day).
-     * @return array{0: int|float, 1: int|float, 2: int|float, 3: int|float, 4: int|float, 5: int|float, 6: int|float}
-     */
-    private static function balanceNsFloatToFields(float $totalAbsNs, int $largestUnitIdx): array
-    {
-        // Convert to the target largest unit using float division, then distribute downward.
-        // This matches JS's approach of computing the balance via float64 arithmetic.
-        $floatMax = (float) PHP_INT_MAX;
-        $toIntSafe = static fn(float $v): int|float => abs($v) < $floatMax ? (int) $v : $v;
-
-        $days = 0;
-        $ns = $totalAbsNs;
-
-        if ($largestUnitIdx >= 6) {
-            $days = floor($ns / 86_400_000_000_000.0);
-            $ns -= $days * 86_400_000_000_000.0;
-        }
-        $h = 0;
-        if ($largestUnitIdx >= 5) {
-            $h = floor($ns / 3_600_000_000_000.0);
-            $ns -= $h * 3_600_000_000_000.0;
-        }
-        $m = 0;
-        if ($largestUnitIdx >= 4) {
-            $m = floor($ns / 60_000_000_000.0);
-            $ns -= $m * 60_000_000_000.0;
-        }
-        $s = 0;
-        if ($largestUnitIdx >= 3) {
-            $s = floor($ns / 1_000_000_000.0);
-            $ns -= $s * 1_000_000_000.0;
-        }
-        $ms = 0;
-        if ($largestUnitIdx >= 2) {
-            $ms = floor($ns / 1_000_000.0);
-            $ns -= $ms * 1_000_000.0;
-        }
-        $us = 0;
-        if ($largestUnitIdx >= 1) {
-            $us = floor($ns / 1_000.0);
-            $ns -= $us * 1_000.0;
-        }
-
-        return [
-            $toIntSafe($days),
-            $toIntSafe($h),
-            $toIntSafe($m),
-            $toIntSafe($s),
-            $toIntSafe($ms),
-            $toIntSafe($us),
-            $toIntSafe($ns),
-        ];
     }
 
     /**
