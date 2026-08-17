@@ -23,7 +23,10 @@ final class EpochRounding
 {
     /**
      * Rounds a true (epochSec, subNs) pair to the nearest multiple of $increment
-     * nanoseconds. $subNs must be in [0, 1e9).
+     * nanoseconds. $subNs must be in [0, 1e9), and $increment must either divide
+     * 10^9 or be a whole multiple of it — which holds for every unit and
+     * roundingIncrement the spec admits, since an increment has to divide its own
+     * next unit up evenly.
      *
      * @return array{int, int} [epochSec, subNs] with subNs in [0, 1e9)
      * @throws RangeError for unknown rounding modes.
@@ -40,7 +43,16 @@ final class EpochRounding
             // here on purpose — at exactly NS_PER_SECOND the result lands on a whole
             // second, and the halfEven tie must break on the parity of that *second*,
             // not the (always-zero) sub-second quotient, so it is handled below.
-            $roundedSubNs = self::roundAsIfPositive($subNs, $increment, $mode);
+            $q = intdiv($subNs, $increment);
+            $d1 = $subNs - ($q * $increment);
+            // The floor multiple of the *combined* value is epochSec × (10^9 / increment)
+            // + q, and a halfEven tie breaks on its parity. Every valid sub-second
+            // increment divides 10^9, but that quotient is not always even (8 ms, say,
+            // gives 125), so the seconds half can flip the parity and cannot be dropped.
+            // Reducing the product mod 2 first keeps it inside int64 for any epochSec.
+            $perSecond = intdiv(EpochLimits::NS_PER_SECOND, $increment);
+            $floorMultiple = (($epochSec % 2) * ($perSecond % 2)) + $q;
+            $roundedSubNs = (self::shouldExpand($d1, $increment, $mode, $floorMultiple) ? $q + 1 : $q) * $increment;
             if ($roundedSubNs >= EpochLimits::NS_PER_SECOND) {
                 $epochSec += intdiv($roundedSubNs, EpochLimits::NS_PER_SECOND);
                 $roundedSubNs %= EpochLimits::NS_PER_SECOND;
