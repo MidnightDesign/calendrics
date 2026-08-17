@@ -9,4 +9,11 @@ declare(strict_types=1);
 use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 $epochMs = 1_735_213_600_321;
-Assert::incomplete('untranslatable: BigInt()');
+$epochNs = 1_735_213_600_321_000_000;
+$legacyDate = new \Temporal\Tests\Test262\JsDate($epochMs);
+$zonedDateTime = new \Temporal\Spec\ZonedDateTime($epochNs, 'UTC');
+foreach ([(object) ['year' => 'numeric'], (object) ['month' => 'long'], (object) ['day' => 'numeric'], (object) ['weekday' => 'long'], (object) ['hour' => 'numeric'], (object) ['minute' => 'numeric'], (object) ['second' => 'numeric'], (object) ['fractionalSecondDigits' => 3], (object) ['dayPeriod' => 'short'], (object) ['timeZoneName' => 'short']] as $options) {
+$zonedDateTimeResult = $zonedDateTime->toLocaleString('en', $options);
+$legacyDateResult = $legacyDate->toLocaleString('en', (object) JsUndefined::strip(array_merge((array) $options, ['timeZone' => 'UTC'])));
+Assert::sameValue($zonedDateTimeResult, $legacyDateResult, "ZonedDateTime.toLocaleString should format lone option " . (json_encode($options)) . "");
+}

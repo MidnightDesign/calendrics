@@ -10,7 +10,7 @@ use Temporal\Tests\Test262\Assert;
 use Temporal\Tests\Test262\JsUndefined;
 use Temporal\Tests\Test262\TemporalHelpers;
 $epochMillis = \Temporal\Tests\Test262\Js::dateUTC(1976, 10, 18, 15, 23, 30, 123);
-$epochNanos = 217_178_610_123 * 1_000_000 + 456_789;
+$epochNanos = 217_178_610_123_456_789;
 $instance = new \Temporal\Spec\ZonedDateTime($epochNanos, 'Europe/Vienna', 'gregory');
 Assert::assertTrue($instance instanceof \Temporal\Spec\ZonedDateTime, 'instanceof is correct');
 Assert::sameValue((is_object($instance) && !($instance instanceof \Temporal\Tests\Test262\JsSymbol)), true, 'typeof is correct');
