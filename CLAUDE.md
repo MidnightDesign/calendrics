@@ -52,6 +52,15 @@ Shared property/getter logic lives in `src/Trait/Has*Properties.php` (porcelain)
 
 PHPStan level 9, Psalm error level 1, Mago lint+format clean, 100% mutation kill (Infection). The `composer check` script is the gate every PR must pass. Don't suppress warnings — fix the underlying types.
 
+## Releases
+
+Versioning and `CHANGELOG.md` are owned by [release-please](https://github.com/googleapis/release-please) (`.github/workflows/release-please.yml`, `release-please-config.json`, `.release-please-manifest.json`). Consequences when working here:
+
+- **`CHANGELOG.md` is generated. Do not hand-edit it**, and do not add an `Unreleased` section — release-please inserts each new entry between the preamble and the newest existing entry.
+- **PR titles are load-bearing.** PRs are squash-merged, so the PR title becomes the commit subject release-please parses. It must be a Conventional Commit (`feat:`, `fix:`, `refactor:`, `test:`, …); `feat!:` or a `BREAKING CHANGE:` footer marks a breaking change. See README's *Releases* section for the type → section → bump table.
+- Release type is `php`, which here only touches `CHANGELOG.md`: `composer.json` has no `version` key (correct for Packagist — do not add one) and there is no `VERSION` file, so the strategy's updaters for both are no-ops.
+- `bootstrap-sha` in the config pins the first run's starting point at the 0.2.0 handoff commit. It is ignored once a release-please PR has been merged and can be deleted then.
+
 ## Git worktrees
 
 Sub-feature branches are sometimes checked out into `.claude/worktrees/<name>/`. When working in a worktree, stay in it — don't reach back into the main repo path.

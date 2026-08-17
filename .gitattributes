@@ -9,3 +9,5 @@ mago.toml export-ignore
 infection.json5 export-ignore
 docker-compose.yml export-ignore
 Dockerfile export-ignore
+release-please-config.json export-ignore
+.release-please-manifest.json export-ignore
