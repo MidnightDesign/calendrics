@@ -1,0 +1,27 @@
+name: Release Please
+
+on:
+  push:
+    branches: [master]
+
+# A batch of merges fires one run per push; serialize them so two runs cannot
+# race the same release pull request into existence.
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release PR / tag
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # commit the changelog, push the tag, create the release
+      issues: write # apply the autorelease:* labels
+      pull-requests: write # open and update the release PR
+
+    steps:
+      # No `with:` block: absent a `release-type` input the action runs in manifest
+      # mode and reads release-please-config.json + .release-please-manifest.json
+      # from their default paths. No checkout is needed; it works over the API.
+      - uses: googleapis/release-please-action@v5

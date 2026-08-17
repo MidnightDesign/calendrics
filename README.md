@@ -507,6 +507,24 @@ From 1.0.0 onward, both API layers are supported under the same contract:
 
 Bug fixes that correct incorrect output are not breaking changes, even when an observed value changes. Deprecations are announced in the changelog at least one minor version before removal and marked with `@deprecated`.
 
+### Releases
+
+Releases are automated with [release-please](https://github.com/googleapis/release-please). Pull requests are squash-merged, so the pull request title becomes the commit subject release-please reads — it has to be a [Conventional Commit](https://www.conventionalcommits.org/):
+
+| Prefix | Changelog section | Bump below 1.0.0 |
+|--------|-------------------|------------------|
+| `feat:` | Features | minor |
+| `fix:` | Bug Fixes | patch |
+| `perf:` | Performance Improvements | patch |
+| `revert:` | Reverts | patch |
+| `chore:` | Miscellaneous Chores | patch |
+| `docs:` `style:` `refactor:` `test:` `build:` `ci:` | not listed | patch |
+| `feat!:`, or any type with a `BREAKING CHANGE:` footer | ⚠ BREAKING CHANGES | minor |
+
+Breaking changes bump the minor version while the project is below 1.0.0, matching the policy above; from 1.0.0 they bump the major. A commit whose type is not listed in the changelog still counts as something to release, so a batch of pure refactors proposes a patch bump.
+
+Merging any conventional commit to `master` opens or updates a release pull request that accumulates the pending changelog. Nothing ships until that pull request is merged — then release-please writes `CHANGELOG.md`, tags `vX.Y.Z`, and publishes the GitHub release. Packagist publishes from the tag.
+
 ---
 
 ## Development
