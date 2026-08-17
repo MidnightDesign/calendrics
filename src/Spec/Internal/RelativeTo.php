@@ -140,6 +140,131 @@ final class RelativeTo
     }
 
     /**
+     * Reduces a `relativeTo` of any spelling to the anchor it denotes.
+     *
+     * Every spelling resolves through here so that the range rules downstream can be
+     * asked of the anchor rather than re-derived per spelling; see {@see RelativeAnchor}
+     * for why that distinction is the whole point.
+     *
+     * Not to be confused with {@see self::resolveZdt()}, which answers the narrower
+     * question "does this anchor need DST-aware arithmetic" and so reports UTC and
+     * fixed-offset anchors as unzoned. Here every zoned anchor counts as zoned.
+     *
+     * @throws RangeError if the anchor itself is outside the representable range.
+     */
+    public static function resolveAnchor(mixed $rt): RelativeAnchor
+    {
+        if (is_object($rt) && !$rt instanceof ZonedDateTime && !$rt instanceof PlainDate) {
+            $rt = self::normalizeBag($rt);
+        }
+        if ($rt instanceof ZonedDateTime) {
+            return RelativeAnchor::onInstant(...$rt->epochParts());
+        }
+        if ($rt instanceof PlainDate) {
+            return RelativeAnchor::onDate(AnchorMath::isoDateToEpochDays($rt->isoYear, $rt->isoMonth, $rt->isoDay));
+        }
+        if (is_string($rt)) {
+            $parsed = self::parseString($rt);
+            return $parsed['_isZDT'] === true
+                ? RelativeAnchor::onInstant((int) $parsed['_utcSec'], 0)
+                : RelativeAnchor::onDate((int) $parsed['_epochDays']);
+        }
+        assert(is_array($rt), description: 'non-string $rt must be a property-bag array at this point');
+        $epochDays = self::bagEpochDays($rt);
+        if (array_key_exists('timeZone', $rt)) {
+            return self::zonedBagAnchor($rt, $epochDays);
+        }
+        // CreateTemporalDate's range check, which the string spelling gets in parseString().
+        if ($epochDays < -100_000_001 || $epochDays > 100_000_000) {
+            throw new RangeError('relativeTo property bag is outside the representable date range.');
+        }
+        return RelativeAnchor::onDate($epochDays);
+    }
+
+    /**
+     * The local date a `relativeTo` property bag denotes, as a day count.
+     *
+     * ToRelativeTemporalObject builds the anchor with overflow=constrain, so an
+     * out-of-range month or day clamps instead of throwing; only a year outside the
+     * ISO limits leaves nothing to clamp towards. Clamping first also keeps the
+     * Julian-day arithmetic inside int64, which an unbounded field would blow past.
+     *
+     * @param array<array-key,mixed> $bag
+     * @throws RangeError if the year is outside the ISO date limits.
+     */
+    private static function bagEpochDays(array $bag): int
+    {
+        [$year, $month, $day] = self::anchorYmd($bag);
+        if ($year < -271_821 || $year > 275_760) {
+            throw new RangeError('relativeTo property bag is outside the representable date range.');
+        }
+        $month = max(1, min(12, $month));
+        return AnchorMath::isoDateToEpochDays(
+            $year,
+            $month,
+            max(1, min(CalendarMath::calcDaysInMonth($year, $month), $day)),
+        );
+    }
+
+    /**
+     * The instant a `relativeTo` property bag naming a time zone denotes.
+     *
+     * @param array<array-key,mixed> $bag
+     * @param int $epochDays The bag's local date, as a day count.
+     * @throws RangeError if the instant is outside the representable range.
+     */
+    private static function zonedBagAnchor(array $bag, int $epochDays): RelativeAnchor
+    {
+        $info = self::resolveZdt($bag);
+        if ($info !== null) {
+            // An IANA zone, where a wall clock can be ambiguous or non-existent:
+            // resolveZdt() has already walked the transition data to settle it.
+            return RelativeAnchor::onInstant($info['epochSec'], $info['subNs']);
+        }
+        /** @var mixed $tz */
+        $tz = $bag['timeZone'];
+        assert(is_string($tz), description: 'validatePropertyBag() rejects a non-string timeZone');
+        // Every other zone holds one constant offset, so the instant is the wall clock
+        // shifted by it, with no ambiguity to disambiguate.
+        $wallSec =
+            ($epochDays * 86_400)
+            + (self::bagTimeField($bag, 'hour', 23) * 3_600)
+            + (self::bagTimeField($bag, 'minute', 59) * 60)
+            + self::bagTimeField($bag, 'second', 59);
+        $epochSec = TimeZoneHelper::wallSecToEpochSec($wallSec, TimeZoneHelper::normalizeTimezoneId($tz));
+        $subNs =
+            (self::bagTimeField($bag, 'millisecond', 999) * 1_000_000)
+            + (self::bagTimeField($bag, 'microsecond', 999) * 1_000)
+            + self::bagTimeField($bag, 'nanosecond', 999);
+        if (
+            $epochSec > EpochLimits::MAX_EPOCH_SECONDS
+            || $epochSec < -EpochLimits::MAX_EPOCH_SECONDS
+            || $epochSec === EpochLimits::MAX_EPOCH_SECONDS && $subNs > 0
+        ) {
+            throw new RangeError('relativeTo property bag is outside the representable range.');
+        }
+        return RelativeAnchor::onInstant($epochSec, $subNs);
+    }
+
+    /**
+     * Reads an optional time field from a property bag, defaulting to zero.
+     *
+     * Values are finiteness-checked by {@see self::validatePropertyBag()} beforehand, so
+     * what is left is ToIntegerWithTruncation and the clamp RegulateTime applies under
+     * the overflow=constrain that ToRelativeTemporalObject asks for.
+     *
+     * @param array<array-key,mixed> $bag
+     * @param int $max Largest value the field can hold.
+     */
+    private static function bagTimeField(array $bag, string $name, int $max): int
+    {
+        if (!array_key_exists($name, $bag)) {
+            return 0;
+        }
+        return max(0, min($max, self::truncateToInteger($bag[$name])));
+    }
+
+    /**
      * Converts a ZonedDateTime to a year/month/day property bag.
      *
      * Uses the ZDT's epochNanoseconds and timezone offset to determine the local date.
