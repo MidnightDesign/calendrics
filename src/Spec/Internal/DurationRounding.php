@@ -129,6 +129,11 @@ final class DurationRounding
         $zdtRelativeTo = $rtRawForZdt instanceof \Temporal\Spec\ZonedDateTime;
         $zdtInfoRound = $rtRawForZdt !== null ? RelativeTo::resolveZdt($rtRawForZdt) : null;
 
+        // The anchor with its spelling reduced away, so the range guards below can ask
+        // what kind of anchor TC39 would have built rather than how it was written.
+        // Resolving it here also range-checks the anchor itself, on both paths.
+        $anchor = $relativeToProvided ? RelativeTo::resolveAnchor($rtRawForZdt) : null;
+
         if ($needsRelativeTo && !$relativeToProvided) {
             // Distinguish "key absent" (= JS undefined → RangeError) from "key
             // present with PHP null" (= JS null → TypeError per
@@ -157,46 +162,6 @@ final class DurationRounding
             );
         }
 
-        // For pure-time rounds: validate relativeTo and check overflow for non-blank durations.
-        if ($relativeToProvided && !$d->blank) {
-            /** @var mixed $rtRaw */
-            $rtRaw = $roundTo['relativeTo'] ?? null;
-            if (is_string($rtRaw)) {
-                $parsedRt = RelativeTo::parseString($rtRaw);
-                $rtIsZDT = $parsedRt['_isZDT'] === true;
-                $rtTotalSec =
-                    ((float) $d->days * 86_400.0)
-                    + ((float) $d->hours * 3_600.0)
-                    + ((float) $d->minutes * 60.0)
-                    + (float) $d->seconds
-                    + (
-                        (
-                            ((float) $d->milliseconds * 1_000_000.0)
-                            + ((float) $d->microseconds * 1_000.0)
-                            + (float) $d->nanoseconds
-                        )
-                        / 1_000_000_000.0
-                    );
-                if ($rtIsZDT) {
-                    if (
-                        ((float) $parsedRt['_utcSec'] + $rtTotalSec) > EpochLimits::MAX_EPOCH_SECONDS
-                        || ((float) $parsedRt['_utcSec'] + $rtTotalSec) < -EpochLimits::MAX_EPOCH_SECONDS
-                    ) {
-                        throw new RangeError(
-                            'relativeTo ZonedDateTime is outside the representable range after applying duration.',
-                        );
-                    }
-                } else {
-                    // PlainDate: epoch days must be within ±100 000 000.
-                    if (abs((int) $parsedRt['_epochDays']) > 100_000_000) {
-                        throw new RangeError(
-                            'relativeTo PlainDate is outside the representable range after applying duration.',
-                        );
-                    }
-                }
-            }
-        }
-
         // Default smallestUnit is 'nanoseconds'.
         $suIdx = $suNorm !== null ? $UNIT_IDX[$suNorm] : 0;
 
@@ -214,6 +179,31 @@ final class DurationRounding
         // largestUnit must be >= smallestUnit.
         if ($luIdx < $suIdx) {
             throw new RangeError('largestUnit must be at least as large as smallestUnit.');
+        }
+
+        // The relativeTo range guards. They sit ahead of the balancing below because an
+        // anchor in an IANA zone routes that through DST-aware day math, where an
+        // out-of-range magnitude overflows int64 before any guard could fire.
+        if ($anchor !== null) {
+            if ($anchor->zoned) {
+                if ($anchor->targetOutOfRange($d)) {
+                    throw new RangeError(
+                        'relativeTo ZonedDateTime is outside the representable range after applying duration.',
+                    );
+                }
+                if ($luIdx >= 6 && $anchor->dayBoundaryOutOfRange()) {
+                    throw new RangeError(
+                        'Duration with ZonedDateTime relativeTo: the day boundary falls outside the valid range.',
+                    );
+                }
+            } elseif (!$d->blank && $anchor->midnightOutOfRange()) {
+                // A blank duration never reaches the conversion to a PlainDateTime: TC39
+                // returns as soon as the two ends coincide, which is why this one alone is
+                // gated on the duration.
+                throw new RangeError(
+                    'relativeTo PlainDate is outside the representable range after applying duration.',
+                );
+            }
         }
 
         // Prevent undefined behavior from (int) cast on float Duration fields > PHP int64.
@@ -313,46 +303,6 @@ final class DurationRounding
             + ((float) $absNs / 1_000_000_000.0);
         if ($totalAbsSec > 9_007_199_254_740_992.0) {
             throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
-        }
-
-        // For ZonedDateTime relativeTo: the result instant must stay within ±8.64e21 ns
-        // (the valid Temporal.Instant range). Check zdtEpoch ± duration in seconds.
-        if ($rtRawForZdt instanceof \Temporal\Spec\ZonedDateTime) {
-            // Use the true-parts accessor (not the clamped public epochNanoseconds field)
-            // so the range guard reflects the real instant for over-int64 anchors.
-            [$zdtTrueSec] = $rtRawForZdt->epochParts();
-            $zdtEpochSec = (float) $zdtTrueSec;
-            $zdtResultSec = $zdtEpochSec + ((float) $sign * $totalAbsSec);
-            if ($zdtResultSec > EpochLimits::MAX_EPOCH_SECONDS || $zdtResultSec < -EpochLimits::MAX_EPOCH_SECONDS) {
-                throw new RangeError(
-                    'Duration with ZonedDateTime relativeTo would move the instant outside the valid range.',
-                );
-            }
-
-            // Next-day boundary guard (mirrors TC39's hoursInDay / day-length computation).
-            // When the largestUnit is days-or-coarser, RoundRelativeDuration must determine the
-            // length of the current day, which requires AddZonedDateTime to find the start of the
-            // NEXT day (and, on the negative edge, the start of the current/prior day). If that
-            // boundary instant falls outside the representable Temporal range it must throw —
-            // independent of the duration's magnitude (so this fires even for a blank duration,
-            // unlike the magnitude-gated guard above).
-            if ($luIdx >= 6) {
-                // For UTC/fixed-offset zones (resolveRelativeToZdt() returns null) the day length
-                // is a fixed 86_400 s, so the next-day start is the day-floored epoch + 86_400 s
-                // and the day start is the day-floor itself. For IANA zones the resolved info
-                // would route through the DST-aware path above; the fixed-offset edge is what the
-                // over-int64 fixtures exercise here.
-                $dayFloorSec = floor($zdtEpochSec / 86_400.0) * 86_400.0;
-                $nextDayStartSec = $dayFloorSec + 86_400.0;
-                if (
-                    $nextDayStartSec > EpochLimits::MAX_EPOCH_SECONDS
-                    || $dayFloorSec < -EpochLimits::MAX_EPOCH_SECONDS
-                ) {
-                    throw new RangeError(
-                        'Duration with ZonedDateTime relativeTo: the day boundary falls outside the valid range.',
-                    );
-                }
-            }
         }
 
         // Nanoseconds per unit (time units only; days and above handled separately).
