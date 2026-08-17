@@ -366,11 +366,42 @@ function tryEvalNumeric(node, numVars = null) {
 }
 
 /**
+ * Recognizes a function declaration that only computes a BigInt from its arguments —
+ * `function f(a) { const k = 1n; return (a - 2n) * k; }`. Such a helper has no PHP
+ * counterpart (its intermediates routinely exceed int64, which is why it is spelled in
+ * BigInt at all), but it is pure and every call site in the corpus passes compile-time
+ * BigInts, so the calls fold and the function itself never has to be emitted.
+ *
+ * The shape accepted is a block of single-declarator variable declarations followed by
+ * a `return`; anything else (branches, loops, reassignment) is left to the incomplete
+ * path rather than given a second, divergent evaluator.
+ *
+ * @return {{params: string[], consts: Array<{name: string, init: object}>, returnExpr: object}|null}
+ */
+function asPureBigIntFunction(fnNode) {
+  if (fnNode.async || fnNode.generator) return null;
+  if (!fnNode.params.every(p => p.type === 'Identifier')) return null;
+  const body = fnNode.body;
+  if (body?.type !== 'BlockStatement' || body.body.length === 0) return null;
+  const consts = [];
+  for (const stmt of body.body.slice(0, -1)) {
+    if (stmt.type !== 'VariableDeclaration' || stmt.declarations.length !== 1) return null;
+    const [d] = stmt.declarations;
+    if (d.id.type !== 'Identifier' || !d.init) return null;
+    consts.push({ name: d.id.name, init: d.init });
+  }
+  const last = body.body[body.body.length - 1];
+  if (last.type !== 'ReturnStatement' || !last.argument) return null;
+  return { params: fnNode.params.map(p => p.name), consts, returnExpr: last.argument };
+}
+
+/**
  * Recursively evaluate a BigInt expression at transpile time.
  * Returns the BigInt value if fully evaluable, or null if any operand is not a BigInt literal.
- * Also handles BigInt(numericExpr) where numericExpr is a constant numeric expression.
+ * Also handles BigInt(numericExpr) where numericExpr is a constant numeric expression,
+ * and a call to one of the `fns` helpers recognized by asPureBigIntFunction.
  */
-function tryEvalBigInt(node, scalarVars = null, numVars = null) {
+function tryEvalBigInt(node, scalarVars = null, numVars = null, fns = null) {
   if (!node) return null;
   if (node.type === 'Literal' && node.bigint !== undefined) return BigInt(node.bigint);
   // A const variable bound to a fully-evaluable BigInt expression (e.g.
@@ -380,12 +411,12 @@ function tryEvalBigInt(node, scalarVars = null, numVars = null) {
     return scalarVars.get(node.name);
   }
   if (node.type === 'UnaryExpression' && node.operator === '-') {
-    const v = tryEvalBigInt(node.argument, scalarVars, numVars);
+    const v = tryEvalBigInt(node.argument, scalarVars, numVars, fns);
     return v !== null ? -v : null;
   }
   if (node.type === 'BinaryExpression') {
-    const l = tryEvalBigInt(node.left, scalarVars, numVars);
-    const r = tryEvalBigInt(node.right, scalarVars, numVars);
+    const l = tryEvalBigInt(node.left, scalarVars, numVars, fns);
+    const r = tryEvalBigInt(node.right, scalarVars, numVars, fns);
     if (l === null || r === null) return null;
     switch (node.operator) {
       case '*':  return l * r;
@@ -407,6 +438,27 @@ function tryEvalBigInt(node, scalarVars = null, numVars = null) {
     if (numVal !== null && Number.isInteger(numVal)) {
       return BigInt(Math.trunc(numVal));
     }
+  }
+  // A call to a transpile-time-only BigInt helper: bind the arguments to the parameters
+  // and evaluate the body in that scope. The helper is dropped from `fns` for its own
+  // body, so a recursive call simply fails to fold instead of spinning here.
+  if (node.type === 'CallExpression' && node.callee?.type === 'Identifier' && fns?.has(node.callee.name)) {
+    const fn = fns.get(node.callee.name);
+    if (node.arguments.length !== fn.params.length) return null;
+    const inner = new Map(fns);
+    inner.delete(node.callee.name);
+    const scope = new Map(scalarVars ?? []);
+    for (const [i, param] of fn.params.entries()) {
+      const v = tryEvalBigInt(node.arguments[i], scalarVars, numVars, fns);
+      if (v === null) return null;
+      scope.set(param, v);
+    }
+    for (const { name, init } of fn.consts) {
+      const v = tryEvalBigInt(init, scope, numVars, inner);
+      if (v === null) return null;
+      scope.set(name, v);
+    }
+    return tryEvalBigInt(fn.returnExpr, scope, numVars, inner);
   }
   return null;
 }
@@ -640,6 +692,15 @@ class Emitter {
     // Maps JS var name → the list of those values, so transpileForOf can unroll a loop
     // over a table int64 cannot hold. See tryUnrollBigIntTableForOf.
     this.bigIntArrayValues = new Map();
+    // Function declarations that only compute a BigInt from their arguments. They have
+    // no PHP counterpart and are never emitted; their calls fold instead. Maps JS
+    // function name → the shape asPureBigIntFunction returned.
+    this.bigIntFns = new Map();
+  }
+
+  /** tryEvalBigInt over this program's tracked bindings and transpile-time helpers. */
+  evalBigInt(node) {
+    return tryEvalBigInt(node, this.bigIntScalarVars, this.constNumericVars, this.bigIntFns);
   }
 
   emit(line) {
@@ -957,7 +1018,7 @@ class Emitter {
         // fixtures' `[nsMax + 1n, nsMin - 1n, 2n ** 128n, -(2n ** 128n)]`). Recording
         // the values lets transpileForOf unroll the loop instead of bailing on the
         // over-int64 elements the emitted array cannot hold.
-        const elementValues = decl.init.elements.map(e => tryEvalBigInt(e, this.bigIntScalarVars, this.constNumericVars));
+        const elementValues = decl.init.elements.map(e => this.evalBigInt(e));
         if (elementValues.length > 0 && elementValues.every(v => v !== null)) {
           this.bigIntArrayValues.set(decl.id.name, elementValues);
         }
@@ -1055,7 +1116,7 @@ class Emitter {
         // undefined PHP variable.
         if (decl.init && (hasBigIntLiteral(decl.init) || referencesBigIntCall(decl.init)
             || expressionRefsAny(decl.init, new Set(this.bigIntScalarVars.keys())))) {
-          const bigVal = tryEvalBigInt(decl.init, this.bigIntScalarVars, this.constNumericVars);
+          const bigVal = this.evalBigInt(decl.init);
           if (bigVal !== null) {
             this.bigIntScalarVars.set(decl.id.name, bigVal);
             if (overflowsInt64(bigVal)) {
@@ -1128,6 +1189,14 @@ class Emitter {
     // A plain, non-overflowing BigInt literal passed straight through (e.g.
     // `new Temporal.ZonedDateTime(0n, tz)`) is safe and lowers to a plain int.
     if (hasUnsafeBigInt(node.body)) {
+      // A helper that only computes a BigInt from its arguments needs no PHP closure:
+      // its calls fold at transpile time, so record it and emit nothing rather than
+      // abandoning the fixture over arithmetic that never runs in PHP.
+      const pureBigIntFn = asPureBigIntFunction(node);
+      if (pureBigIntFn !== null) {
+        this.bigIntFns.set(name, pureBigIntFn);
+        return;
+      }
       this.emitIncomplete('untranslatable: BigInt arithmetic in function body');
       return;
     }
@@ -1965,7 +2034,7 @@ class Emitter {
         // An over-int64 BigInt constant has no PHP value, but JS interpolates it as its
         // decimal digits — which is all these description strings ever need.
         if (expressionRefsAny(exprNode, this.bigIntUnrepresentableVars)) {
-          const bigVal = tryEvalBigInt(exprNode, this.bigIntScalarVars, this.constNumericVars);
+          const bigVal = this.evalBigInt(exprNode);
           if (bigVal === null) {
             this.emitIncomplete('untranslatable: unfoldable BigInt in template literal');
             return null;
@@ -2327,13 +2396,27 @@ class Emitter {
       return `Assert::assertTrue(${valPhp}, ${msgPhp})`;
     }
 
+    // A call to a transpile-time-only BigInt helper (see asPureBigIntFunction). No PHP
+    // function was emitted for it, so the value has to fold here or the fixture bails.
+    if (callee.type === 'Identifier' && this.bigIntFns.has(callee.name)) {
+      const bigVal = this.evalBigInt(node);
+      if (bigVal === null) {
+        this.emitIncomplete('untranslatable: BigInt arithmetic in function body');
+        return null;
+      }
+      // Over int64 the caller decides: an Instant/ZonedDateTime argument lowers to the
+      // exact (epochSec, subNs) parts, anything else bails where the value is consumed.
+      if (overflowsInt64(bigVal)) return null;
+      return phpInt(bigVal.toString());
+    }
+
     // BigInt(x) — try constant-folding (BigInt(4 * 1e9), BigInt(5 * 60 + 4), etc.)
     if (callee.type === 'Identifier' && callee.name === 'BigInt') {
       // tryEvalBigInt handles BigInt(numericConstExpr) via tryEvalNumeric.
       // Only constant numeric expressions (not runtime variables) are safe to fold here,
       // since we can't know whether a runtime variable's value will overflow int64 when
       // later multiplied (e.g. BigInt(seconds) * 1_000_000n may overflow).
-      const bigVal = tryEvalBigInt(node, this.bigIntScalarVars, this.constNumericVars);
+      const bigVal = this.evalBigInt(node);
       if (bigVal !== null) {
         if (overflowsInt64(bigVal)) return null; // caller handles overflow
         return phpInt(bigVal.toString());
@@ -2367,7 +2450,7 @@ class Emitter {
       // exact integer.
       if (referencesBigIntCall(arg0) || hasBigIntLiteral(arg0)
           || (arg0.type === 'Identifier' && this.bigIntScalarVars.has(arg0.name))) {
-        const bigVal = tryEvalBigInt(arg0, this.bigIntScalarVars, this.constNumericVars);
+        const bigVal = this.evalBigInt(arg0);
         if (bigVal !== null) {
           return phpNumberFromBigInt(bigVal);
         }
@@ -2649,7 +2732,7 @@ class Emitter {
       // Instant / ZonedDateTime constructors get, so the ±8.64e21 boundary fixtures can
       // express their arguments at all.
       if (key === 'Instant::fromEpochNanoseconds' && node.arguments.length === 1) {
-        const epNsBig = tryEvalBigInt(node.arguments[0], this.bigIntScalarVars, this.constNumericVars);
+        const epNsBig = this.evalBigInt(node.arguments[0]);
         if (epNsBig !== null && overflowsInt64(epNsBig)) {
           return emitOverInt64Ctor('Instant', epNsBig, '');
         }
@@ -2841,7 +2924,7 @@ class Emitter {
         return null;
       }
       if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
-        const epNsBig = tryEvalBigInt(node.arguments[0], this.bigIntScalarVars, this.constNumericVars);
+        const epNsBig = this.evalBigInt(node.arguments[0]);
         if (epNsBig !== null && overflowsInt64(epNsBig)) {
           const rest = node.arguments.length > 1 ? this.transpileArgs(node.arguments.slice(1)) : '';
           if (rest === null) return null;
@@ -2860,7 +2943,7 @@ class Emitter {
         return null;
       }
       if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
-        const epNsBig = tryEvalBigInt(node.arguments[0], this.bigIntScalarVars, this.constNumericVars);
+        const epNsBig = this.evalBigInt(node.arguments[0]);
         if (epNsBig !== null && overflowsInt64(epNsBig)) {
           const rest = node.arguments.length > 1 ? this.transpileArgs(node.arguments.slice(1)) : '';
           if (rest === null) return null;
@@ -3119,7 +3202,7 @@ class Emitter {
       }
     }
     // Check if the combined BigInt expression overflows int64 (e.g. 864n * 10n ** 19n).
-    const combinedBig = tryEvalBigInt(node, this.bigIntScalarVars, this.constNumericVars);
+    const combinedBig = this.evalBigInt(node);
     if (combinedBig !== null && overflowsInt64(combinedBig)) {
       return null; // caller handles: variable decl → emitIncomplete, array → sentinel
     }
