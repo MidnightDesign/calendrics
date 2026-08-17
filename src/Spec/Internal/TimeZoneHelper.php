@@ -99,9 +99,10 @@ final class TimeZoneHelper
             if (preg_match('/[Zz](?:\[|$)/', $id) === 1) {
                 return 'UTC';
             }
+            // Extended (±HH:MM) and basic (±HHMM) spellings are both valid inline offsets.
             $om = null;
-            if (preg_match('/([+\-]\d{2}:\d{2})(?:\[|$)/', $id, $om) === 1) {
-                return $om[1];
+            if (preg_match('/([+\-])(\d{2}):?(\d{2})(?:\[|$)/', $id, $om) === 1) {
+                return sprintf('%s%s:%s', $om[1], $om[2], $om[3]);
             }
             throw new RangeError("Invalid timeZoneId \"{$id}\": bare datetime without Z, offset, or bracket.");
         }
