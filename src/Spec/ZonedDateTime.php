@@ -452,7 +452,12 @@ final class ZonedDateTime implements Stringable
         if (is_float($epochNanoseconds)) {
             throw new TypeError('ZonedDateTime epochNanoseconds must be an integer, not a float.');
         }
-        $this->epochNanoseconds = $epochNanoseconds;
+        // An int argument is the instant exactly, sentinel-valued or not: PHP_INT_MIN and
+        // PHP_INT_MAX are ordinary nanosecond counts here, and stamping their true parts
+        // keeps them from reading as the over-int64 clamp markers of the same value.
+        $epoch = EpochValue::fromNanoseconds($epochNanoseconds);
+        $this->epochNanoseconds = $epoch->epochNanoseconds;
+        $this->applyEpoch($epoch);
         $this->timeZoneId = TimeZoneHelper::normalizeTimezoneId($timeZoneId, true);
         $this->calendarId = CalendarFactory::canonicalize($calendarId);
         $this->resolvedTimeZoneId = ZoneOffsets::canonicalize($this->timeZoneId);
@@ -485,7 +490,11 @@ final class ZonedDateTime implements Stringable
         // away, having no fields to prepare.
         if ($item instanceof self) {
             ZonedFields::fromOptions($options);
-            return new self($item->epochNanoseconds, $item->timeZoneId, $item->calendarId);
+            // Copy through the true epoch parts, not the public nanosecond field: the
+            // field clamps for an over-int64 instant, and rebuilding from it would move
+            // the copy to the clamp instead of reproducing the original.
+            [$epochSec, $subNs] = $item->epochParts();
+            return self::fromEpochParts($epochSec, $subNs, $item->timeZoneId, $item->calendarId);
         }
         if (is_string($item)) {
             // ZonedParse::parse reaches GetOptionsObject only once the string has parsed.
@@ -1814,8 +1823,9 @@ final class ZonedDateTime implements Stringable
         }
 
         // When the full nanosecond value fits int64, pack it exactly; otherwise the
-        // public field clamps to a sentinel and the true parts are carried (the
-        // fits-int64 case returns the null/0 defaults already on the object).
+        // public field clamps to a sentinel. The constructor derives its own parts from
+        // the int it is handed, which is the clamp rather than the instant in that case,
+        // so re-stamp from the value that knows both.
         $epoch = EpochValue::fromParts($epochSec, $subNs);
         $zdt = new self($epoch->epochNanoseconds, $tzId, $calendarId);
         $zdt->applyEpoch($epoch);

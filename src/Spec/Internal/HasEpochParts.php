@@ -10,15 +10,15 @@ namespace Temporal\Spec\Internal;
  *
  * Both classes carry the same instant as a triple — the public {@see $epochNanoseconds}
  * field (clamped to a PHP_INT_MIN/MAX sentinel once the true value overflows int64) plus
- * the carried {@see $trueEpochSec}/{@see $trueSubNs} pair that survives that clamp. This
- * trait owns those three fields and every operation on them so the
- * "epochNanoseconds is a sentinel iff trueEpochSec !== null" invariant lives in exactly
- * one place rather than being re-asserted by hand in each class:
+ * the {@see $trueEpochSec}/{@see $trueSubNs} pair that survives that clamp. The pair is
+ * carried unconditionally, including for values that fit int64 exactly: PHP_INT_MIN and
+ * PHP_INT_MAX are themselves legitimate nanosecond counts, so a field equal to a sentinel
+ * says nothing on its own about whether the instant clamped. Reading the pair rather than
+ * the field is therefore always right, and this trait owns both so that rule lives in one
+ * place rather than being re-asserted by hand in each class:
  *
- *   - {@see epochParts()} — decodes the triple back into (epochSec, subNs), handling
- *     sentinels transparently without allocating a temporary {@see EpochValue}.
- *   - {@see isClampedEpoch()} — reports the one state that decode cannot rescue.
- *   - {@see applyEpoch()} — stamps the carried true parts from a single {@see EpochValue},
+ *   - {@see epochParts()} — the (epochSec, subNs) pair every consumer should read.
+ *   - {@see applyEpoch()} — stamps that pair from a single {@see EpochValue},
  *     the canonical encoder of the int64-fit / sentinel rule.
  *
  * {@see $epochNanoseconds} is `readonly` and is therefore still assigned directly by each
@@ -41,56 +41,33 @@ trait HasEpochParts
     public readonly int $epochNanoseconds;
 
     /**
-     * True UTC epoch seconds — set when {@see $epochNanoseconds} is a sentinel
-     * (PHP_INT_MIN/MAX) because the actual value overflows int64 nanoseconds. Carrying
-     * the true parts lets over-int64 (but in-spec) instants survive construction,
-     * arithmetic, and conversion without clamping.
+     * True UTC epoch seconds. Set for every instant, not only the over-int64 ones whose
+     * {@see $epochNanoseconds} clamped to a sentinel: carrying the pair unconditionally
+     * lets over-int64 (but in-spec) instants survive construction, arithmetic, and
+     * conversion without clamping, and keeps an exact PHP_INT_MIN/MAX nanosecond count
+     * from being mistaken for one of them.
      */
-    private ?int $trueEpochSec = null;
+    private int $trueEpochSec;
 
     /** Sub-second nanoseconds (0–999_999_999) paired with {@see $trueEpochSec}. */
-    private int $trueSubNs = 0;
+    private int $trueSubNs;
 
     /**
-     * Returns the true UTC epoch seconds and sub-second nanoseconds, handling sentinel
-     * {@see $epochNanoseconds} values transparently.
+     * Returns the true UTC epoch seconds and sub-second nanoseconds.
      *
      * @return array{int, int} [epochSec, subNs] where subNs is 0–999_999_999
      */
     public function epochParts(): array
     {
-        if ($this->trueEpochSec !== null) {
-            return [$this->trueEpochSec, $this->trueSubNs];
-        }
-        $epochSec = CalendarMath::floorDiv($this->epochNanoseconds, 1_000_000_000);
-        return [$epochSec, $this->epochNanoseconds - ($epochSec * 1_000_000_000)];
+        return [$this->trueEpochSec, $this->trueSubNs];
     }
 
     /**
-     * Reports whether {@see $epochNanoseconds} clamped to a sentinel with nothing carried
-     * behind it — the one state in which this instant's true value is genuinely lost.
-     *
-     * The distinction matters to arithmetic that works on the nanosecond field directly:
-     * a sentinel WITH carried parts is exact and merely too large for int64, so
-     * {@see epochParts()} still recovers it; a sentinel WITHOUT them can only decode back
-     * to the sentinel. Both halves of that test live here, so a caller asks one question
-     * instead of reassembling the invariant from the raw field and a partial predicate.
-     */
-    public function isClampedEpoch(): bool
-    {
-        return (
-            $this->trueEpochSec === null
-            && ($this->epochNanoseconds === PHP_INT_MAX || $this->epochNanoseconds === PHP_INT_MIN)
-        );
-    }
-
-    /**
-     * Stamps the carried true epoch parts from $epoch onto this instance.
+     * Stamps the true epoch parts from $epoch onto this instance.
      *
      * The public {@see $epochNanoseconds} field is readonly and is set separately by the
      * constructor from the same {@see EpochValue}; this writer establishes the matching
-     * sentinel bookkeeping ({@see $trueEpochSec}/{@see $trueSubNs}) so the
-     * "sentinel iff trueEpochSec !== null" invariant is never assembled by hand.
+     * {@see $trueEpochSec}/{@see $trueSubNs} pair so the triple is never assembled by hand.
      */
     private function applyEpoch(EpochValue $epoch): void
     {

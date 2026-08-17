@@ -38,28 +38,6 @@ final class ZonedArithmetic
      */
     public static function add(ZonedDateTime $zdt, int $sign, Duration $dur, array|object|null $options): ZonedDateTime
     {
-        // An instant past int64 nanoseconds is carried as (seconds, sub-ns) behind a
-        // sentinel. The calendar path goes through localComponents(), which reads those
-        // carried parts, but the pure-time path adds to the nanosecond field directly and
-        // has nothing to add to when the field is a bare clamped sentinel.
-        if ($zdt->isClampedEpoch()) {
-            $isBlank =
-                $dur->years === 0
-                && $dur->months === 0
-                && $dur->weeks === 0
-                && $dur->days === 0
-                && $dur->hours === 0
-                && $dur->minutes === 0
-                && $dur->seconds === 0
-                && $dur->milliseconds === 0
-                && $dur->microseconds === 0
-                && $dur->nanoseconds === 0;
-            $hasCalendar = $dur->years !== 0 || $dur->months !== 0 || $dur->weeks !== 0 || $dur->days !== 0;
-            if (!$isBlank && !$hasCalendar) {
-                throw new RangeError('ZonedDateTime arithmetic result is outside the representable range.');
-            }
-        }
-
         $overflow = Options::overflowFromBag($options);
 
         $years = $sign * (int) $dur->years;

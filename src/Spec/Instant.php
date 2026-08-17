@@ -68,6 +68,11 @@ final class Instant implements Stringable
         if (is_bool($epochNanoseconds)) {
             $epochNanoseconds = (int) $epochNanoseconds;
         }
+        // ToBigInt(Number) is a TypeError, so a PHP float (our Number stand-in) is
+        // rejected; an over-int64 instant is supplied as a decimal string instead.
+        if (is_float($epochNanoseconds)) {
+            throw new TypeError('epochNanoseconds must be an integer, not a float.');
+        }
         if (is_string($epochNanoseconds)) {
             // Exact decomposition of a (possibly over-int64) decimal integer string
             // into floor epoch-seconds + sub-second nanoseconds, preserving full
@@ -77,16 +82,14 @@ final class Instant implements Stringable
             }
             [$sec, $subNs] = self::decimalStringToEpochParts($epochNanoseconds);
             $epoch = self::normalizeEpochParts($sec, $subNs);
-            $this->epochNanoseconds = $epoch->epochNanoseconds;
-            $this->applyEpoch($epoch);
-            return;
+        } else {
+            // An int argument is the instant exactly, sentinel-valued or not: PHP_INT_MIN
+            // and PHP_INT_MAX are ordinary nanosecond counts here, and stamping their true
+            // parts keeps them from reading as the over-int64 clamp markers of the same value.
+            $epoch = EpochValue::fromNanoseconds($epochNanoseconds);
         }
-        // ToBigInt(Number) is a TypeError, so a PHP float (our Number stand-in) is
-        // rejected; an over-int64 instant is supplied as a decimal string instead.
-        if (is_float($epochNanoseconds)) {
-            throw new TypeError('epochNanoseconds must be an integer, not a float.');
-        }
-        $this->epochNanoseconds = $epochNanoseconds;
+        $this->epochNanoseconds = $epoch->epochNanoseconds;
+        $this->applyEpoch($epoch);
     }
 
     /**
@@ -141,7 +144,8 @@ final class Instant implements Stringable
         $epoch = EpochValue::fromParts($epochSec, $subNs);
 
         // Range-check against the spec bound on the normalized pair (subNs in [0, 1e9)).
-        [$normSec, $normSubNs] = $epoch->parts();
+        $normSec = $epoch->trueEpochSec;
+        $normSubNs = $epoch->trueSubNs;
         $maxSec = EpochLimits::MAX_EPOCH_SECONDS;
         if ($normSec < -$maxSec || $normSec > $maxSec || $normSec === $maxSec && $normSubNs > 0) {
             throw new RangeError('Instant result is outside the representable nanosecond range.');
@@ -180,6 +184,9 @@ final class Instant implements Stringable
         }
         [$epochSec, $subNs] = $parts;
 
+        // The constructor derives its own parts from the int it is handed, which is the
+        // clamp rather than the instant once the value overflows int64, so re-stamp from
+        // the value that knows both.
         $epoch = self::normalizeEpochParts($epochSec, $subNs);
         $self = new self($epoch->epochNanoseconds);
         $self->applyEpoch($epoch);
