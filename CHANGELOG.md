@@ -7,6 +7,17 @@ All notable changes to this project are documented in this file. It is generated
 
 Until 1.0.0 the public API may change between minor versions.
 
+## [0.3.0](https://github.com/MidnightDesign/temporal-php/compare/v0.2.1...v0.3.0) (2026-08-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* `Temporal\` is now `Calendrics\`, including `Temporal\Spec\` → `Calendrics\Spec\` and `Temporal\Exception\` → `Calendrics\Exception\`. The marker interface `Temporal\Exception\TemporalException` is now `Calendrics\Exception\CalendricsException`. Require `midnight/calendrics` in place of `midnight/temporal-php`.
+
+### Features
+
+* rename the package and root namespace to calendrics ([#91](https://github.com/MidnightDesign/temporal-php/issues/91)) ([0ad2c31](https://github.com/MidnightDesign/temporal-php/commit/0ad2c31bbd668089c9b8f4107ab16c6a38371085))
+
 ## [0.2.1](https://github.com/MidnightDesign/temporal-php/compare/v0.2.0...v0.2.1) (2026-08-17)
 
 
