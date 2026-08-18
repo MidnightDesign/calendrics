@@ -7,6 +7,13 @@ All notable changes to this project are documented in this file. It is generated
 
 Until 1.0.0 the public API may change between minor versions.
 
+## [0.3.1](https://github.com/MidnightDesign/calendrics/compare/v0.3.0...v0.3.1) (2026-08-18)
+
+
+### Miscellaneous Chores
+
+* add package discovery metadata ([#93](https://github.com/MidnightDesign/calendrics/issues/93)) ([b0b7867](https://github.com/MidnightDesign/calendrics/commit/b0b7867fb55f9dd8763d0b9d927a95dffc059b24))
+
 ## [0.3.0](https://github.com/MidnightDesign/temporal-php/compare/v0.2.1...v0.3.0) (2026-08-18)
 
 
