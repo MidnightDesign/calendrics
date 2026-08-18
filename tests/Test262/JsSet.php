@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262;
+namespace Calendrics\Tests\Test262;
 
 /**
  * PHP equivalent of the JavaScript `Set` built-in, for fixtures that build a set of

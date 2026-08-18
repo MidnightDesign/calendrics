@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
 /**
  * Temporal epoch range bounds, shared across Instant, ZonedDateTime, and Duration.

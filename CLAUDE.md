@@ -34,9 +34,9 @@ PHPUnit suites (`phpunit.xml`): `default` (everything except Porcelain/Test262),
 
 Two parallel, fully supported public API tiers plus an internal core:
 
-- **`Temporal\`** (porcelain) — `src/*.php`. Idiomatic PHP: strict types, backed enums, named arguments, readonly value objects. What application code should normally use.
-- **`Temporal\Spec\`** (spec layer) — `src/Spec/*.php`. TC39-faithful surface, validated by the test262 conformance suite. Public API, not internal. Mirrors the porcelain class set 1:1.
-- **`Temporal\Spec\Internal\`** — genuine implementation detail. Calendar protocol/bridges (ECMA-402 calendars via `ext-intl`, plus pure-PHP Hebrew/Indian implementations), serde, calendar math. Free to break across versions; do not import from outside `Temporal\Spec\`.
+- **`Calendrics\`** (porcelain) — `src/*.php`. Idiomatic PHP: strict types, backed enums, named arguments, readonly value objects. What application code should normally use.
+- **`Calendrics\Spec\`** (spec layer) — `src/Spec/*.php`. TC39-faithful surface, validated by the test262 conformance suite. Public API, not internal. Mirrors the porcelain class set 1:1.
+- **`Calendrics\Spec\Internal\`** — genuine implementation detail. Calendar protocol/bridges (ECMA-402 calendars via `ext-intl`, plus pure-PHP Hebrew/Indian implementations), serde, calendar math. Free to break across versions; do not import from outside `Calendrics\Spec\`.
 
 Each porcelain class has a matching spec class and pairs of `toSpec()` / `fromSpec()` for round-tripping. Every porcelain↔spec seam is covered by the BC promise (`X::fromSpec($x->toSpec()) === $x` within a major).
 
@@ -46,7 +46,7 @@ Shared property/getter logic lives in `src/Trait/Has*Properties.php` (porcelain)
 
 `tests/Test262/data/` — verbatim mirror of upstream tc39/test262 JS files. **Do not edit these.** If a test fails, fix the implementation. `tests/Test262/data/CLAUDE.md` has the rules.
 
-`tests/Test262/scripts/` — generated PHP transpiled from the JS. **Do not hand-edit.** Regenerate via `composer test262:build`. The scripts are loaded by `tests/Test262/RunnerTest.php` against the `Temporal\Spec\` layer.
+`tests/Test262/scripts/` — generated PHP transpiled from the JS. **Do not hand-edit.** Regenerate via `composer test262:build`. The scripts are loaded by `tests/Test262/RunnerTest.php` against the `Calendrics\Spec\` layer.
 
 ## Quality bar
 

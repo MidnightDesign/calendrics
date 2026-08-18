@@ -2,27 +2,27 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\EpochLimits;
+use Calendrics\Spec\Internal\EpochRounding;
+use Calendrics\Spec\Internal\EpochValue;
+use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasEpochParts;
+use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\TimeZoneHelper;
+use Calendrics\Spec\Internal\ZonedArithmetic;
+use Calendrics\Spec\Internal\ZonedDifference;
+use Calendrics\Spec\Internal\ZonedFields;
+use Calendrics\Spec\Internal\ZonedParse;
+use Calendrics\Spec\Internal\ZoneOffsets;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\Calendar\CalendarFactory;
-use Temporal\Spec\Internal\CalendarMath;
-use Temporal\Spec\Internal\EpochLimits;
-use Temporal\Spec\Internal\EpochRounding;
-use Temporal\Spec\Internal\EpochValue;
-use Temporal\Spec\Internal\FieldBag;
-use Temporal\Spec\Internal\HasEpochParts;
-use Temporal\Spec\Internal\IntlFormatter;
-use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\TemporalSerde;
-use Temporal\Spec\Internal\TimeZoneHelper;
-use Temporal\Spec\Internal\ZonedArithmetic;
-use Temporal\Spec\Internal\ZonedDifference;
-use Temporal\Spec\Internal\ZonedFields;
-use Temporal\Spec\Internal\ZonedParse;
-use Temporal\Spec\Internal\ZoneOffsets;
 
 /**
  * A date-time anchored to a specific timezone and instant.
@@ -38,7 +38,7 @@ use Temporal\Spec\Internal\ZoneOffsets;
 final class ZonedDateTime implements Stringable
 {
     use HasEpochParts;
-    use TemporalSerde;
+    use HasStringRepresentations;
 
     private const int MS_PER_SECOND = 1_000;
 
@@ -1067,7 +1067,7 @@ final class ZonedDateTime implements Stringable
         /** @var mixed $suRaw */
         $suRaw = $options['smallestUnit'] ?? null;
         if ($suRaw === null) {
-            throw new RangeError('Temporal\\ZonedDateTime::round() requires smallestUnit.');
+            throw new RangeError('Calendrics\\ZonedDateTime::round() requires smallestUnit.');
         }
         $suRaw = Options::coerceEnumOption($suRaw, 'smallestUnit');
 
@@ -1089,7 +1089,7 @@ final class ZonedDateTime implements Stringable
             'nanoseconds' => [1, 1_000],
         ];
         if (!array_key_exists($suRaw, $unitMap)) {
-            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Temporal\\ZonedDateTime::round().");
+            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Calendrics\\ZonedDateTime::round().");
         }
         [$nsPerUnit, $maxDivisor] = $unitMap[$suRaw];
 
@@ -1704,10 +1704,10 @@ final class ZonedDateTime implements Stringable
      *
      * The one shape every local-field consumer works from — the virtual property hooks
      * above, and the parsing, arithmetic and difference collaborators in
-     * `Temporal\Spec\Internal`, which is why this is public rather than private.
+     * `Calendrics\Spec\Internal`, which is why this is public rather than private.
      *
      * @internal
-     * @psalm-internal Temporal\Spec
+     * @psalm-internal Calendrics\Spec
      * @return array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string}
      */
     public function localComponents(): array
@@ -1797,7 +1797,7 @@ final class ZonedDateTime implements Stringable
      * {@see EpochValue::narrowParts()}, which documents where float parts come from.
      *
      * @internal
-     * @psalm-internal Temporal\Spec
+     * @psalm-internal Calendrics\Spec
      * @throws RangeError if the result is outside the representable range.
      */
     public static function fromEpochParts(

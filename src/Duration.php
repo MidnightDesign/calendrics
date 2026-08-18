@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
 /**
  * A span of time expressed as 10 calendar and clock fields.
@@ -35,7 +35,7 @@ final class Duration implements \Stringable, \JsonSerializable
     private readonly Spec\Duration $spec;
 
     /**
-     * @throws \Temporal\Exception\RangeError when fields are out of range or non-zero fields do not all share the same sign.
+     * @throws \Calendrics\Exception\RangeError when fields are out of range or non-zero fields do not all share the same sign.
      */
     public function __construct(
         public readonly int $years = 0,
@@ -66,7 +66,7 @@ final class Duration implements \Stringable, \JsonSerializable
     /**
      * Parses an ISO 8601 duration string into a Duration.
      *
-     * @throws \Temporal\Exception\RangeError if the string is not a valid ISO 8601 duration.
+     * @throws \Calendrics\Exception\RangeError if the string is not a valid ISO 8601 duration.
      */
     public static function parse(string $text): self
     {
@@ -79,7 +79,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * A relativeTo anchor is required when either duration contains calendar units
      * (years, months, or weeks).
      *
-     * @throws \Temporal\Exception\RangeError if calendar units are present without a relativeTo anchor.
+     * @throws \Calendrics\Exception\RangeError if calendar units are present without a relativeTo anchor.
      */
     public static function compare(self $one, self $two, PlainDate|ZonedDateTime|null $relativeTo = null): int
     {
@@ -118,7 +118,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * Returns a new Duration with the specified fields replaced; unspecified fields keep their current values.
      *
      * @throws \TypeError if no recognized Duration field is provided.
-     * @throws \Temporal\Exception\RangeError if the resulting fields have mixed signs.
+     * @throws \Calendrics\Exception\RangeError if the resulting fields have mixed signs.
      */
     public function with(
         ?int $years = null,
@@ -173,7 +173,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * Both durations must be free of calendar fields (years, months, weeks) unless
      * they cancel out to zero.
      *
-     * @throws \Temporal\Exception\RangeError if either duration has calendar fields.
+     * @throws \Calendrics\Exception\RangeError if either duration has calendar fields.
      */
     public function add(self $other): self
     {
@@ -186,7 +186,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * Both durations must be free of calendar fields (years, months, weeks) unless
      * they cancel out to zero.
      *
-     * @throws \Temporal\Exception\RangeError if either duration has calendar fields.
+     * @throws \Calendrics\Exception\RangeError if either duration has calendar fields.
      */
     public function subtract(self $other): self
     {
@@ -200,7 +200,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * A relativeTo anchor is required when the duration or rounding units involve
      * calendar fields (years, months, or weeks).
      *
-     * @throws \Temporal\Exception\RangeError if options are invalid or calendar units are used without a relativeTo anchor.
+     * @throws \Calendrics\Exception\RangeError if options are invalid or calendar units are used without a relativeTo anchor.
      */
     public function round(
         ?Unit $smallestUnit = null,
@@ -229,7 +229,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * A relativeTo anchor is required when the target unit or the duration itself
      * involves calendar fields (years, months, or weeks).
      *
-     * @throws \Temporal\Exception\RangeError if calendar units are used without a relativeTo anchor.
+     * @throws \Calendrics\Exception\RangeError if calendar units are used without a relativeTo anchor.
      */
     public function total(Unit $unit, PlainDate|ZonedDateTime|null $relativeTo = null): int|float
     {

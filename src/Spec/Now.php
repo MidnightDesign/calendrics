@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
 
 /**
  * The Temporal.Now namespace object.

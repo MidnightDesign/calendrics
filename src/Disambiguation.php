@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
 /**
  * Controls how ambiguous wall-clock times are resolved during time zone conversions.

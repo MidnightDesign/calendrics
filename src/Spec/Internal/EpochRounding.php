@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Exception\RangeError;
+use Calendrics\Exception\RangeError;
 
 /**
  * Rounds a true epoch value, held as a (epochSec, subNs) pair, to a nanosecond
@@ -14,8 +14,8 @@ use Temporal\Exception\RangeError;
  * over-int64 instant's combined nanosecond value does not fit a signed 64-bit
  * int, so the rounding is performed in the seconds domain (for minute-or-coarser
  * increments) or on the sub-second remainder alone (for sub-second increments),
- * and the combined value is never materialized. Shared by {@see Temporal\Spec\Instant}
- * and {@see Temporal\Spec\ZonedDateTime}.
+ * and the combined value is never materialized. Shared by {@see Calendrics\Spec\Instant}
+ * and {@see Calendrics\Spec\ZonedDateTime}.
  *
  * @internal
  */
@@ -79,8 +79,8 @@ final class EpochRounding
      * 'ceil'/'expand' toward +∞, and the half-modes break ties with the positive-
      * sign convention regardless of the original value's sign.
      *
-     * Package-internal seam: {@see Temporal\Spec\ZonedDateTime}, {@see Temporal\Spec\Instant},
-     * {@see Temporal\Spec\PlainDateTime}, {@see Temporal\Spec\PlainTime},
+     * Package-internal seam: {@see Calendrics\Spec\ZonedDateTime}, {@see Calendrics\Spec\Instant},
+     * {@see Calendrics\Spec\PlainDateTime}, {@see Calendrics\Spec\PlainTime},
      * {@see DateTimeDifference}, and {@see DurationRounding} call this for their
      * non-negative as-if-positive nanosecond rounding rather than re-implementing it.
      * Not part of any public surface.

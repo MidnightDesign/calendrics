@@ -2,26 +2,26 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
+use Calendrics\Calendar;
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\FormatStyle;
+use Calendrics\HourCycle;
+use Calendrics\Instant;
+use Calendrics\MonthWidth;
+use Calendrics\NumberWidth;
+use Calendrics\PlainDate;
+use Calendrics\PlainDateTime;
+use Calendrics\PlainMonthDay;
+use Calendrics\PlainTime;
+use Calendrics\PlainYearMonth;
+use Calendrics\TextWidth;
+use Calendrics\TimeZoneNameStyle;
+use Calendrics\ZonedDateTime;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Temporal\Calendar;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\FormatStyle;
-use Temporal\HourCycle;
-use Temporal\Instant;
-use Temporal\MonthWidth;
-use Temporal\NumberWidth;
-use Temporal\PlainDate;
-use Temporal\PlainDateTime;
-use Temporal\PlainMonthDay;
-use Temporal\PlainTime;
-use Temporal\PlainYearMonth;
-use Temporal\TextWidth;
-use Temporal\TimeZoneNameStyle;
-use Temporal\ZonedDateTime;
 
 /**
  * Covers the porcelain `toLocaleString()` surface.

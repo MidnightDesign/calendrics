@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tools\PHPStan;
+namespace Calendrics\Tools\PHPStan;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr;

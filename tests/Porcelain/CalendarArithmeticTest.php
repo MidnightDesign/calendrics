@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Spec\Duration;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\PlainDate;
+use Calendrics\Spec\PlainDateTime;
+use Calendrics\Spec\PlainYearMonth;
 use PHPUnit\Framework\TestCase;
-use Temporal\Exception\RangeError;
-use Temporal\Spec\Duration;
-use Temporal\Spec\Internal\Calendar\CalendarFactory;
-use Temporal\Spec\PlainDate;
-use Temporal\Spec\PlainDateTime;
-use Temporal\Spec\PlainYearMonth;
 
 /**
  * Tests for Phase 5: Calendar arithmetic (dateAdd / dateUntil).

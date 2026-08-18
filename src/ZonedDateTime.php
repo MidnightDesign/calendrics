@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
-use Temporal\Spec\Internal\PhpDateTimeInterop;
-use Temporal\Trait\HasDayOfMonthProperties;
-use Temporal\Trait\HasDayOfMonthSpec;
-use Temporal\Trait\HasEpochProperties;
-use Temporal\Trait\HasEpochSpec;
-use Temporal\Trait\HasLocalizedFormatting;
-use Temporal\Trait\HasTimeOfDayProperties;
-use Temporal\Trait\HasTimeOfDaySpec;
-use Temporal\Trait\HasYearMonthProperties;
-use Temporal\Trait\HasYearMonthSpec;
+use Calendrics\Spec\Internal\PhpDateTimeInterop;
+use Calendrics\Trait\HasDayOfMonthProperties;
+use Calendrics\Trait\HasDayOfMonthSpec;
+use Calendrics\Trait\HasEpochProperties;
+use Calendrics\Trait\HasEpochSpec;
+use Calendrics\Trait\HasLocalizedFormatting;
+use Calendrics\Trait\HasTimeOfDayProperties;
+use Calendrics\Trait\HasTimeOfDaySpec;
+use Calendrics\Trait\HasYearMonthProperties;
+use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A date-time anchored to a specific time zone and instant.
@@ -88,7 +88,7 @@ final class ZonedDateTime implements
      * @param int      $epochNanoseconds Nanoseconds since the Unix epoch.
      * @param string   $timeZoneId       Timezone identifier: 'UTC', '+-HH:MM', or an IANA name.
      * @param Calendar $calendar         Calendar system (default ISO 8601).
-     * @throws \Temporal\Exception\RangeError if the epoch nanoseconds or time zone are invalid.
+     * @throws \Calendrics\Exception\RangeError if the epoch nanoseconds or time zone are invalid.
      */
     public function __construct(int $epochNanoseconds, string $timeZoneId, Calendar $calendar = Calendar::Iso8601)
     {
@@ -108,7 +108,7 @@ final class ZonedDateTime implements
      * @param string         $text           ISO 8601 ZonedDateTime string.
      * @param Disambiguation $disambiguation How to resolve ambiguous wall-clock times.
      * @param OffsetOption   $offsetOption   How to handle a provided UTC offset.
-     * @throws \Temporal\Exception\RangeError if the string cannot be parsed.
+     * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
      */
     public static function parse(
         string $text,
@@ -269,7 +269,7 @@ final class ZonedDateTime implements
      * @param Overflow       $overflow       How to handle out-of-range values.
      * @param Disambiguation $disambiguation How to resolve ambiguous wall-clock times.
      * @param OffsetOption   $offsetOption   How to use the provided offset.
-     * @throws \Temporal\Exception\RangeError if fields are invalid.
+     * @throws \Calendrics\Exception\RangeError if fields are invalid.
      */
     public function with(
         ?int $year = null,
@@ -400,7 +400,7 @@ final class ZonedDateTime implements
      * @param Unit         $smallestUnit       The unit to round to.
      * @param RoundingMode $roundingMode       Rounding mode (default: HalfExpand).
      * @param int          $roundingIncrement  Must evenly divide the next-larger unit.
-     * @throws \Temporal\Exception\RangeError for invalid unit or increment values.
+     * @throws \Calendrics\Exception\RangeError for invalid unit or increment values.
      */
     public function round(
         Unit $smallestUnit,
@@ -502,8 +502,8 @@ final class ZonedDateTime implements
      * @param HourCycle|null         $hourCycle    Hour numbering; null lets the locale decide.
      * @param Calendar|null          $calendar     Calendar to render in; null keeps the locale's own calendar.
      * @return string
-     * @throws \Temporal\Exception\TypeError if a style option is combined with a component option.
-     * @throws \Temporal\Exception\RangeError if this value's calendar cannot be rendered by the
+     * @throws \Calendrics\Exception\TypeError if a style option is combined with a component option.
+     * @throws \Calendrics\Exception\RangeError if this value's calendar cannot be rendered by the
      *                                        resolved formatter — see {@see withCalendar()}.
      */
     public function toLocaleString(
@@ -620,7 +620,7 @@ final class ZonedDateTime implements
      * The epoch nanoseconds remain the same; only the local time display changes.
      *
      * @param string $timeZone IANA timezone identifier, UTC offset string, or 'UTC'.
-     * @throws \Temporal\Exception\RangeError if the time zone is invalid.
+     * @throws \Calendrics\Exception\RangeError if the time zone is invalid.
      */
     public function withTimeZone(string $timeZone): self
     {

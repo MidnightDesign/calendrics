@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\MonthCode;
+use Calendrics\Spec\Internal\Options;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\Calendar\CalendarFactory;
-use Temporal\Spec\Internal\CalendarMath;
-use Temporal\Spec\Internal\FieldBag;
-use Temporal\Spec\Internal\MonthCode;
-use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\TemporalSerde;
 
 /**
  * A calendar month-day without a year, time, or time zone.
@@ -24,7 +24,7 @@ use Temporal\Spec\Internal\TemporalSerde;
  */
 final class PlainMonthDay implements Stringable
 {
-    use TemporalSerde;
+    use HasStringRepresentations;
 
     /**
      * The calendar fields a PlainMonthDay is built from, as passed to

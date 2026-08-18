@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262\Helper;
+namespace Calendrics\Tests\Test262\Helper;
 
-use Temporal\Tests\Test262\ObserverTrace;
-use Temporal\Tests\Test262\PropertyBagObserver;
-use Temporal\Tests\Test262\StringCoercionObserver;
+use Calendrics\Tests\Test262\ObserverTrace;
+use Calendrics\Tests\Test262\PropertyBagObserver;
+use Calendrics\Tests\Test262\StringCoercionObserver;
 
 /**
  * Property-access observers and calendar-era canonicalization from TC39's TemporalHelpers harness.
@@ -16,12 +16,12 @@ use Temporal\Tests\Test262\StringCoercionObserver;
  * fixtures assert. JS's two coercion hooks map unevenly onto PHP: ToString has an
  * equivalent (`__toString`), ToNumber has none — no object can stand in for an
  * integer — so string values are observed and numeric ones are handed over bare.
- * {@see \Temporal\Tests\Test262\Assert::compareObserverTrace()} drops the
+ * {@see \Calendrics\Tests\Test262\Assert::compareObserverTrace()} drops the
  * correspondingly unobservable `…valueOf` events from each fixture's expected trace.
  *
  * canonicalizeCalendarEra normalizes implementation-specific era casing/aliases.
  *
- * Composed into {@see \Temporal\Tests\Test262\TemporalHelpers}; the public
+ * Composed into {@see \Calendrics\Tests\Test262\TemporalHelpers}; the public
  * surface is `TemporalHelpers::toPrimitiveObserver()` etc.
  */
 trait ObserversAndCalendar

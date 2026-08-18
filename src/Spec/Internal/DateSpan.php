@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Spec\Duration;
+use Calendrics\Spec\Duration;
 
 /**
  * The calendar portion of a difference: whole years, months, weeks and days.

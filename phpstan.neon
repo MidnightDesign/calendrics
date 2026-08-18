@@ -1,6 +1,6 @@
 rules:
-    - Temporal\Tools\PHPStan\NoMixedIntFloatArithmeticRule
-    - Temporal\Tools\PHPStan\PreferSprintfOverConcatRule
+    - Calendrics\Tools\PHPStan\NoMixedIntFloatArithmeticRule
+    - Calendrics\Tools\PHPStan\PreferSprintfOverConcatRule
 
 parameters:
     level: 9

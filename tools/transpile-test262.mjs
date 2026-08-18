@@ -14,8 +14,8 @@
  * Translation rules (see project prompt for full table):
  *   const/let x = expr        → $x = expr;
  *   123n (BigInt)             → 123  (skipped if overflows int64)
- *   Temporal.X.y(arg)         → \Temporal\Spec\X::y($arg)
- *   new Temporal.X(...)       → new \Temporal\Spec\X(...)
+ *   Temporal.X.y(arg)         → \Calendrics\Spec\X::y($arg)
+ *   new Temporal.X(...)       → new \Calendrics\Spec\X(...)
  *   for (const x of arr)      → foreach ($arr as $x)
  *   for (const [a,b] of arr)  → foreach ($arr as [$a, $b])
  *   arr.forEach(x => {...})   → foreach ($arr as $x) {...}
@@ -38,6 +38,20 @@ import path from 'node:path';
 // ---------------------------------------------------------------------------
 
 const ACORN_OPTIONS = { ecmaVersion: 2022, sourceType: 'script' };
+
+/**
+ * Namespace prefixes for the emitted PHP. Every FQCN this transpiler writes hangs off
+ * the spec layer (the library under test) or the harness (the PHP-side test262 shims),
+ * so moving either namespace is an edit to these constants rather than to the emitter.
+ *
+ * The `_BARE` variants drop the leading `\`, which `use` statements and the namespaces
+ * quoted inside emitted error messages must not carry.
+ */
+const ROOT_NS = 'Calendrics';
+const SPEC_NS_BARE = `${ROOT_NS}\\Spec\\`;
+const HARNESS_NS_BARE = `${ROOT_NS}\\Tests\\Test262\\`;
+const SPEC_NS = `\\${SPEC_NS_BARE}`;
+const HARNESS_NS = `\\${HARNESS_NS_BARE}`;
 
 const PHP_INT_MAX = 9_223_372_036_854_775_807n;
 const PHP_INT_MIN = -9_223_372_036_854_775_808n;
@@ -126,19 +140,19 @@ const SIMPLE_METHOD_CALLS = {
   // str.padStart(len, fill) → str_pad($str, $len, $fill, STR_PAD_LEFT)
   padStart: { minArgs: 1, build: (recv, args) => `str_pad(${recv}, ${args[0]}, ${args[1] ?? "' '"}, STR_PAD_LEFT)` },
   // obj.slice(start[, end]) → Js::slice($obj, $start[, $end]) (strings and arrays)
-  slice: (recv, args) => `\\Temporal\\Tests\\Test262\\Js::slice(${recv}, ${args[0] ?? '0'}${args[1] !== undefined ? `, ${args[1]}` : ''})`,
+  slice: (recv, args) => `${HARNESS_NS}Js::slice(${recv}, ${args[0] ?? '0'}${args[1] !== undefined ? `, ${args[1]}` : ''})`,
   // str.substr(start[, len]) → substr(string: $str, offset: $start[, length: $len])
   substr: (recv, args) => `substr(string: ${recv}, offset: ${args[0] ?? '0'}${args[1] !== undefined ? `, length: ${args[1]}` : ''})`,
   // str.split(delim) → explode($delim, $str)
   split: { minArgs: 1, build: (recv, args) => `explode(${args[0]}, ${recv})` },
   // n.toPrecision(digits) → Js::toPrecision($n, $digits)
-  toPrecision: { minArgs: 1, build: (recv, args) => `\\Temporal\\Tests\\Test262\\Js::toPrecision(${recv}, ${args[0]})` },
+  toPrecision: { minArgs: 1, build: (recv, args) => `${HARNESS_NS}Js::toPrecision(${recv}, ${args[0]})` },
   // obj.includes(needle) → Js::includes($obj, $needle) (strings and arrays)
-  includes: (recv, args) => `\\Temporal\\Tests\\Test262\\Js::includes(${recv}, ${args[0] ?? "''"})`,
+  includes: (recv, args) => `${HARNESS_NS}Js::includes(${recv}, ${args[0] ?? "''"})`,
   // str.startsWith(needle) → Js::startsWith($str, $needle)
-  startsWith: (recv, args) => `\\Temporal\\Tests\\Test262\\Js::startsWith(${recv}, ${args[0] ?? "''"})`,
+  startsWith: (recv, args) => `${HARNESS_NS}Js::startsWith(${recv}, ${args[0] ?? "''"})`,
   // str.endsWith(needle) → Js::endsWith($str, $needle)
-  endsWith: (recv, args) => `\\Temporal\\Tests\\Test262\\Js::endsWith(${recv}, ${args[0] ?? "''"})`,
+  endsWith: (recv, args) => `${HARNESS_NS}Js::endsWith(${recv}, ${args[0] ?? "''"})`,
   // str.toLowerCase() / str.toUpperCase() → strtolower / strtoupper. The only corpus
   // users are the timezone-case-insensitive fixtures, whose receivers are pure-ASCII
   // IANA identifiers, so PHP's byte-wise case fold matches JS's Unicode mapping exactly.
@@ -299,10 +313,10 @@ function epochNsToFloorParts(epNsBig) {
 function emitOverInt64Ctor(cls, epNsBig, rest) {
   const { epochSec, subNs } = epochNsToFloorParts(epNsBig);
   if (cls === 'Instant') {
-    return `\\Temporal\\Spec\\Instant::fromEpochParts(${epochSec}, ${subNs})`;
+    return `${SPEC_NS}Instant::fromEpochParts(${epochSec}, ${subNs})`;
   }
   // ZonedDateTime: fromEpochParts(epochSec, subNs, tz[, cal])
-  return `\\Temporal\\Spec\\ZonedDateTime::fromEpochParts(${epochSec}, ${subNs}, ${rest})`;
+  return `${SPEC_NS}ZonedDateTime::fromEpochParts(${epochSec}, ${subNs}, ${rest})`;
 }
 
 /**
@@ -563,7 +577,7 @@ function typeofToPhp(phpArg, jsType) {
     case 'string':    return `is_string(${phpArg})`;
     case 'number':    return `(is_int(${phpArg}) || is_float(${phpArg}))`;
     case 'boolean':   return `is_bool(${phpArg})`;
-    case 'object':    return `(is_object(${phpArg}) && !(${phpArg} instanceof \\Temporal\\Tests\\Test262\\JsSymbol))`;
+    case 'object':    return `(is_object(${phpArg}) && !(${phpArg} instanceof ${HARNESS_NS}JsSymbol))`;
     // typeof matches JS strictly: `typeof null === 'object'`, not `'undefined'`.
     // Only the JsUndefined sentinel counts as JS undefined here. (Compare with
     // the `x === undefined` pattern handled in transpileBinary, which uses the
@@ -573,7 +587,7 @@ function typeofToPhp(phpArg, jsType) {
     case 'function':  return `is_callable(${phpArg})`;
     // 'symbol' is representable via the JsSymbol stand-in, so check it at runtime.
     // 'bigint' has no PHP equivalent (we lower BigInt to int/float) — always false.
-    case 'symbol':    return `${phpArg} instanceof \\Temporal\\Tests\\Test262\\JsSymbol`;
+    case 'symbol':    return `${phpArg} instanceof ${HARNESS_NS}JsSymbol`;
     case 'bigint':    return 'false';
     default:          return null;
   }
@@ -758,7 +772,7 @@ class Emitter {
     const propDesc = parsePropDescAccessorProgram(node.body);
     if (propDesc) {
       this.emit(
-        `Assert::readOnlyAccessor(\\Temporal\\Spec\\${propDesc.class}::class, ${phpStr(propDesc.prop)});`,
+        `Assert::readOnlyAccessor(${SPEC_NS}${propDesc.class}::class, ${phpStr(propDesc.prop)});`,
       );
       return;
     }
@@ -863,7 +877,7 @@ class Emitter {
         // Getter-only Temporal subclass (use-internal-slots fixtures): register the
         // class as an alias of its Temporal base and drop the declaration. The
         // throwing getters can never fire in PHP (property reads don't dispatch
-        // through getters), and `new X(args)` rewrites to `new Temporal\Spec\Base`.
+        // through getters), and `new X(args)` rewrites to `new Calendrics\Spec\Base`.
         const baseClass = parseGetterOnlyTemporalSubclass(node);
         if (baseClass !== null) {
           this.temporalClassAliases.set(node.id.name, baseClass);
@@ -910,7 +924,7 @@ class Emitter {
           }
           continue; // no PHP emitted for this declaration
         }
-        // const { method } = Temporal.X; → $method = [\Temporal\X::class, 'method'];
+        // const { method } = Temporal.X; → $method = [\Calendrics\X::class, 'method'];
         if (decl.init?.type === 'MemberExpression' && !decl.init.computed
             && decl.init.object?.type === 'Identifier' && decl.init.object.name === 'Temporal'
             && decl.init.property?.type === 'Identifier') {
@@ -918,7 +932,7 @@ class Emitter {
           for (const prop of decl.id.properties) {
             if (prop.type === 'Property' && !prop.computed && prop.key?.type === 'Identifier') {
               const methodName = prop.value?.name ?? prop.key.name;
-              this.emit(`$${methodName} = [\\Temporal\\Spec\\${className}::class, '${methodName}'];`);
+              this.emit(`$${methodName} = [${SPEC_NS}${className}::class, '${methodName}'];`);
             }
           }
           continue; // handled
@@ -1000,7 +1014,7 @@ class Emitter {
       // fixture later asserts on.
       if (decl.id.type === 'Identifier' && decl.init?.type === 'ArrayExpression'
           && decl.init.elements.length === 0 && this.observerTrackers.has(decl.id.name)) {
-        this.emit(`$${decl.id.name} = new \\Temporal\\Tests\\Test262\\ObserverTrace();`);
+        this.emit(`$${decl.id.name} = new ${HARNESS_NS}ObserverTrace();`);
         continue;
       }
       // Track variables initialized from array literals — used in observer mode
@@ -1862,7 +1876,7 @@ class Emitter {
       (node.right.type === 'ArrayExpression' && node.right.elements.some(hasNonStringToPrimitive))
       || (node.right.type === 'Identifier' && this.nonStringPrimitiveArrayVars.has(node.right.name));
     if (tableHasNonStringPrimitive && subtreeHasAssertThrows(node.body)) {
-      this.emit(`if (${pat} instanceof \\Temporal\\Tests\\Test262\\JsNonStringPrimitive) { continue; }`);
+      this.emit(`if (${pat} instanceof ${HARNESS_NS}JsNonStringPrimitive) { continue; }`);
     }
     this.transpileStatement(node.body);
     if (opened) this.lines.push('}'); // always close what was opened
@@ -1999,7 +2013,7 @@ class Emitter {
       // The test262 harness's Test262Error → its PHP counterpart. Used both as a
       // class reference in `assert.throws(Test262Error, …)` (via transpileAsClassRef)
       // and as a thrown value in positive-probe getter bodies (`throw new Test262Error()`).
-      case 'Test262Error': return '\\Temporal\\Tests\\Test262\\Test262Error';
+      case 'Test262Error': return `${HARNESS_NS}Test262Error`;
       case 'Infinity':   return 'INF';
       case 'NaN':        return 'NAN';
       case 'Temporal':
@@ -2160,13 +2174,13 @@ class Emitter {
             // (missing required fields on a non-property-bag object).
             // Emit new \stdClass() — not a string, array, or Temporal type → TypeError.
             // Note: instanceof and TemporalHelpers.checkSubclassing* use transpileTemporalClassRef
-            // directly, bypassing this path, so they still get \Temporal\X::class.
+            // directly, bypassing this path, so they still get \Calendrics\X::class.
             return 'new \\stdClass()';
           case 'prototype':
             return 'new \\stdClass()';
           case 'staticMethod':
           case 'instanceMethod':
-            this.emitIncomplete(`\\Temporal\\Spec\\${temporalTarget.class}::${temporalTarget.method} used as a value`);
+            this.emitIncomplete(`${SPEC_NS}${temporalTarget.class}::${temporalTarget.method} used as a value`);
             return null;
         }
       }
@@ -2313,7 +2327,7 @@ class Emitter {
       const cbPhp = this.transpileExpr(cb);
       if (cbPhp === null) return null;
       const helper = callee.property.name === 'find' ? 'arrayFind' : 'arraySome';
-      return `\\Temporal\\Tests\\Test262\\Js::${helper}(${arr}, ${cbPhp})`;
+      return `${HARNESS_NS}Js::${helper}(${arr}, ${cbPhp})`;
     }
 
     // TemporalHelpers.ISO.method() chains: translate known methods to TemporalHelpers::isoMethod().
@@ -2362,7 +2376,7 @@ class Emitter {
         return null;
       }
       // checkSubclassingIgnored / checkSubclassingIgnoredStatic:
-      // first arg is Temporal.X (class reference) → translate to \Temporal\X::class
+      // first arg is Temporal.X (class reference) → translate to \Calendrics\X::class
       if (method === 'checkSubclassingIgnored' || method === 'checkSubclassingIgnoredStatic') {
         const [classArg, ...rest] = node.arguments;
         const classRef = this.transpileTemporalClassRef(classArg);
@@ -2483,7 +2497,7 @@ class Emitter {
       if (isSafeLiteral) {
         return `(string) (${argPhp})`;
       }
-      return `\\Temporal\\Tests\\Test262\\Js::toString(${argPhp})`;
+      return `${HARNESS_NS}Js::toString(${argPhp})`;
     }
 
     // Symbol() called as bare function → JsSymbol sentinel. JsSymbol is Stringable
@@ -2491,7 +2505,7 @@ class Emitter {
     // This makes e.g. `fractionalSecondDigits: Symbol()` raise TypeError while a
     // plain non-Stringable object falls through to RangeError.
     if (callee.type === 'Identifier' && callee.name === 'Symbol') {
-      return '\\Temporal\\Tests\\Test262\\JsSymbol::singleton()';
+      return `${HARNESS_NS}JsSymbol::singleton()`;
     }
 
     // verifyProperty(target, prop, descriptor) → Assert::method checks
@@ -2503,12 +2517,12 @@ class Emitter {
       return 'false';
     }
 
-    // Date.UTC(year, month0, day, h, min, s, ms) → \Temporal\Tests\Test262\Js::dateUTC(...)
+    // Date.UTC(year, month0, day, h, min, s, ms) → \Calendrics\Tests\Test262\Js::dateUTC(...)
     // JS month is 0-indexed; our PHP helper mirrors this convention.
     if (isMember(callee, 'Date', 'UTC')) {
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `\\Temporal\\Tests\\Test262\\Js::dateUTC(${args})`;
+      return `${HARNESS_NS}Js::dateUTC(${args})`;
     }
 
     // Temporal class alias static method calls: Instant.from() after const { Instant } = Temporal;
@@ -2525,7 +2539,7 @@ class Emitter {
       }
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `\\Temporal\\Spec\\${className}::${method}(${args})`;
+      return `${SPEC_NS}${className}::${method}(${args})`;
     }
 
     // Temporal.X() called without new (should be called with new in PHP)
@@ -2533,7 +2547,7 @@ class Emitter {
         && callee.object.type === 'Identifier' && callee.object.name === 'Temporal'
         && callee.property.type === 'Identifier') {
       // This is Temporal.X() — not Temporal.X.y()
-      this.emitIncomplete(`\\Temporal\\Spec\\${callee.property.name}() must be called with new`);
+      this.emitIncomplete(`${SPEC_NS}${callee.property.name}() must be called with new`);
       return null;
     }
 
@@ -2751,7 +2765,7 @@ class Emitter {
       }
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `\\Temporal\\Spec\\${className}::${method}(${args})`;
+      return `${SPEC_NS}${className}::${method}(${args})`;
     }
 
     // Generic call (best-effort)
@@ -2812,13 +2826,16 @@ class Emitter {
       return null;
     }
 
-    switch (target.type) {
-      case 'namespace':
-        return 'Assert::assertTrue(true)';
+    // The Temporal namespace object itself carries no PHP counterpart; every other
+    // target names a spec class, so resolve it once for the branches below.
+    if (target.type === 'namespace') {
+      return 'Assert::assertTrue(true)';
+    }
+    const cls = target.class;
+    const phpClass = `${SPEC_NS}${cls}`;
 
+    switch (target.type) {
       case 'class': {
-        const cls = target.class;
-        const phpClass = `\\Temporal\\Spec\\${cls}`;
         if (propName === 'length') {
           const value = descNode ? this.getDescriptorValue(descNode) : null;
           if (value !== null) {
@@ -2837,8 +2854,6 @@ class Emitter {
       }
 
       case 'prototype': {
-        const cls = target.class;
-        const phpClass = `\\Temporal\\Spec\\${cls}`;
         if (propName === 'length' || propName === 'name' || propName === 'constructor') {
           return 'Assert::assertTrue(true)';
         }
@@ -2849,26 +2864,11 @@ class Emitter {
         return null;
       }
 
-      case 'staticMethod': {
-        const { class: cls, method } = target;
-        const phpClass = `\\Temporal\\Spec\\${cls}`;
-        if (propName === 'length') {
-          const value = descNode ? this.getDescriptorValue(descNode) : null;
-          if (value !== null) {
-            if (isPhpMethodImplemented(cls, method)) {
-              return `Assert::methodLength('${phpClass}', '${method}', ${value})`;
-            }
-            this.emitIncomplete(incompleteReasonFor(cls, method));
-            return null;
-          }
-          return 'Assert::assertTrue(true)';
-        }
-        return 'Assert::assertTrue(true)';
-      }
-
+      // Both spellings check the same thing: a method's declared arity. Static vs
+      // instance is a JS-side distinction with no bearing on the emitted assertion.
+      case 'staticMethod':
       case 'instanceMethod': {
-        const { class: cls, method } = target;
-        const phpClass = `\\Temporal\\Spec\\${cls}`;
+        const { method } = target;
         if (propName === 'length') {
           const value = descNode ? this.getDescriptorValue(descNode) : null;
           if (value !== null) {
@@ -2878,7 +2878,6 @@ class Emitter {
             this.emitIncomplete(incompleteReasonFor(cls, method));
             return null;
           }
-          return 'Assert::assertTrue(true)';
         }
         return 'Assert::assertTrue(true)';
       }
@@ -2914,13 +2913,13 @@ class Emitter {
     if (callee.type === 'Identifier' && callee.name === 'Set') {
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `new \\Temporal\\Tests\\Test262\\JsSet(${args})`;
+      return `new ${HARNESS_NS}JsSet(${args})`;
     }
     // new X(…) where X is a Temporal class alias (from const { X } = Temporal;)
     if (callee.type === 'Identifier' && this.temporalClassAliases.has(callee.name)) {
       const cls = this.temporalClassAliases.get(callee.name);
       if (!IMPLEMENTED_CTORS.has(cls)) {
-        this.emitIncomplete(`\\Temporal\\Spec\\${cls} is not yet implemented`);
+        this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
         return null;
       }
       if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
@@ -2933,13 +2932,13 @@ class Emitter {
       }
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `new \\Temporal\\Spec\\${cls}(${args})`;
+      return `new ${SPEC_NS}${cls}(${args})`;
     }
     if (callee.type === 'MemberExpression' && !callee.computed
         && callee.object.type === 'Identifier' && callee.object.name === 'Temporal') {
       const cls = callee.property.name;
       if (!IMPLEMENTED_CTORS.has(cls)) {
-        this.emitIncomplete(`\\Temporal\\Spec\\${cls} is not yet implemented`);
+        this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
         return null;
       }
       if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
@@ -2952,7 +2951,7 @@ class Emitter {
       }
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `new \\Temporal\\Spec\\${cls}(${args})`;
+      return `new ${SPEC_NS}${cls}(${args})`;
     }
     // new Temporal.X.method() or new Temporal.X.prototype.method() → TypeError
     const deepTarget = parseVerifyPropertyTarget(callee);
@@ -2968,7 +2967,7 @@ class Emitter {
       if (callee.property.name === 'DateTimeFormat') {
         const args = this.transpileArgs(node.arguments);
         if (args === null) return null;
-        return `new \\Temporal\\Tests\\Test262\\IntlDateTimeFormat(${args})`;
+        return `new ${HARNESS_NS}IntlDateTimeFormat(${args})`;
       }
       this.emitIncomplete(`untranslatable: Intl.${callee.property.name} has no harness shim`);
       return null;
@@ -2979,7 +2978,7 @@ class Emitter {
     if (callee.type === 'Identifier' && callee.name === 'Date') {
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `new \\Temporal\\Tests\\Test262\\JsDate(${args})`;
+      return `new ${HARNESS_NS}JsDate(${args})`;
     }
     this.emitIncomplete(`untranslatable new expression`);
     return null;
@@ -3034,7 +3033,7 @@ class Emitter {
       for (const pr of p.properties) {
         const withDefault = pr.value.type === 'AssignmentPattern';
         const name = withDefault ? pr.value.left.name : pr.value.name;
-        let read = `\\Temporal\\Tests\\Test262\\Js::destructure($${tmp}, '${pr.key.name}')`;
+        let read = `${HARNESS_NS}Js::destructure($${tmp}, '${pr.key.name}')`;
         if (withDefault) {
           const fallback = this.transpileExpr(pr.value.right);
           if (fallback === null) return null;
@@ -3191,8 +3190,8 @@ class Emitter {
         }
       }
     }
-    // `expr instanceof Temporal.X` → `$expr instanceof \Temporal\Spec\X`
-    // (transpileTemporalClassRef returns \Temporal\Spec\X::class; strip ::class for instanceof)
+    // `expr instanceof Temporal.X` → `$expr instanceof \Calendrics\Spec\X`
+    // (transpileTemporalClassRef returns \Calendrics\Spec\X::class; strip ::class for instanceof)
     if (node.operator === 'instanceof') {
       const classRef = this.transpileTemporalClassRef(node.right);
       if (classRef !== null) {
@@ -3270,7 +3269,7 @@ class Emitter {
    * Fallback: treats any other transpiled PHP starting with \ as a class ref.
    */
   /**
-   * Translates a Temporal.X MemberExpression to \Temporal\X::class.
+   * Translates a Temporal.X MemberExpression to \Calendrics\X::class.
    * Used for passing Temporal class references to TemporalHelpers methods
    * (checkSubclassingIgnored, checkSubclassingIgnoredStatic).
    * Returns null if the node is not a recognized Temporal.X expression.
@@ -3279,7 +3278,7 @@ class Emitter {
     if (node.type === 'MemberExpression' && !node.computed
         && node.object.type === 'Identifier' && node.object.name === 'Temporal'
         && node.property.type === 'Identifier') {
-      return `\\Temporal\\Spec\\${node.property.name}::class`;
+      return `${SPEC_NS}${node.property.name}::class`;
     }
     return null;
   }
@@ -3326,7 +3325,7 @@ class Emitter {
       if (ret !== null) {
         return returnsStringValue(toStringRet)
           ? 'new class implements \\Stringable { #[\\Override] public function __toString(): string { return (string) (' + ret + '); } }'
-          : `new \\Temporal\\Tests\\Test262\\JsNonStringPrimitive(${ret})`;
+          : `new ${HARNESS_NS}JsNonStringPrimitive(${ret})`;
       }
     }
 
@@ -3355,7 +3354,7 @@ class Emitter {
       const cls = this.emitProbeBagAnonClass(
         positiveBag.initProps,
         positiveBag.getterNames,
-        'throw new \\Temporal\\Tests\\Test262\\Test262Error();',
+        `throw new ${HARNESS_NS}Test262Error();`,
       );
       if (cls !== null) return cls;
     }
@@ -3561,7 +3560,7 @@ class Emitter {
 
     // `Object.getPrototypeOf(<instance-expr>) === Temporal.Y.prototype`: asserts the
     // result is a Temporal Y instance. The prototype-identity check is not load-bearing
-    // beyond class identity, so lower to `<instance-expr> instanceof \Temporal\Spec\Y`.
+    // beyond class identity, so lower to `<instance-expr> instanceof \Calendrics\Spec\Y`.
     // Gated strictly: `expected` must be a Temporal Y.prototype (excludes the builtin.js
     // `getPrototypeOf(X) === Function.prototype` Function-object floor case), and the
     // getPrototypeOf argument must NOT itself be a Temporal namespace/class/method
@@ -3575,7 +3574,7 @@ class Emitter {
         const argPhp = this.transpileExpr(actual.arguments[0]);
         const msgPhp = msg ? this.transpileExpr(msg) : "''";
         if (argPhp !== null && msgPhp !== null) {
-          return `Assert::assertTrue(${argPhp} instanceof \\Temporal\\Spec\\${protoTarget.class}, ${msgPhp})`;
+          return `Assert::assertTrue(${argPhp} instanceof ${SPEC_NS}${protoTarget.class}, ${msgPhp})`;
         }
       }
     }
@@ -3609,7 +3608,8 @@ class Emitter {
       const cls = fnNode.body.callee.property.name;
       const msgPhp = msgNode ? this.transpileExpr(msgNode) : "''";
       if (msgPhp !== null) {
-        return `Assert::throws(\\TypeError::class, fn() => throw new \\TypeError('Temporal\\\\Spec\\\\${cls} cannot be called as a function; use new'), ${msgPhp})`;
+        const what = phpStr(`${SPEC_NS_BARE}${cls} cannot be called as a function; use new`);
+        return `Assert::throws(\\TypeError::class, fn() => throw new \\TypeError(${what}), ${msgPhp})`;
       }
     }
 
@@ -3631,12 +3631,12 @@ class Emitter {
         && fnNode.body.callee.property?.type === 'Identifier'
         && (fnNode.body.callee.property.name === 'call' || fnNode.body.callee.property.name === 'apply')) {
       const ref = this.brandedRefVars.get(fnNode.body.callee.object.name);
-      const what = ref.isGetter
-        ? `Temporal\\\\Spec\\\\${ref.class}::$${ref.member} getter requires a valid receiver`
-        : `Temporal\\\\Spec\\\\${ref.class}::${ref.member}() requires a valid receiver`;
+      const what = phpStr(ref.isGetter
+        ? `${SPEC_NS_BARE}${ref.class}::$${ref.member} getter requires a valid receiver`
+        : `${SPEC_NS_BARE}${ref.class}::${ref.member}() requires a valid receiver`);
       const msgPhp = msgNode ? this.transpileExpr(msgNode) : "''";
       if (msgPhp !== null) {
-        return `Assert::throws(\\TypeError::class, fn() => throw new \\TypeError('${what}'), ${msgPhp})`;
+        return `Assert::throws(\\TypeError::class, fn() => throw new \\TypeError(${what}), ${msgPhp})`;
       }
     }
 
@@ -4986,8 +4986,8 @@ function parsePropDescAccessorProgram(body) {
  * throwing getters and then asserts that compare()/equals() reads internal slots,
  * never the observable getters. PHP property reads never dispatch through getters,
  * so a plain base-class instance produces the identical result. Such a class can be
- * registered as an alias of Temporal\Spec\Y and its declaration dropped: every
- * `new X(args)` rewrites to `new Temporal\Spec\Y(args)`, and the getters (which
+ * registered as an alias of Calendrics\Spec\Y and its declaration dropped: every
+ * `new X(args)` rewrites to `new Calendrics\Spec\Y(args)`, and the getters (which
  * could never fire in PHP) are discarded.
  *
  * Returns the base Temporal class name (e.g. 'PlainDate'), or null. Requiring a
@@ -5028,9 +5028,9 @@ function isPhpMethodImplemented(className, method) {
  */
 function incompleteReasonFor(className, method) {
   if (PHP_INTENTIONALLY_ABSENT_METHODS.has(method)) {
-    return PHP_ABSENT_METHOD_REASONS[method] ?? `\\Temporal\\Spec\\${className}::${method}() is intentionally not exposed`;
+    return PHP_ABSENT_METHOD_REASONS[method] ?? `${SPEC_NS}${className}::${method}() is intentionally not exposed`;
   }
-  return `\\Temporal\\Spec\\${className}::${method}() is not yet implemented`;
+  return `${SPEC_NS}${className}::${method}() is not yet implemented`;
 }
 
 /** PHP single-quoted string literal. */
@@ -5084,9 +5084,9 @@ function processFile(jsPath, dataDir, scriptsDir) {
     '// Generated by tools/transpile-test262.mjs — do not edit manually.',
     '// Re-generate: composer test262:build',
     '',
-    'use Temporal\\Tests\\Test262\\Assert;',
-    'use Temporal\\Tests\\Test262\\JsUndefined;',
-    ...(useTemporalHelpers ? ['use Temporal\\Tests\\Test262\\TemporalHelpers;'] : []),
+    `use ${HARNESS_NS_BARE}Assert;`,
+    `use ${HARNESS_NS_BARE}JsUndefined;`,
+    ...(useTemporalHelpers ? [`use ${HARNESS_NS_BARE}TemporalHelpers;`] : []),
     '',
   ];
   const includesTemporalHelpers = includes.includes('temporalHelpers.js');

@@ -2,23 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Exception\RangeError;
+use Calendrics\Exception\RangeError;
 
 /**
  * Internal helpers for converting between epoch-nanosecond integers and PHP's
  * `\DateTimeInterface`/`\DateTimeImmutable`.
  *
- * Used by `Temporal\Instant::{fromDateTime,toDateTime}` and
- * `Temporal\ZonedDateTime::{fromDateTime,toDateTime}`. The other porcelain
- * `fromDateTime()` factories (`Temporal\PlainDateTime`, `Temporal\PlainDate`,
- * `Temporal\PlainTime`) extract individual calendar fields directly from the
+ * Used by `Calendrics\Instant::{fromDateTime,toDateTime}` and
+ * `Calendrics\ZonedDateTime::{fromDateTime,toDateTime}`. The other porcelain
+ * `fromDateTime()` factories (`Calendrics\PlainDateTime`, `Calendrics\PlainDate`,
+ * `Calendrics\PlainTime`) extract individual calendar fields directly from the
  * source `\DateTimeInterface` and do not go through this helper.
  *
- * Although the namespace is `Temporal\Spec\Internal\`, this helper isn't
+ * Although the namespace is `Calendrics\Spec\Internal\`, this helper isn't
  * strictly spec-layer machinery — it's placed here to keep all internal-only
- * helpers in one namespace. As with everything in `Temporal\Spec\Internal\`,
+ * helpers in one namespace. As with everything in `Calendrics\Spec\Internal\`,
  * it is not part of the public BC contract: signatures, behavior, and
  * existence may change between any two releases.
  */
@@ -73,7 +73,7 @@ final class PhpDateTimeInterop
      * digits) are dropped. This matches the loss-of-precision contract
      * documented on the porcelain `toDateTime()` methods.
      *
-     * Because this helper lives in `Temporal\Spec\Internal\`, it is not part
+     * Because this helper lives in `Calendrics\Spec\Internal\`, it is not part
      * of the public BC contract and may change between any two releases.
      */
     public static function toDateTime(int $epochNanoseconds, \DateTimeZone $tz): \DateTimeImmutable

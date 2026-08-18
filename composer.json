@@ -1,5 +1,5 @@
 {
-    "name": "midnight/temporal-php",
+    "name": "midnight/calendrics",
     "description": "PHP implementation of the TC39 Temporal API",
     "type": "library",
     "license": "MIT",
@@ -20,13 +20,13 @@
     },
     "autoload": {
         "psr-4": {
-            "Temporal\\": "src/"
+            "Calendrics\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Temporal\\Tests\\": "tests/",
-            "Temporal\\Tools\\": "tools/"
+            "Calendrics\\Tests\\": "tests/",
+            "Calendrics\\Tools\\": "tools/"
         }
     },
     "scripts": {

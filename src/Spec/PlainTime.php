@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\EpochLimits;
+use Calendrics\Spec\Internal\EpochRounding;
+use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\IsoFraction;
+use Calendrics\Spec\Internal\Options;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\CalendarMath;
-use Temporal\Spec\Internal\EpochLimits;
-use Temporal\Spec\Internal\EpochRounding;
-use Temporal\Spec\Internal\FieldBag;
-use Temporal\Spec\Internal\IsoFraction;
-use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\TemporalSerde;
 
 /**
  * A wall-clock time without a date or time zone.
@@ -25,7 +25,7 @@ use Temporal\Spec\Internal\TemporalSerde;
  */
 final class PlainTime implements Stringable
 {
-    use TemporalSerde;
+    use HasStringRepresentations;
 
     /**
      * The fields a PlainTime is built from. A time carries no calendar, so this list is
@@ -425,7 +425,7 @@ final class PlainTime implements Stringable
         /** @var mixed $suRaw */
         $suRaw = $options['smallestUnit'] ?? null;
         if ($suRaw === null) {
-            throw new RangeError('Temporal\\PlainTime::round() requires smallestUnit.');
+            throw new RangeError('Calendrics\\PlainTime::round() requires smallestUnit.');
         }
         $suRaw = Options::coerceEnumOption($suRaw, 'smallestUnit');
 
@@ -446,7 +446,7 @@ final class PlainTime implements Stringable
             'hours' => [3_600_000_000_000, 24],
         ];
         if (!array_key_exists($suRaw, $unitMap)) {
-            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Temporal\\PlainTime::round().");
+            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Calendrics\\PlainTime::round().");
         }
         [$nsPerUnit, $maxIncrement] = $unitMap[$suRaw];
 

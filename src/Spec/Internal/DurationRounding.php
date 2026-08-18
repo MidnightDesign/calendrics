@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Duration;
-use Temporal\Spec\PlainDate;
-use Temporal\Spec\ZonedDateTime;
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Duration;
+use Calendrics\Spec\PlainDate;
+use Calendrics\Spec\ZonedDateTime;
 
 /**
  * The engine behind {@see Duration::round()}.
@@ -126,7 +126,7 @@ final class DurationRounding
         // $roundTo is always an array at this point (strings/objects normalized above).
         /** @var mixed $rtRawForZdt */
         $rtRawForZdt = $roundTo['relativeTo'] ?? null;
-        $zdtRelativeTo = $rtRawForZdt instanceof \Temporal\Spec\ZonedDateTime;
+        $zdtRelativeTo = $rtRawForZdt instanceof \Calendrics\Spec\ZonedDateTime;
         $zdtInfoRound = $rtRawForZdt !== null ? RelativeTo::resolveZdt($rtRawForZdt) : null;
 
         // The anchor with its spelling reduced away, so the range guards below can ask

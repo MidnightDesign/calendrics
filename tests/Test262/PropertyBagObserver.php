@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262;
+namespace Calendrics\Tests\Test262;
 
 /**
  * A property bag that logs every `Get(O, P)` performed against it.
@@ -11,7 +11,7 @@ namespace Temporal\Tests\Test262;
  * field bag is expected, then assert the exact sequence of property reads the
  * operation performed. The JS harness uses a Proxy; PHP's equivalent is `__get`,
  * which the spec layer reaches because it reads bags through
- * {@see \Temporal\Spec\Internal\Options::bagGet()} rather than `get_object_vars()`.
+ * {@see \Calendrics\Spec\Internal\Options::bagGet()} rather than `get_object_vars()`.
  *
  * Every property is private, so `get_object_vars()` from `Options`' scope sees
  * nothing and each recognized name funnels through `__get()`. `__isset()` answers

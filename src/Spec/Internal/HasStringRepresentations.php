@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Exception\TypeError;
+use Calendrics\Exception\TypeError;
 
 /** @internal */
-trait TemporalSerde
+trait HasStringRepresentations
 {
     abstract public function toString(): string;
 
@@ -71,7 +71,7 @@ trait TemporalSerde
      * @param array<array-key, mixed>|object|null $options
      * @psalm-api
      * @throws TypeError if a style option is not applicable to this type.
-     * @throws \Temporal\Exception\RangeError if this value's calendar is incompatible with the formatter's.
+     * @throws \Calendrics\Exception\RangeError if this value's calendar is incompatible with the formatter's.
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
     {

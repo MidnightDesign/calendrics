@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Trait;
+namespace Calendrics\Trait;
 
-use Temporal\Spec\PlainDate as SpecPlainDate;
-use Temporal\Spec\PlainDateTime as SpecPlainDateTime;
-use Temporal\Spec\ZonedDateTime as SpecZonedDateTime;
+use Calendrics\Spec\PlainDate as SpecPlainDate;
+use Calendrics\Spec\PlainDateTime as SpecPlainDateTime;
+use Calendrics\Spec\ZonedDateTime as SpecZonedDateTime;
 
 /**
  * Marker interface declaring that a class exposes a `$spec` property whose

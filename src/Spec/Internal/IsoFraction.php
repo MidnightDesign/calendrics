@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
 /**
  * The fractional-second component of an ISO 8601 string.

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
-use Temporal\Spec\PlainDate as SpecPlainDate;
-use Temporal\Trait\HasDayOfMonthProperties;
-use Temporal\Trait\HasDayOfMonthSpec;
-use Temporal\Trait\HasLocalizedFormatting;
-use Temporal\Trait\HasYearMonthProperties;
-use Temporal\Trait\HasYearMonthSpec;
+use Calendrics\Spec\PlainDate as SpecPlainDate;
+use Calendrics\Trait\HasDayOfMonthProperties;
+use Calendrics\Trait\HasDayOfMonthSpec;
+use Calendrics\Trait\HasLocalizedFormatting;
+use Calendrics\Trait\HasYearMonthProperties;
+use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A calendar date without a time or time zone.
@@ -37,7 +37,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param int<1, 12>   $isoMonth ISO month of the year (1–12).
      * @param int<1, 31>   $isoDay   ISO day of the month (1–31, depending on month/year).
      * @param Calendar     $calendar Calendar system to project through.
-     * @throws \Temporal\Exception\RangeError if the date is invalid or out of range.
+     * @throws \Calendrics\Exception\RangeError if the date is invalid or out of range.
      */
     public function __construct(int $isoYear, int $isoMonth, int $isoDay, Calendar $calendar = Calendar::Iso8601)
     {
@@ -101,7 +101,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      *
      * @param string $text ISO 8601 date string (e.g. "2020-01-01").
      * @return self
-     * @throws \Temporal\Exception\RangeError if the string cannot be parsed.
+     * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
      */
     public static function parse(string $text): self
     {
@@ -152,7 +152,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param int|null         $eraYear   Era year override, or null to keep current.
      * @param Overflow         $overflow  How to handle out-of-range values.
      * @return self A new PlainDate with the overridden fields.
-     * @throws \Temporal\Exception\RangeError if the resulting date is invalid (overflow: reject) or fields conflict.
+     * @throws \Calendrics\Exception\RangeError if the resulting date is invalid (overflow: reject) or fields conflict.
      */
     public function with(
         ?int $year = null,
@@ -326,8 +326,8 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param NumberWidth|null $day
      * @param Calendar|null    $calendar  Calendar to render in; null keeps the locale's own calendar.
      * @return string
-     * @throws \Temporal\Exception\TypeError if `dateStyle` is combined with a component option.
-     * @throws \Temporal\Exception\RangeError if this date's calendar cannot be rendered by the
+     * @throws \Calendrics\Exception\TypeError if `dateStyle` is combined with a component option.
+     * @throws \Calendrics\Exception\RangeError if this date's calendar cannot be rendered by the
      *                                        resolved formatter — see {@see withCalendar()}.
      */
     public function toLocaleString(
@@ -376,7 +376,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param string         $timeZone IANA timezone identifier or UTC offset string.
      * @param PlainTime|null $time     Optional time; if null, midnight is used.
      * @return ZonedDateTime
-     * @throws \Temporal\Exception\RangeError if the timezone is invalid or the result is out of range.
+     * @throws \Calendrics\Exception\RangeError if the timezone is invalid or the result is out of range.
      */
     public function toZonedDateTime(string $timeZone, ?PlainTime $time = null): ZonedDateTime
     {

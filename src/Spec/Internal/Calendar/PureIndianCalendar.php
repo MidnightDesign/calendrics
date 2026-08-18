@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal\Calendar;
+namespace Calendrics\Spec\Internal\Calendar;
 
-use Temporal\Exception\RangeError;
-use Temporal\Spec\Internal\CalendarMath;
+use Calendrics\Exception\RangeError;
+use Calendrics\Spec\Internal\CalendarMath;
 
 /**
  * Pure PHP implementation of the Indian National (Saka) calendar.

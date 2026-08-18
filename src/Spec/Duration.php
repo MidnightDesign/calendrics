@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\AnchorMath;
+use Calendrics\Spec\Internal\DurationRounding;
+use Calendrics\Spec\Internal\DurationTotal;
+use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\RelativeTo;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\AnchorMath;
-use Temporal\Spec\Internal\DurationRounding;
-use Temporal\Spec\Internal\DurationTotal;
-use Temporal\Spec\Internal\FieldBag;
-use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\RelativeTo;
 
 /**
  * A span of time expressed as 10 calendar and clock fields.
@@ -912,7 +912,7 @@ final class Duration implements Stringable
             $v = $item[$field] ?? 0;
             // Coerce per the universal numeric contract: a numeric value (int /
             // float / numeric string) is accepted; a Stringable is cast first
-            // (a Symbol-like sentinel's __toString throws Temporal\Exception\TypeError);
+            // (a Symbol-like sentinel's __toString throws Calendrics\Exception\TypeError);
             // any other value — null, bool, array, plain object, non-numeric
             // string — is out of range and yields a RangeError. (Previously such
             // values were silently (int)-cast to 0 / kept the prior field value.)
@@ -1323,7 +1323,7 @@ final class Duration implements Stringable
         // earlier, so days is the live case here), the resulting target instant must stay within
         // the representable Temporal range (±8.64e12 s). Check both operands independently so the
         // call carrying the out-of-range duration throws regardless of argument order.
-        if ($rtForCompare instanceof \Temporal\Spec\ZonedDateTime) {
+        if ($rtForCompare instanceof \Calendrics\Spec\ZonedDateTime) {
             // years/months/weeks are known zero here ($hasCalendar was false above), so the only
             // live date-category field is days.
             $d1IsDateCategory = $d1->days !== 0;

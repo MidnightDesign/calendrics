@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Exception\RangeError;
-use Temporal\Spec\PlainDateTime;
+use Calendrics\Exception\RangeError;
+use Calendrics\Spec\PlainDateTime;
 
 /**
  * The ISO 8601 grammar for `PlainDateTime` strings.

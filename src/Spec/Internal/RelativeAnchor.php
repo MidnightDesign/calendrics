@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Spec\Duration;
+use Calendrics\Spec\Duration;
 
 /**
  * The object a `relativeTo` denotes, with its spelling reduced away.

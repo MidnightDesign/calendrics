@@ -2,24 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DateTimeArithmetic;
+use Calendrics\Spec\Internal\DateTimeDifference;
+use Calendrics\Spec\Internal\DateTimeFields;
+use Calendrics\Spec\Internal\DateTimeParse;
+use Calendrics\Spec\Internal\EpochLimits;
+use Calendrics\Spec\Internal\EpochRounding;
+use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\MonthCode;
+use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\TimeZoneHelper;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\Calendar\CalendarFactory;
-use Temporal\Spec\Internal\CalendarMath;
-use Temporal\Spec\Internal\DateTimeArithmetic;
-use Temporal\Spec\Internal\DateTimeDifference;
-use Temporal\Spec\Internal\DateTimeFields;
-use Temporal\Spec\Internal\DateTimeParse;
-use Temporal\Spec\Internal\EpochLimits;
-use Temporal\Spec\Internal\EpochRounding;
-use Temporal\Spec\Internal\FieldBag;
-use Temporal\Spec\Internal\MonthCode;
-use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\TemporalSerde;
-use Temporal\Spec\Internal\TimeZoneHelper;
 
 /**
  * A calendar date combined with a wall-clock time, without a time zone.
@@ -32,7 +32,7 @@ use Temporal\Spec\Internal\TimeZoneHelper;
  */
 final class PlainDateTime implements Stringable
 {
-    use TemporalSerde;
+    use HasStringRepresentations;
 
     // -------------------------------------------------------------------------
     // Virtual (get-only) properties
@@ -829,7 +829,7 @@ final class PlainDateTime implements Stringable
         /** @var mixed $suRaw */
         $suRaw = $options['smallestUnit'] ?? null;
         if ($suRaw === null) {
-            throw new RangeError('Temporal\\PlainDateTime::round() requires smallestUnit.');
+            throw new RangeError('Calendrics\\PlainDateTime::round() requires smallestUnit.');
         }
         $suRaw = Options::coerceEnumOption($suRaw, 'smallestUnit');
 
@@ -852,7 +852,7 @@ final class PlainDateTime implements Stringable
             'nanoseconds' => [1, 1_000],
         ];
         if (!array_key_exists($suRaw, $unitMap)) {
-            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Temporal\\PlainDateTime::round().");
+            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Calendrics\\PlainDateTime::round().");
         }
         [$nsPerUnit, $maxIncrement] = $unitMap[$suRaw];
 

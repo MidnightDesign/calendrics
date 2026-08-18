@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262;
+namespace Calendrics\Tests\Test262;
 
-use Temporal\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\IntlFormatter;
 
 /**
  * Minimal stand-in for the legacy JavaScript `Date` object, as used by intl402
