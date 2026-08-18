@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
-use Temporal\Spec\Now as SpecNow;
+use Calendrics\Spec\Now as SpecNow;
 
 /**
  * Provides access to the current date and time as porcelain Temporal types.
@@ -42,7 +42,7 @@ final class Now
      *
      * @param string|null $timeZone IANA time zone or UTC offset; null uses the system default.
      * @param Calendar    $calendar Calendar system (default ISO 8601).
-     * @throws \Temporal\Exception\RangeError if the string is not a valid time zone identifier.
+     * @throws \Calendrics\Exception\RangeError if the string is not a valid time zone identifier.
      */
     public static function plainDate(?string $timeZone = null, Calendar $calendar = Calendar::Iso8601): PlainDate
     {
@@ -59,7 +59,7 @@ final class Now
      * Returns the current wall-clock time (no date) in the ISO 8601 calendar.
      *
      * @param string|null $timeZone IANA time zone or UTC offset; null uses the system default.
-     * @throws \Temporal\Exception\RangeError if the string is not a valid time zone identifier.
+     * @throws \Calendrics\Exception\RangeError if the string is not a valid time zone identifier.
      */
     public static function plainTime(?string $timeZone = null): PlainTime
     {
@@ -73,7 +73,7 @@ final class Now
      *
      * @param string|null $timeZone IANA time zone or UTC offset; null uses the system default.
      * @param Calendar    $calendar Calendar system (default ISO 8601).
-     * @throws \Temporal\Exception\RangeError if the string is not a valid time zone identifier.
+     * @throws \Calendrics\Exception\RangeError if the string is not a valid time zone identifier.
      */
     public static function plainDateTime(
         ?string $timeZone = null,
@@ -93,7 +93,7 @@ final class Now
      *
      * @param string|null $timeZone IANA time zone or UTC offset; null uses the system default.
      * @param Calendar    $calendar Calendar system (default ISO 8601).
-     * @throws \Temporal\Exception\RangeError if the string is not a valid time zone identifier.
+     * @throws \Calendrics\Exception\RangeError if the string is not a valid time zone identifier.
      */
     public static function zonedDateTime(
         ?string $timeZone = null,

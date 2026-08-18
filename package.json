@@ -1,5 +1,5 @@
 {
-  "name": "temporal-php",
+  "name": "calendrics",
   "version": "1.0.0",
   "description": "A PHP 8.4 implementation of the [TC39 Temporal API](https://tc39.es/proposal-temporal/).",
   "main": "index.js",
@@ -11,16 +11,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MidnightDesign/temporal-php.git"
+    "url": "git+https://github.com/MidnightDesign/calendrics.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/MidnightDesign/temporal-php/issues"
+    "url": "https://github.com/MidnightDesign/calendrics/issues"
   },
-  "homepage": "https://github.com/MidnightDesign/temporal-php#readme",
+  "homepage": "https://github.com/MidnightDesign/calendrics#readme",
   "devDependencies": {
     "acorn": "^8.16.0"
   }

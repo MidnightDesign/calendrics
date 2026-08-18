@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal\Calendar;
+namespace Calendrics\Spec\Internal\Calendar;
 
 /**
  * Defines all calendar-dependent operations required by Temporal types.
@@ -133,7 +133,7 @@ interface CalendarProtocol
      * era should be ignored. Throws if the era is invalid for this calendar.
      *
      * @return int|null The resolved year, or null if era is not applicable.
-     * @throws \Temporal\Exception\RangeError if the era is not valid for this calendar.
+     * @throws \Calendrics\Exception\RangeError if the era is not valid for this calendar.
      */
     public function resolveEra(string $era, int $eraYear): ?int;
 }

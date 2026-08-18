@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
 
 /**
  * Faithful coercion of a TC39 string-typed option value.
  *
  * GetOption(options, prop, "string", ...) applies ToString: a string passes
  * through; a Stringable coerces via (string) (a Symbol-like sentinel's
- * __toString throws Temporal\Exception\TypeError); any other type (number,
+ * __toString throws Calendrics\Exception\TypeError); any other type (number,
  * bool, plain object, null) would ToString to a value that is never a valid
  * option keyword, so it is rejected with a RangeError. The returned string must
  * still be validated against the option's allowed set by the caller.
@@ -53,7 +53,7 @@ final class Options
     /**
      * Faithful TC39 GetOption(..., "string", ...) ToString coercion of an option
      * value: a string passes through; a Stringable coerces via __toString (a JsSymbol
-     * sentinel's throwing __toString surfaces as Temporal\Exception\TypeError); any
+     * sentinel's throwing __toString surfaces as Calendrics\Exception\TypeError); any
      * other type is rejected with a RangeError. The returned string must still be
      * validated against the option's allowed keyword set by the caller.
      *
@@ -82,7 +82,7 @@ final class Options
      *
      * Combines the canonical {@see self::coerceEnumOption()} ToString coercion (a
      * string passes through; a Stringable coerces via __toString — a JsSymbol
-     * sentinel's throwing __toString surfaces as Temporal\Exception\TypeError; any
+     * sentinel's throwing __toString surfaces as Calendrics\Exception\TypeError; any
      * other type is a RangeError) with the keyword check that the ~9 inline copies
      * across the Plain... and ZonedDateTime classes perform.
      *
@@ -150,7 +150,7 @@ final class Options
      * {@see self::overflowFromValue()} instead; this helper always defaults a null bag.
      *
      * After the Plain... convergence on {@see self::overflowFromValue()}, the only
-     * external caller is {@see Temporal\Spec\ZonedDateTime}, which performs its own
+     * external caller is {@see Calendrics\Spec\ZonedDateTime}, which performs its own
      * GetOptionsObject (null handling) upstream and so wants the bag-only resolver here;
      * internally, {@see self::overflowFromValue()} also delegates to this method after
      * its own GetOptionsObject step.
@@ -234,7 +234,7 @@ final class Options
      * ZonedDateTime use {@see CalendarMath::validateRoundingIncrement()}, which adds the
      * universal 1e9 upper bound for time-domain increments.
      *
-     * The two RangeError messages match the {@see Temporal\Spec\Duration::round()}
+     * The two RangeError messages match the {@see Calendrics\Spec\Duration::round()}
      * original byte-for-byte (the test262 suite asserts on them).
      *
      * @throws RangeError if the value is a non-finite number or rounds to < 1.
@@ -299,7 +299,7 @@ final class Options
         }
         if (is_object($options)) {
             if ($options instanceof Stringable) {
-                // JsSymbol sentinel: __toString throws Temporal\Exception\TypeError.
+                // JsSymbol sentinel: __toString throws Calendrics\Exception\TypeError.
                 // For any other Stringable (e.g. JsUndefined which returns 'undefined'),
                 // the cast succeeds and we fall through to the snapshot.
                 (string) $options;
@@ -344,7 +344,7 @@ final class Options
         }
         if (is_object($options)) {
             if ($options instanceof Stringable) {
-                // JsSymbol sentinel: __toString throws Temporal\Exception\TypeError.
+                // JsSymbol sentinel: __toString throws Calendrics\Exception\TypeError.
                 // This must propagate — do not catch it.
                 (string) $options;
             }
@@ -359,7 +359,7 @@ final class Options
      * property). Distinct from a declared property whose value is `null`, which
      * {@see self::bagGet()} returns as `null`.
      */
-    public const string ABSENT = "\0Temporal\\Spec\\Internal\\Options::ABSENT\0";
+    public const string ABSENT = "\0Calendrics\\Spec\\Internal\\Options::ABSENT\0";
 
     /**
      * Bag entries TC39 reads with ToString, and which {@see self::bagSnapshot()}
@@ -499,7 +499,7 @@ final class Options
      * applied to an already-read value. A Number (int or float) is range-checked
      * (NaN/±∞ → RangeError) and floored to an integer in 0–9; any non-number value is
      * coerced via ToString and must equal "auto" (a JsSymbol sentinel's throwing
-     * __toString surfaces as Temporal\Exception\TypeError, exactly as ToString(Symbol)
+     * __toString surfaces as Calendrics\Exception\TypeError, exactly as ToString(Symbol)
      * does in JS). Returns null for "auto" (the no-op default), or the digit count 0–9.
      *
      * @throws RangeError if the value is a non-finite/out-of-range number or a
@@ -520,7 +520,7 @@ final class Options
             return $value;
         }
         if ($value instanceof Stringable) {
-            // JsSymbol sentinel: __toString throws Temporal\Exception\TypeError.
+            // JsSymbol sentinel: __toString throws Calendrics\Exception\TypeError.
             $value = (string) $value;
         }
         if ($value !== 'auto') {

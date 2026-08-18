@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain\Constraint;
+namespace Calendrics\Tests\Porcelain\Constraint;
 
+use Calendrics\PlainTime;
 use PHPUnit\Framework\ExpectationFailedException;
 use PHPUnit\Framework\TestCase;
-use Temporal\PlainTime;
 
 final class PlainTimeEqualsTest extends TestCase
 {

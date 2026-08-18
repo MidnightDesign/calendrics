@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
-use Temporal\Calendar;
-use Temporal\CalendarDisplay;
-use Temporal\Duration;
-use Temporal\Exception\RangeError;
-use Temporal\Overflow;
-use Temporal\PlainDateTime;
-use Temporal\PlainTime;
-use Temporal\RoundingMode;
-use Temporal\Unit;
+use Calendrics\Calendar;
+use Calendrics\CalendarDisplay;
+use Calendrics\Duration;
+use Calendrics\Exception\RangeError;
+use Calendrics\Overflow;
+use Calendrics\PlainDateTime;
+use Calendrics\PlainTime;
+use Calendrics\RoundingMode;
+use Calendrics\Unit;
 
-final class PlainDateTimeTest extends TemporalTestCase
+final class PlainDateTimeTest extends CalendricsTestCase
 {
     // -------------------------------------------------------------------------
     // Constructor & readonly properties
@@ -743,7 +743,7 @@ final class PlainDateTimeTest extends TemporalTestCase
 
     public function testFromSpecCreatesInstance(): void
     {
-        $spec = new \Temporal\Spec\PlainDateTime(2020, 6, 15, 13, 45, 30, 123, 456, 789);
+        $spec = new \Calendrics\Spec\PlainDateTime(2020, 6, 15, 13, 45, 30, 123, 456, 789);
         $dt = PlainDateTime::fromSpec($spec);
 
         static::assertSame(2020, $dt->year);
@@ -1096,8 +1096,8 @@ final class PlainDateTimeTest extends TemporalTestCase
         // 2020-11-01 01:30 is ambiguous in America/New_York (fall-back DST)
         $dt = new PlainDateTime(2020, 11, 1, 1, 30);
 
-        $earlier = $dt->toZonedDateTime('America/New_York', \Temporal\Disambiguation::Earlier);
-        $later = $dt->toZonedDateTime('America/New_York', \Temporal\Disambiguation::Later);
+        $earlier = $dt->toZonedDateTime('America/New_York', \Calendrics\Disambiguation::Earlier);
+        $later = $dt->toZonedDateTime('America/New_York', \Calendrics\Disambiguation::Later);
 
         static::assertSame('-04:00', $earlier->offset);
         static::assertSame('-05:00', $later->offset);

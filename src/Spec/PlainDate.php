@@ -2,23 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DateArithmetic;
+use Calendrics\Spec\Internal\DateDifference;
+use Calendrics\Spec\Internal\DateFields;
+use Calendrics\Spec\Internal\DateParse;
+use Calendrics\Spec\Internal\EpochLimits;
+use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\MonthCode;
+use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\TemporalSerde;
+use Calendrics\Spec\Internal\TimeZoneHelper;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\Calendar\CalendarFactory;
-use Temporal\Spec\Internal\CalendarMath;
-use Temporal\Spec\Internal\DateArithmetic;
-use Temporal\Spec\Internal\DateDifference;
-use Temporal\Spec\Internal\DateFields;
-use Temporal\Spec\Internal\DateParse;
-use Temporal\Spec\Internal\EpochLimits;
-use Temporal\Spec\Internal\FieldBag;
-use Temporal\Spec\Internal\MonthCode;
-use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\TemporalSerde;
-use Temporal\Spec\Internal\TimeZoneHelper;
 
 /**
  * A calendar date without a time or time zone.

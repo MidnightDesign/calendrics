@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262;
+namespace Calendrics\Tests\Test262;
 
 /**
  * Singleton sentinel for the JS `undefined` value, distinct from PHP `null`

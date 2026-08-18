@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
 /**
  * Time-zone identifier canonicalization and UTC-offset lookup.

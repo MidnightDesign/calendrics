@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal\Calendar;
+namespace Calendrics\Spec\Internal\Calendar;
 
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
 
 /**
  * Singleton factory for calendar protocol instances.

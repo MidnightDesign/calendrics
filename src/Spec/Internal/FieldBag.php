@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 
 /**
  * Normalizes an object property bag to an array the way TC39's PrepareCalendarFields

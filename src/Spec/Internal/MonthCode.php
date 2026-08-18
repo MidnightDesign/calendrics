@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
 
 /**
  * Validates a TC39 calendar `monthCode` FIELD value at read time, following the
@@ -18,8 +18,8 @@ use Temporal\Exception\TypeError;
  * later, calendar-specific concern.
  *
  * This is the consistent type-then-syntax behavior shared by
- * {@see Temporal\Spec\PlainDate} and {@see Temporal\Spec\PlainYearMonth}. The
- * {@see Temporal\Spec\PlainDateTime} property-bag path historically DRIFTED: it
+ * {@see Calendrics\Spec\PlainDate} and {@see Calendrics\Spec\PlainYearMonth}. The
+ * {@see Calendrics\Spec\PlainDateTime} property-bag path historically DRIFTED: it
  * skipped the type-check at read time (only validating syntax when the value was
  * already a string) and deferred the TypeError to after the year field was
  * coerced. Routing that path through this helper deliberately realigns it with

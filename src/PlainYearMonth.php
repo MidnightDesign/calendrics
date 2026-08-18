@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
-use Temporal\Spec\PlainYearMonth as SpecPlainYearMonth;
-use Temporal\Trait\HasLocalizedFormatting;
-use Temporal\Trait\HasYearMonthProperties;
-use Temporal\Trait\HasYearMonthSpec;
+use Calendrics\Spec\PlainYearMonth as SpecPlainYearMonth;
+use Calendrics\Trait\HasLocalizedFormatting;
+use Calendrics\Trait\HasYearMonthProperties;
+use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A calendar year-month without a specific day, time, or time zone.
@@ -34,7 +34,7 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
      * @param int<1, 12> $isoMonth       ISO month of the year (1–12).
      * @param Calendar   $calendar       Calendar system (default ISO 8601).
      * @param int        $referenceISODay Reference ISO day for round-trip fidelity (default 1).
-     * @throws \Temporal\Exception\RangeError if the year-month is invalid or out of range.
+     * @throws \Calendrics\Exception\RangeError if the year-month is invalid or out of range.
      */
     public function __construct(
         int $isoYear,
@@ -99,7 +99,7 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
      *
      * @param string $text ISO 8601 year-month string (e.g. "2020-01").
      * @return self
-     * @throws \Temporal\Exception\RangeError if the string cannot be parsed.
+     * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
      */
     public static function parse(string $text): self
     {
@@ -128,7 +128,7 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
      * @param int|null        $year  Year override, or null to keep current.
      * @param int<1, 12>|null $month Month override (1–12), or null to keep current.
      * @return self A new PlainYearMonth with the overridden fields.
-     * @throws \Temporal\Exception\RangeError if the resulting year-month is invalid or fields conflict.
+     * @throws \Calendrics\Exception\RangeError if the resulting year-month is invalid or fields conflict.
      */
     public function with(
         ?int $year = null,
@@ -293,8 +293,8 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
      * @param MonthWidth|null  $month
      * @param Calendar|null    $calendar  Calendar to render in; null keeps the locale's own calendar.
      * @return string
-     * @throws \Temporal\Exception\TypeError if `dateStyle` is combined with a component option.
-     * @throws \Temporal\Exception\RangeError if this value's calendar differs from the resolved
+     * @throws \Calendrics\Exception\TypeError if `dateStyle` is combined with a component option.
+     * @throws \Calendrics\Exception\RangeError if this value's calendar differs from the resolved
      *                                        formatter's.
      */
     public function toLocaleString(
@@ -319,7 +319,7 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
      *
      * @param int<1, 31> $day Day of the month.
      * @return PlainDate
-     * @throws \Temporal\Exception\RangeError if the resulting date is invalid.
+     * @throws \Calendrics\Exception\RangeError if the resulting date is invalid.
      */
     public function toPlainDate(int $day): PlainDate
     {

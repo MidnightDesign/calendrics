@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
 /**
  * Controls how a provided UTC offset is handled when parsing or modifying a ZonedDateTime.

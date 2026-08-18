@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
-use Temporal\Spec\PlainDateTime as SpecPlainDateTime;
-use Temporal\Trait\HasDayOfMonthProperties;
-use Temporal\Trait\HasDayOfMonthSpec;
-use Temporal\Trait\HasLocalizedFormatting;
-use Temporal\Trait\HasTimeOfDayProperties;
-use Temporal\Trait\HasTimeOfDaySpec;
-use Temporal\Trait\HasYearMonthProperties;
-use Temporal\Trait\HasYearMonthSpec;
+use Calendrics\Spec\PlainDateTime as SpecPlainDateTime;
+use Calendrics\Trait\HasDayOfMonthProperties;
+use Calendrics\Trait\HasDayOfMonthSpec;
+use Calendrics\Trait\HasLocalizedFormatting;
+use Calendrics\Trait\HasTimeOfDayProperties;
+use Calendrics\Trait\HasTimeOfDaySpec;
+use Calendrics\Trait\HasYearMonthProperties;
+use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A calendar date combined with a wall-clock time, without a time zone.
@@ -51,7 +51,7 @@ final class PlainDateTime implements
      * @param int<0, 999>  $microsecond Microsecond (0–999).
      * @param int<0, 999>  $nanosecond  Nanosecond (0–999).
      * @param Calendar     $calendar    Calendar system to project through.
-     * @throws \Temporal\Exception\RangeError if any value is out of range.
+     * @throws \Calendrics\Exception\RangeError if any value is out of range.
      */
     public function __construct(
         int $isoYear,
@@ -166,7 +166,7 @@ final class PlainDateTime implements
      *
      * @param string $text ISO 8601 datetime string (e.g. "2020-01-01T12:30:00").
      * @return self
-     * @throws \Temporal\Exception\RangeError if the string cannot be parsed.
+     * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
      */
     public static function parse(string $text): self
     {
@@ -240,7 +240,7 @@ final class PlainDateTime implements
      * @param int|null         $eraYear     Era year override, or null to keep current.
      * @param Overflow         $overflow    How to handle out-of-range values.
      * @return self A new PlainDateTime with the overridden fields.
-     * @throws \Temporal\Exception\RangeError if the resulting datetime is invalid (overflow: reject) or fields conflict.
+     * @throws \Calendrics\Exception\RangeError if the resulting datetime is invalid (overflow: reject) or fields conflict.
      */
     public function with(
         ?int $year = null,
@@ -399,7 +399,7 @@ final class PlainDateTime implements
      * @param RoundingMode $roundingMode      Rounding mode (default: HalfExpand).
      * @param int          $roundingIncrement Must evenly divide the next-larger unit.
      * @return self
-     * @throws \Temporal\Exception\RangeError for invalid unit or increment values.
+     * @throws \Calendrics\Exception\RangeError for invalid unit or increment values.
      */
     public function round(
         Unit $smallestUnit,
@@ -482,8 +482,8 @@ final class PlainDateTime implements
      * @param HourCycle|null   $hourCycle Hour numbering; null lets the locale decide.
      * @param Calendar|null    $calendar  Calendar to render in; null keeps the locale's own calendar.
      * @return string
-     * @throws \Temporal\Exception\TypeError if a style option is combined with a component option.
-     * @throws \Temporal\Exception\RangeError if this value's calendar cannot be rendered by the
+     * @throws \Calendrics\Exception\TypeError if a style option is combined with a component option.
+     * @throws \Calendrics\Exception\RangeError if this value's calendar cannot be rendered by the
      *                                        resolved formatter — see {@see withCalendar()}.
      */
     public function toLocaleString(
@@ -567,7 +567,7 @@ final class PlainDateTime implements
      * @param string         $timeZone      IANA time zone identifier or UTC offset string.
      * @param Disambiguation $disambiguation How to resolve ambiguous wall-clock times.
      * @return ZonedDateTime
-     * @throws \Temporal\Exception\RangeError if the time zone is invalid or the result is out of range.
+     * @throws \Calendrics\Exception\RangeError if the time zone is invalid or the result is out of range.
      */
     public function toZonedDateTime(
         string $timeZone,

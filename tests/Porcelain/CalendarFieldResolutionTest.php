@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\PlainDate;
+use Calendrics\Spec\PlainDateTime;
+use Calendrics\Spec\PlainMonthDay;
+use Calendrics\Spec\PlainYearMonth;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Temporal\Exception\RangeError;
-use Temporal\Spec\Internal\Calendar\CalendarFactory;
-use Temporal\Spec\PlainDate;
-use Temporal\Spec\PlainDateTime;
-use Temporal\Spec\PlainMonthDay;
-use Temporal\Spec\PlainYearMonth;
 
 /**
  * Tests for Phase 4: Calendar field resolution (from/with).

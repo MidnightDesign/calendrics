@@ -2,23 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\EpochLimits;
+use Calendrics\Spec\Internal\EpochRounding;
+use Calendrics\Spec\Internal\EpochValue;
+use Calendrics\Spec\Internal\HasEpochParts;
+use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\IsoFraction;
+use Calendrics\Spec\Internal\IsoOffset;
+use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\TimeZoneHelper;
 use DateTimeImmutable;
 use DateTimeZone;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\CalendarMath;
-use Temporal\Spec\Internal\EpochLimits;
-use Temporal\Spec\Internal\EpochRounding;
-use Temporal\Spec\Internal\EpochValue;
-use Temporal\Spec\Internal\HasEpochParts;
-use Temporal\Spec\Internal\IntlFormatter;
-use Temporal\Spec\Internal\IsoFraction;
-use Temporal\Spec\Internal\IsoOffset;
-use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\TimeZoneHelper;
 
 /**
  * A fixed point in time with nanosecond precision.
@@ -167,7 +167,7 @@ final class Instant implements Stringable
      * {@see EpochValue::narrowParts()}, which documents where float parts come from.
      *
      * @internal
-     * @psalm-internal Temporal\Spec
+     * @psalm-internal Calendrics\Spec
      * @throws RangeError if a part is a non-integer float or the result
      *         is outside the representable Temporal range.
      */
@@ -230,7 +230,7 @@ final class Instant implements Stringable
         }
         // TC39 sec-temporal-totemporalinstant step 1.b: a ZonedDateTime carries a
         // Nanoseconds internal slot — extract it directly as the fast path.
-        if ($item instanceof \Temporal\Spec\ZonedDateTime) {
+        if ($item instanceof \Calendrics\Spec\ZonedDateTime) {
             [$epochSec, $subNs] = $item->epochParts();
             return self::fromEpochParts($epochSec, $subNs);
         }
@@ -462,7 +462,7 @@ final class Instant implements Stringable
                 // A non-string, non-Stringable value (number, bool, plain object,
                 // Temporal type other than Instant) is a wrong-TYPE argument —
                 // TC39 throws TypeError before any string coercion is attempted.
-                throw new TypeError('Temporal\\Instant argument must be an Instant or an ISO string.');
+                throw new TypeError('Calendrics\\Instant argument must be an Instant or an ISO string.');
             }
         }
         return self::from($arg);
@@ -972,7 +972,7 @@ final class Instant implements Stringable
         $d = Duration::from($duration);
         if ($d->years !== 0 || $d->months !== 0 || $d->weeks !== 0 || $d->days !== 0) {
             throw new RangeError(
-                'Temporal\\Instant::add() does not support calendar fields (years, months, weeks, days).',
+                'Calendrics\\Instant::add() does not support calendar fields (years, months, weeks, days).',
             );
         }
         [$epochSec, $subNs] = $this->epochParts();
@@ -1002,7 +1002,7 @@ final class Instant implements Stringable
         $d = Duration::from($duration);
         if ($d->years !== 0 || $d->months !== 0 || $d->weeks !== 0 || $d->days !== 0) {
             throw new RangeError(
-                'Temporal\\Instant::subtract() does not support calendar fields (years, months, weeks, days).',
+                'Calendrics\\Instant::subtract() does not support calendar fields (years, months, weeks, days).',
             );
         }
         [$epochSec, $subNs] = $this->epochParts();
@@ -1048,7 +1048,7 @@ final class Instant implements Stringable
         /** @var mixed $suRaw */
         $suRaw = $roundTo['smallestUnit'] ?? null;
         if ($suRaw === null) {
-            throw new RangeError('Temporal\\Instant::round() requires smallestUnit.');
+            throw new RangeError('Calendrics\\Instant::round() requires smallestUnit.');
         }
         $suRaw = Options::coerceEnumOption($suRaw, 'smallestUnit');
         // Maps unit name → [ns-per-unit, max-increment-divisor (next unit size)]
@@ -1067,7 +1067,7 @@ final class Instant implements Stringable
             'hours' => [3_600_000_000_000, 24],
         ];
         if (!array_key_exists($suRaw, $unitMap)) {
-            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Temporal\\Instant::round().");
+            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Calendrics\\Instant::round().");
         }
         [$nsPerUnit, $maxDivisor] = $unitMap[$suRaw];
 

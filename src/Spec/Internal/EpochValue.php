@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
 /**
- * The over-int64 instant representation shared by {@see Temporal\Spec\Instant} and
- * {@see Temporal\Spec\ZonedDateTime}, modeled as one immutable triple instead of
+ * The over-int64 instant representation shared by {@see Calendrics\Spec\Instant} and
+ * {@see Calendrics\Spec\ZonedDateTime}, modeled as one immutable triple instead of
  * three scattered fields.
  *
  * The TC39 nanosecond range (±8.64e21 ns) exceeds PHP's signed 64-bit int, so both
@@ -26,7 +26,7 @@ namespace Temporal\Spec\Internal;
  * packing moves here.
  *
  * @internal
- * @psalm-internal Temporal\Spec
+ * @psalm-internal Calendrics\Spec
  */
 final readonly class EpochValue
 {

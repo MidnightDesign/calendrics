@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain\Exception;
+namespace Calendrics\Tests\Porcelain\Exception;
 
+use Calendrics\Calendar;
+use Calendrics\Exception\CalendricsException;
+use Calendrics\Exception\InvalidArgument;
+use Calendrics\Exception\RangeError;
+use Calendrics\RoundingMode;
 use PHPUnit\Framework\TestCase;
-use Temporal\Calendar;
-use Temporal\Exception\InvalidArgument;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TemporalException;
-use Temporal\RoundingMode;
 
 /**
  * Locks down the public exception hierarchy so a future refactor cannot
@@ -21,9 +21,9 @@ use Temporal\RoundingMode;
  */
 final class ExceptionHierarchyTest extends TestCase
 {
-    public function testTemporalExceptionIsAnInterfaceExtendingThrowable(): void
+    public function testCalendricsExceptionIsAnInterfaceExtendingThrowable(): void
     {
-        $reflection = new \ReflectionClass(TemporalException::class);
+        $reflection = new \ReflectionClass(CalendricsException::class);
 
         static::assertTrue($reflection->isInterface());
         static::assertContains(\Throwable::class, $reflection->getInterfaceNames());
@@ -33,7 +33,7 @@ final class ExceptionHierarchyTest extends TestCase
     {
         static::assertContains(\InvalidArgumentException::class, self::parentNames(InvalidArgument::class));
         static::assertContains(\LogicException::class, self::parentNames(InvalidArgument::class));
-        static::assertContains(TemporalException::class, self::interfaceNames(InvalidArgument::class));
+        static::assertContains(CalendricsException::class, self::interfaceNames(InvalidArgument::class));
 
         $exception = new InvalidArgument('boom');
         static::assertSame('boom', $exception->getMessage());
@@ -43,13 +43,13 @@ final class ExceptionHierarchyTest extends TestCase
     {
         static::assertContains(\RangeException::class, self::parentNames(RangeError::class));
         static::assertContains(\RuntimeException::class, self::parentNames(RangeError::class));
-        static::assertContains(TemporalException::class, self::interfaceNames(RangeError::class));
+        static::assertContains(CalendricsException::class, self::interfaceNames(RangeError::class));
 
         $exception = new RangeError('out of range');
         static::assertSame('out of range', $exception->getMessage());
     }
 
-    public function testCalendarFromIdThrowsTemporalInvalidArgumentForUnknownId(): void
+    public function testCalendarFromIdThrowsCalendricsInvalidArgumentForUnknownId(): void
     {
         $caught = null;
         try {
@@ -62,7 +62,7 @@ final class ExceptionHierarchyTest extends TestCase
         static::assertStringContainsString('bogus', $caught->getMessage());
     }
 
-    public function testRoundingModeToPhpThrowsTemporalInvalidArgumentForHalfCeil(): void
+    public function testRoundingModeToPhpThrowsCalendricsInvalidArgumentForHalfCeil(): void
     {
         $caught = null;
         try {
@@ -74,7 +74,7 @@ final class ExceptionHierarchyTest extends TestCase
         static::assertInstanceOf(InvalidArgument::class, $caught);
     }
 
-    public function testRoundingModeToPhpThrowsTemporalInvalidArgumentForHalfFloor(): void
+    public function testRoundingModeToPhpThrowsCalendricsInvalidArgumentForHalfFloor(): void
     {
         $caught = null;
         try {
@@ -86,7 +86,7 @@ final class ExceptionHierarchyTest extends TestCase
         static::assertInstanceOf(InvalidArgument::class, $caught);
     }
 
-    public function testRoundingModeFromPhpThrowsTemporalInvalidArgumentForHalfOdd(): void
+    public function testRoundingModeFromPhpThrowsCalendricsInvalidArgumentForHalfOdd(): void
     {
         $caught = null;
         try {

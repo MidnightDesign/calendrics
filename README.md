@@ -1,4 +1,4 @@
-# temporal-php
+# calendrics
 
 A PHP 8.4 implementation of the [TC39 Temporal API](https://tc39.es/proposal-temporal/).
 
@@ -15,7 +15,7 @@ Temporal is the modern replacement for JavaScript's `Date`, providing a precise,
 ## Installation
 
 ```bash
-composer require midnight/temporal-php
+composer require midnight/calendrics
 ```
 
 ## Architecture
@@ -24,14 +24,14 @@ This library has two API tiers:
 
 | Layer | Namespace | Purpose |
 |-------|-----------|---------|
-| **Porcelain** | `Temporal\` | PHP-native API with strict types, backed enums, and named arguments |
-| **Spec** | `Temporal\Spec\` | TC39-faithful implementation, validated by 6600+ test262 scripts |
+| **Porcelain** | `Calendrics\` | PHP-native API with strict types, backed enums, and named arguments |
+| **Spec** | `Calendrics\Spec\` | TC39-faithful implementation, validated by 6600+ test262 scripts |
 
 Most application code should use the porcelain layer. The spec layer is a fully supported alternative when you need TC39-faithful semantics — for example, producing output that matches JavaScript Temporal byte-for-byte. Both layers are covered by the [Backwards Compatibility Promise](#versioning-and-backwards-compatibility).
 
 ### Deliberate deviations from TC39
 
-The porcelain layer adapts TC39 semantics to PHP-native conventions rather than mirroring the JavaScript API shape 1:1. The spec layer (`Temporal\Spec\`) remains TC39-faithful for anyone needing that, with one small exception (see `valueOf()` below).
+The porcelain layer adapts TC39 semantics to PHP-native conventions rather than mirroring the JavaScript API shape 1:1. The spec layer (`Calendrics\Spec\`) remains TC39-faithful for anyone needing that, with one small exception (see `valueOf()` below).
 
 Notable differences:
 
@@ -50,11 +50,11 @@ Notable differences:
 A calendar date without time or time zone.
 
 ```php
-use Temporal\PlainDate;
-use Temporal\Calendar;
-use Temporal\Duration;
-use Temporal\Overflow;
-use Temporal\Unit;
+use Calendrics\PlainDate;
+use Calendrics\Calendar;
+use Calendrics\Duration;
+use Calendrics\Overflow;
+use Calendrics\Unit;
 
 $date = new PlainDate(2024, 3, 15);
 $date = PlainDate::parse('2024-03-15');
@@ -124,10 +124,10 @@ echo json_encode($date);  // '"2024-03-15"'
 A wall-clock time without date or time zone.
 
 ```php
-use Temporal\PlainTime;
-use Temporal\Duration;
-use Temporal\Unit;
-use Temporal\RoundingMode;
+use Calendrics\PlainTime;
+use Calendrics\Duration;
+use Calendrics\Unit;
+use Calendrics\RoundingMode;
 
 $time = new PlainTime(9, 30);
 $time = PlainTime::parse('09:30:00.123456789');
@@ -164,10 +164,10 @@ echo $time;  // '09:30:00'
 A date and time without time zone.
 
 ```php
-use Temporal\PlainDateTime;
-use Temporal\PlainTime;
-use Temporal\Duration;
-use Temporal\Disambiguation;
+use Calendrics\PlainDateTime;
+use Calendrics\PlainTime;
+use Calendrics\Duration;
+use Calendrics\Disambiguation;
 
 $dt = new PlainDateTime(2024, 3, 15, 9, 30);
 $dt = PlainDateTime::parse('2024-03-15T09:30:00');
@@ -200,9 +200,9 @@ echo $dt;  // '2024-03-15T09:30:00'
 A fixed point in time with nanosecond precision (~1677-2262).
 
 ```php
-use Temporal\Instant;
-use Temporal\Duration;
-use Temporal\Unit;
+use Calendrics\Instant;
+use Calendrics\Duration;
+use Calendrics\Unit;
 
 $instant = Instant::parse('2020-01-01T12:00:00Z');
 $instant = Instant::fromEpochMilliseconds(1_577_880_000_000);
@@ -231,11 +231,11 @@ echo $instant;  // '2020-01-01T12:00:00Z'
 A date and time bound to a specific time zone.
 
 ```php
-use Temporal\ZonedDateTime;
-use Temporal\Duration;
-use Temporal\Disambiguation;
-use Temporal\OffsetOption;
-use Temporal\TransitionDirection;
+use Calendrics\ZonedDateTime;
+use Calendrics\Duration;
+use Calendrics\Disambiguation;
+use Calendrics\OffsetOption;
+use Calendrics\TransitionDirection;
 
 $zdt = new ZonedDateTime(epochNanoseconds: 0, timeZoneId: 'UTC');
 $zdt = ZonedDateTime::parse(
@@ -280,9 +280,9 @@ echo $zdt;  // '2024-03-15T09:30:00+01:00[Europe/Berlin]'
 An ISO 8601 duration with 10 fields, all strict `int`.
 
 ```php
-use Temporal\Duration;
-use Temporal\Unit;
-use Temporal\RoundingMode;
+use Calendrics\Duration;
+use Calendrics\Unit;
+use Calendrics\RoundingMode;
 
 $d = new Duration(years: 1, months: 6, days: 15);
 $d = Duration::parse('P1Y6M15DT2H30M');
@@ -328,7 +328,7 @@ echo $d;  // 'P1Y6M15DT2H30M'
 A year and month without a day.
 
 ```php
-use Temporal\PlainYearMonth;
+use Calendrics\PlainYearMonth;
 
 $ym = new PlainYearMonth(2024, 3);
 $ym = PlainYearMonth::parse('2024-03');
@@ -346,7 +346,7 @@ $date = $ym->toPlainDate(day: 15);
 A month and day without a year (e.g., a birthday or anniversary).
 
 ```php
-use Temporal\PlainMonthDay;
+use Calendrics\PlainMonthDay;
 
 $md = new PlainMonthDay(12, 25);
 $md = PlainMonthDay::parse('--12-25');
@@ -359,7 +359,7 @@ $date = $md->toPlainDate(year: 2024);
 Current date and time. Static-only, not instantiable.
 
 ```php
-use Temporal\Now;
+use Calendrics\Now;
 
 $instant = Now::instant();
 $tzId    = Now::timeZoneId();             // e.g. 'Europe/Amsterdam'
@@ -375,8 +375,8 @@ $zdt     = Now::zonedDateTime();
 Full ECMA-402 multi-calendar support. The `Calendar` enum covers all 16 calendars defined by the spec:
 
 ```php
-use Temporal\PlainDate;
-use Temporal\Calendar;
+use Calendrics\PlainDate;
+use Calendrics\Calendar;
 
 // Project any date into a non-ISO calendar
 $date   = PlainDate::parse('2024-03-15');
@@ -406,13 +406,13 @@ Available calendars: `Iso8601`, `Buddhist`, `Chinese`, `Coptic`, `Dangi`, `Ethio
 `toLocaleString()` renders a value the way a human in a given locale would write it, via ICU. It is available on `PlainDate`, `PlainDateTime`, `PlainTime`, `PlainYearMonth`, `PlainMonthDay`, `Instant`, and `ZonedDateTime`.
 
 ```php
-use Temporal\PlainDate;
-use Temporal\ZonedDateTime;
-use Temporal\FormatStyle;
-use Temporal\MonthWidth;
-use Temporal\NumberWidth;
-use Temporal\TextWidth;
-use Temporal\TimeZoneNameStyle;
+use Calendrics\PlainDate;
+use Calendrics\ZonedDateTime;
+use Calendrics\FormatStyle;
+use Calendrics\MonthWidth;
+use Calendrics\NumberWidth;
+use Calendrics\TextWidth;
+use Calendrics\TimeZoneNameStyle;
 
 $date = PlainDate::parse('2020-06-15');
 
@@ -438,13 +438,13 @@ $zdt->toLocaleString('de-AT', timeZoneName: TimeZoneNameStyle::LongGeneric);
 
 Unlike ECMA-402's untyped options bag, each type exposes only the options that mean something for it, so the compiler rejects the rest: a `PlainDate` has no `timeStyle`, a `PlainTime` has no `dateStyle`, a `PlainYearMonth` has no `day`. `hour12` and `hourCycle` are collapsed into a single `HourCycle` enum, since the two overlap and can contradict each other.
 
-A style option selects a locale-provided pattern as a whole, so combining `dateStyle`/`timeStyle` with an individual component option throws `Temporal\Exception\TypeError`.
+A style option selects a locale-provided pattern as a whole, so combining `dateStyle`/`timeStyle` with an individual component option throws `Calendrics\Exception\TypeError`.
 
 **Calendars.** The formatter's calendar comes from the locale (`th-TH` → `buddhist`) unless you pass `calendar:` explicitly, and per ECMA-402 it must agree with the value's own calendar:
 
 ```php
-use Temporal\Calendar;
-use Temporal\PlainYearMonth;
+use Calendrics\Calendar;
+use Calendrics\PlainYearMonth;
 
 // An ISO date is unambiguous, so it projects into the formatter's calendar
 PlainDate::parse('2020-06-15')->toLocaleString('th-TH');            // '15/6/2563' (Buddhist)
@@ -487,7 +487,7 @@ All option strings are replaced by backed enums:
 Every porcelain class has `toSpec()` and `fromSpec()` for dropping to the TC39-faithful layer when needed:
 
 ```php
-$specDate = $date->toSpec();            // Temporal\Spec\PlainDate
+$specDate = $date->toSpec();            // Calendrics\Spec\PlainDate
 $date     = PlainDate::fromSpec($spec); // back to porcelain
 ```
 
@@ -499,11 +499,11 @@ This project follows [Semantic Versioning](https://semver.org). Until 1.0.0 the 
 
 From 1.0.0 onward, both API layers are supported under the same contract:
 
-- **Porcelain (`Temporal\`)** — public methods, property names and types, enum cases, and constructor parameters are stable within a major version.
-- **Spec (`Temporal\Spec\`)** — same contract as porcelain. This layer tracks the TC39 Temporal specification; if an upstream Stage 4 change alters observable semantics, that change ships only in a major version of this library.
+- **Porcelain (`Calendrics\`)** — public methods, property names and types, enum cases, and constructor parameters are stable within a major version.
+- **Spec (`Calendrics\Spec\`)** — same contract as porcelain. This layer tracks the TC39 Temporal specification; if an upstream Stage 4 change alters observable semantics, that change ships only in a major version of this library.
 - **Seam** — for every porcelain class, `X::fromSpec($x->toSpec())` equals `$x` within a major version. You can move values between layers without lossy conversion.
-- **Exceptions (`Temporal\Exception\`)** — every porcelain throw is a `Temporal\Exception\TemporalException` (marker interface) and also extends a stable SPL parent (e.g. `Temporal\Exception\InvalidArgument extends \InvalidArgumentException`). The marker interface and the SPL parent of each concrete exception class are stable within a major version, so both `catch (TemporalException)` and `catch (\InvalidArgumentException)` keep working. The spec layer throws through the same hierarchy; the only remaining bare SPL throws are internal invariant guards in `Temporal\Spec\Internal\`, which are not reachable through the public API.
-- **Internal (`Temporal\Spec\Internal\`)** — genuine implementation detail (calendar bridges, serde, arithmetic helpers). May change at any time without a major version bump. Do not import from it.
+- **Exceptions (`Calendrics\Exception\`)** — every porcelain throw is a `Calendrics\Exception\CalendricsException` (marker interface) and also extends a stable SPL parent (e.g. `Calendrics\Exception\InvalidArgument extends \InvalidArgumentException`). The marker interface and the SPL parent of each concrete exception class are stable within a major version, so both `catch (CalendricsException)` and `catch (\InvalidArgumentException)` keep working. The spec layer throws through the same hierarchy; the only remaining bare SPL throws are internal invariant guards in `Calendrics\Spec\Internal\`, which are not reachable through the public API.
+- **Internal (`Calendrics\Spec\Internal\`)** — genuine implementation detail (calendar bridges, serde, arithmetic helpers). May change at any time without a major version bump. Do not import from it.
 
 Bug fixes that correct incorrect output are not breaking changes, even when an observed value changes. Deprecations are announced in the changelog at least one minor version before removal and marked with `@deprecated`.
 

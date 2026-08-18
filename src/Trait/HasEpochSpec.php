@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Trait;
+namespace Calendrics\Trait;
 
-use Temporal\Spec\Instant as SpecInstant;
-use Temporal\Spec\ZonedDateTime as SpecZonedDateTime;
+use Calendrics\Spec\Instant as SpecInstant;
+use Calendrics\Spec\ZonedDateTime as SpecZonedDateTime;
 
 /**
  * Marker interface declaring that a class exposes a `$spec` property whose

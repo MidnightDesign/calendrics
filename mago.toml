@@ -35,7 +35,7 @@ threshold = 35
 # (just under 250), from the TC39 construction/parse/compare matrix that remains after
 # its engines moved out. Duration, ZonedDateTime and PlainDateTime all used to sit far
 # above this and were brought under it by moving their engines into
-# Temporal\Spec\Internal\ collaborators — so treat this as a ratchet, not a ceiling:
+# Calendrics\Spec\Internal\ collaborators — so treat this as a ratchet, not a ceiling:
 # it should only ever move down.
 [linter.rules.cyclomatic-complexity]
 level = "warning"
@@ -58,7 +58,7 @@ level = "warning"
 threshold = 16
 
 # Halstead volumes/effort are dominated by the TC39 parsing, add/subtract, and
-# round/diff algorithms in PlainDateTime and in the Temporal\Spec\Internal\
+# round/diff algorithms in PlainDateTime and in the Calendrics\Spec\Internal\
 # collaborators, which must handle all 10 duration fields × 9 rounding modes ×
 # signed paths in one call.
 # Thresholds are sized to accommodate spec-level algorithms without masking

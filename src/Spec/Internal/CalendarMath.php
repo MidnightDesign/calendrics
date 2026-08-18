@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\Calendar\CalendarFactory;
-use Temporal\Spec\Internal\Calendar\CalendarProtocol;
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\Calendar\CalendarProtocol;
 
 /** @internal */
 final class CalendarMath
@@ -130,7 +130,7 @@ final class CalendarMath
             return (int) $floatVal;
         }
         // Stringable: cast to string then re-run the numeric checks. The JsSymbol
-        // sentinel's __toString throws Temporal\Exception\TypeError here, while a
+        // sentinel's __toString throws Calendrics\Exception\TypeError here, while a
         // plain stdClass (not Stringable) falls through to RangeError below.
         if ($value instanceof \Stringable) {
             $str = (string) $value;
@@ -424,7 +424,7 @@ final class CalendarMath
     {
         if (!is_int($value) && !is_float($value) && !is_string($value) && !is_bool($value)) {
             // Stringable: cast to string so the JsSymbol sentinel's __toString
-            // raises Temporal\Exception\TypeError; everything else => RangeError.
+            // raises Calendrics\Exception\TypeError; everything else => RangeError.
             if ($value instanceof \Stringable) {
                 $value = (string) $value;
             } else {

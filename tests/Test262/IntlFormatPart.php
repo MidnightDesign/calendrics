@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262;
+namespace Calendrics\Tests\Test262;
 
 /**
  * One element of {@see IntlDateTimeFormat::formatToParts()}'s result — the PHP

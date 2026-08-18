@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Exception\RangeError;
+use Calendrics\Exception\RangeError;
 
 /**
  * Internal helpers for timezone identifier normalization and wall-clock-to-epoch
  * resolution shared between ZonedDateTime, PlainDate, PlainDateTime, Instant, and
  * Duration.
  *
- * This class lives in `Temporal\Spec\Internal\` and is therefore not part of the
+ * This class lives in `Calendrics\Spec\Internal\` and is therefore not part of the
  * public BC contract. Signatures, behavior, and existence may change between
  * any two releases. External code must not depend on it.
  */

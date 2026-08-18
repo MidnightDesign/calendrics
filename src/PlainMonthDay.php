@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
-use Temporal\Spec\PlainMonthDay as SpecPlainMonthDay;
-use Temporal\Trait\HasLocalizedFormatting;
+use Calendrics\Spec\PlainMonthDay as SpecPlainMonthDay;
+use Calendrics\Trait\HasLocalizedFormatting;
 
 /**
  * A calendar month-day without a year, time, or time zone.
@@ -71,7 +71,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * @param int<1, 31> $isoDay          ISO day of the month (1–31, depending on month).
      * @param Calendar   $calendar        Calendar system (default ISO 8601).
      * @param int        $referenceISOYear Reference ISO year for round-trip fidelity (default 1972).
-     * @throws \Temporal\Exception\RangeError if the month-day is invalid or out of range.
+     * @throws \Calendrics\Exception\RangeError if the month-day is invalid or out of range.
      */
     public function __construct(
         int $isoMonth,
@@ -139,7 +139,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      *
      * @param string $text ISO 8601 month-day string (e.g. "--12-25" or "12-25").
      * @return self
-     * @throws \Temporal\Exception\RangeError if the string cannot be parsed.
+     * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
      */
     public static function parse(string $text): self
     {
@@ -159,7 +159,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * @param int<1, 31>|null $day       Day override, or null to keep current.
      * @param Overflow        $overflow  How to handle out-of-range values.
      * @return self A new PlainMonthDay with the overridden fields.
-     * @throws \Temporal\Exception\RangeError if the resulting month-day is invalid (overflow: reject) or fields conflict.
+     * @throws \Calendrics\Exception\RangeError if the resulting month-day is invalid (overflow: reject) or fields conflict.
      */
     public function with(
         ?int $month = null,
@@ -231,8 +231,8 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * @param NumberWidth|null $day
      * @param Calendar|null    $calendar  Calendar to render in; null keeps the locale's own calendar.
      * @return string
-     * @throws \Temporal\Exception\TypeError if `dateStyle` is combined with a component option.
-     * @throws \Temporal\Exception\RangeError if this value's calendar differs from the resolved
+     * @throws \Calendrics\Exception\TypeError if `dateStyle` is combined with a component option.
+     * @throws \Calendrics\Exception\RangeError if this value's calendar differs from the resolved
      *                                        formatter's.
      */
     public function toLocaleString(
@@ -257,7 +257,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      *
      * @param int $year The year to combine with this month-day.
      * @return PlainDate
-     * @throws \Temporal\Exception\RangeError if the resulting date is invalid.
+     * @throws \Calendrics\Exception\RangeError if the resulting date is invalid.
      */
     public function toPlainDate(int $year): PlainDate
     {

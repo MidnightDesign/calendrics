@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262;
+namespace Calendrics\Tests\Test262;
 
 use PHPUnit\Framework\Assert as PHPUnitAssert;
 use PHPUnit\Framework\AssertionFailedError;
@@ -231,7 +231,7 @@ final class Assert
      * "does this class member have the shape test262's prop-desc / verifyProperty
      * expects?" via reflection.
      *
-     * @param class-string $fqcn Fully-qualified spec class name (e.g. \Temporal\Spec\PlainDate).
+     * @param class-string $fqcn Fully-qualified spec class name (e.g. \Calendrics\Spec\PlainDate).
      * @param string       $prop Property name.
      */
     public static function readOnlyAccessor(string $fqcn, string $prop): void

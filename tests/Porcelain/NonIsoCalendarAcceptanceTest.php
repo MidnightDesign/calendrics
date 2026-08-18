@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Spec\Duration;
+use Calendrics\Spec\PlainDate;
+use Calendrics\Spec\PlainDateTime;
+use Calendrics\Spec\PlainMonthDay;
+use Calendrics\Spec\PlainYearMonth;
+use Calendrics\Spec\ZonedDateTime;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Temporal\Exception\RangeError;
-use Temporal\Spec\Duration;
-use Temporal\Spec\PlainDate;
-use Temporal\Spec\PlainDateTime;
-use Temporal\Spec\PlainMonthDay;
-use Temporal\Spec\PlainYearMonth;
-use Temporal\Spec\ZonedDateTime;
 
 /**
  * Verifies that all Temporal types accept known non-ISO calendar IDs
@@ -368,21 +368,21 @@ final class NonIsoCalendarAcceptanceTest extends TestCase
 
     public function testValidateAnnotationsReturnsCalendarId(): void
     {
-        $result = \Temporal\Spec\Internal\CalendarMath::validateAnnotations('[u-ca=hebrew]', 'test');
+        $result = \Calendrics\Spec\Internal\CalendarMath::validateAnnotations('[u-ca=hebrew]', 'test');
 
         static::assertSame('hebrew', $result);
     }
 
     public function testValidateAnnotationsReturnsNullWhenNoCalendar(): void
     {
-        $result = \Temporal\Spec\Internal\CalendarMath::validateAnnotations('[America/New_York]', 'test');
+        $result = \Calendrics\Spec\Internal\CalendarMath::validateAnnotations('[America/New_York]', 'test');
 
         static::assertNull($result);
     }
 
     public function testValidateAnnotationsReturnsNullForEmptySection(): void
     {
-        $result = \Temporal\Spec\Internal\CalendarMath::validateAnnotations('', 'test');
+        $result = \Calendrics\Spec\Internal\CalendarMath::validateAnnotations('', 'test');
 
         static::assertNull($result);
     }
@@ -391,13 +391,13 @@ final class NonIsoCalendarAcceptanceTest extends TestCase
     {
         $this->expectException(RangeError::class);
         $this->expectExceptionMessage('Unknown calendar');
-        \Temporal\Spec\Internal\CalendarMath::validateAnnotations('[u-ca=bogus]', 'test');
+        \Calendrics\Spec\Internal\CalendarMath::validateAnnotations('[u-ca=bogus]', 'test');
     }
 
     public function testValidateAnnotationsSkipsCalendarCheckWhenDisabled(): void
     {
         // With checkCalendar=false, unknown calendars should be silently ignored
-        $result = \Temporal\Spec\Internal\CalendarMath::validateAnnotations('[u-ca=anything]', 'test', false);
+        $result = \Calendrics\Spec\Internal\CalendarMath::validateAnnotations('[u-ca=anything]', 'test', false);
 
         static::assertNull($result);
     }
@@ -408,14 +408,14 @@ final class NonIsoCalendarAcceptanceTest extends TestCase
 
     public function testExtractCalendarFromStringAcceptsKnownCalendar(): void
     {
-        $result = \Temporal\Spec\Internal\Calendar\CalendarFactory::extractCalendarFromString('hebrew');
+        $result = \Calendrics\Spec\Internal\Calendar\CalendarFactory::extractCalendarFromString('hebrew');
 
         static::assertSame('hebrew', $result);
     }
 
     public function testExtractCalendarFromStringAcceptsAnnotation(): void
     {
-        $result = \Temporal\Spec\Internal\Calendar\CalendarFactory::extractCalendarFromString(
+        $result = \Calendrics\Spec\Internal\Calendar\CalendarFactory::extractCalendarFromString(
             '2024-01-15[u-ca=japanese]',
         );
 
@@ -425,7 +425,7 @@ final class NonIsoCalendarAcceptanceTest extends TestCase
     public function testExtractCalendarFromStringRejectsUnknownCalendar(): void
     {
         $this->expectException(RangeError::class);
-        \Temporal\Spec\Internal\Calendar\CalendarFactory::extractCalendarFromString('nonsense');
+        \Calendrics\Spec\Internal\Calendar\CalendarFactory::extractCalendarFromString('nonsense');
     }
 
     // -------------------------------------------------------------------------

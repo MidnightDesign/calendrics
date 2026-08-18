@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262;
+namespace Calendrics\Tests\Test262;
 
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Instant;
-use Temporal\Spec\Internal\IntlFormatter;
-use Temporal\Spec\PlainDate;
-use Temporal\Spec\PlainDateTime;
-use Temporal\Spec\PlainMonthDay;
-use Temporal\Spec\PlainTime;
-use Temporal\Spec\PlainYearMonth;
-use Temporal\Spec\ZonedDateTime;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Instant;
+use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\PlainDate;
+use Calendrics\Spec\PlainDateTime;
+use Calendrics\Spec\PlainMonthDay;
+use Calendrics\Spec\PlainTime;
+use Calendrics\Spec\PlainYearMonth;
+use Calendrics\Spec\ZonedDateTime;
 
 /**
  * Test-harness stand-in for the ECMA-402 `Intl.DateTimeFormat` object, scoped to

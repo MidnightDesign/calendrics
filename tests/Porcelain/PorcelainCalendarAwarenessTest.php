@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
+use Calendrics\Calendar;
+use Calendrics\Duration;
+use Calendrics\PlainDate;
+use Calendrics\PlainDateTime;
+use Calendrics\PlainMonthDay;
+use Calendrics\PlainYearMonth;
+use Calendrics\Unit;
+use Calendrics\ZonedDateTime;
 use PHPUnit\Framework\TestCase;
-use Temporal\Calendar;
-use Temporal\Duration;
-use Temporal\PlainDate;
-use Temporal\PlainDateTime;
-use Temporal\PlainMonthDay;
-use Temporal\PlainYearMonth;
-use Temporal\Unit;
-use Temporal\ZonedDateTime;
 
 /**
  * Tests that the porcelain layer correctly preserves and exposes calendar IDs
@@ -60,7 +60,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testPlainDateFromSpecPreservesCalendar(): void
     {
-        $spec = new \Temporal\Spec\PlainDate(2024, 1, 15, 'hebrew');
+        $spec = new \Calendrics\Spec\PlainDate(2024, 1, 15, 'hebrew');
         $pd = PlainDate::fromSpec($spec);
 
         static::assertSame(Calendar::Hebrew, $pd->calendar);
@@ -73,7 +73,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
     public function testPlainDateFromSpecDoesNotCorruptNonIsoCalendar(): void
     {
         // Create a spec PlainDate with hebrew calendar
-        $spec1 = new \Temporal\Spec\PlainDate(2024, 1, 15, 'hebrew');
+        $spec1 = new \Calendrics\Spec\PlainDate(2024, 1, 15, 'hebrew');
         $pd = PlainDate::fromSpec($spec1);
 
         // Round-trip: fromSpec -> toSpec -> fromSpec
@@ -191,7 +191,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testPlainDateTimeFromSpecPreservesCalendar(): void
     {
-        $spec = new \Temporal\Spec\PlainDateTime(2024, 1, 15, 10, 30, 0, 0, 0, 0, 'japanese');
+        $spec = new \Calendrics\Spec\PlainDateTime(2024, 1, 15, 10, 30, 0, 0, 0, 0, 'japanese');
         $pdt = PlainDateTime::fromSpec($spec);
 
         static::assertSame(Calendar::Japanese, $pdt->calendar);
@@ -202,7 +202,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testPlainDateTimeFromSpecDoesNotCorruptNonIso(): void
     {
-        $spec1 = new \Temporal\Spec\PlainDateTime(2024, 1, 15, 12, 0, 0, 0, 0, 0, 'persian');
+        $spec1 = new \Calendrics\Spec\PlainDateTime(2024, 1, 15, 12, 0, 0, 0, 0, 0, 'persian');
         $pdt = PlainDateTime::fromSpec($spec1);
 
         // Round-trip
@@ -266,7 +266,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testPlainYearMonthFromSpecPreservesCalendar(): void
     {
-        $spec = new \Temporal\Spec\PlainYearMonth(2024, 6, 'buddhist');
+        $spec = new \Calendrics\Spec\PlainYearMonth(2024, 6, 'buddhist');
         $pym = PlainYearMonth::fromSpec($spec);
 
         static::assertSame(Calendar::Buddhist, $pym->calendar);
@@ -276,7 +276,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testPlainYearMonthFromSpecPreservesReferenceDay(): void
     {
-        $spec = new \Temporal\Spec\PlainYearMonth(2024, 3, 'iso8601', 15);
+        $spec = new \Calendrics\Spec\PlainYearMonth(2024, 3, 'iso8601', 15);
         $pym = PlainYearMonth::fromSpec($spec);
 
         static::assertSame(15, $pym->toSpec()->referenceISODay);
@@ -284,7 +284,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testPlainYearMonthFromSpecDoesNotCorruptNonIso(): void
     {
-        $spec1 = new \Temporal\Spec\PlainYearMonth(2024, 6, 'gregory');
+        $spec1 = new \Calendrics\Spec\PlainYearMonth(2024, 6, 'gregory');
         $pym = PlainYearMonth::fromSpec($spec1);
         $spec2 = $pym->toSpec();
         $pym2 = PlainYearMonth::fromSpec($spec2);
@@ -329,7 +329,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testPlainMonthDayFromSpecPreservesCalendar(): void
     {
-        $spec = new \Temporal\Spec\PlainMonthDay(3, 15, 'coptic');
+        $spec = new \Calendrics\Spec\PlainMonthDay(3, 15, 'coptic');
         $pmd = PlainMonthDay::fromSpec($spec);
 
         static::assertSame(Calendar::Coptic, $pmd->calendar);
@@ -339,7 +339,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testPlainMonthDayFromSpecPreservesReferenceYear(): void
     {
-        $spec = new \Temporal\Spec\PlainMonthDay(6, 15, 'iso8601', 2000);
+        $spec = new \Calendrics\Spec\PlainMonthDay(6, 15, 'iso8601', 2000);
         $pmd = PlainMonthDay::fromSpec($spec);
 
         static::assertSame(2000, $pmd->toSpec()->referenceISOYear);
@@ -347,7 +347,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testPlainMonthDayFromSpecDoesNotCorruptNonIso(): void
     {
-        $spec1 = new \Temporal\Spec\PlainMonthDay(3, 15, 'indian');
+        $spec1 = new \Calendrics\Spec\PlainMonthDay(3, 15, 'indian');
         $pmd = PlainMonthDay::fromSpec($spec1);
         $spec2 = $pmd->toSpec();
         $pmd2 = PlainMonthDay::fromSpec($spec2);
@@ -384,7 +384,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testZonedDateTimeFromSpecPreservesCalendar(): void
     {
-        $spec = new \Temporal\Spec\ZonedDateTime(0, 'UTC', 'gregory');
+        $spec = new \Calendrics\Spec\ZonedDateTime(0, 'UTC', 'gregory');
         $zdt = ZonedDateTime::fromSpec($spec);
 
         static::assertSame(Calendar::Gregory, $zdt->calendar);
@@ -392,7 +392,7 @@ final class PorcelainCalendarAwarenessTest extends TestCase
 
     public function testZonedDateTimeFromSpecDoesNotCorruptCalendar(): void
     {
-        $spec1 = new \Temporal\Spec\ZonedDateTime(0, 'UTC', 'japanese');
+        $spec1 = new \Calendrics\Spec\ZonedDateTime(0, 'UTC', 'japanese');
         $zdt = ZonedDateTime::fromSpec($spec1);
         $spec2 = $zdt->toSpec();
         $zdt2 = ZonedDateTime::fromSpec($spec2);

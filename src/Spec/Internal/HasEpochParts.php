@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
 /**
  * Backing storage and accessors for the over-int64 instant representation shared by
- * {@see \Temporal\Spec\Instant} and {@see \Temporal\Spec\ZonedDateTime}.
+ * {@see \Calendrics\Spec\Instant} and {@see \Calendrics\Spec\ZonedDateTime}.
  *
  * Both classes carry the same instant as a triple — the public {@see $epochNanoseconds}
  * field (clamped to a PHP_INT_MIN/MAX sentinel once the true value overflows int64) plus
@@ -27,7 +27,7 @@ namespace Temporal\Spec\Internal;
  * never a hand-built triple.
  *
  * @internal
- * @psalm-internal Temporal\Spec
+ * @psalm-internal Calendrics\Spec
  */
 trait HasEpochParts
 {
