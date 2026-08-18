@@ -821,14 +821,18 @@ final class PlainDate implements Stringable
     /**
      * Returns a new PlainDate with the specified calendar.
      *
-     * Accepts a bare calendar ID or an ISO date string from which the calendar is extracted.
+     * Per TC39 ToTemporalCalendarIdentifier, $calendar may be:
+     *   - A bare calendar ID, or an ISO date string from which the calendar is extracted.
+     *   - A Temporal date-bearing object (PlainDate, PlainDateTime, PlainMonthDay,
+     *     PlainYearMonth, ZonedDateTime) whose `calendarId` slot is read directly.
      *
+     * @throws TypeError if $calendar is neither a string nor a calendar-bearing Temporal object.
      * @throws RangeError if the calendar is unsupported.
      * @psalm-api
      */
-    public function withCalendar(string $calendar): self
+    public function withCalendar(mixed $calendar): self
     {
-        $calId = CalendarFactory::extractCalendarFromString($calendar);
+        $calId = CalendarFactory::resolveBagCalendar($calendar, 'PlainDate');
         return new self($this->isoYear, $this->isoMonth, $this->isoDay, $calId);
     }
 
