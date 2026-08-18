@@ -1,6 +1,6 @@
-# calendrics
+# calendrics — TC39 Temporal API for PHP
 
-A PHP 8.4 implementation of the [TC39 Temporal API](https://tc39.es/proposal-temporal/).
+A PHP 8.4 implementation of the [TC39 Temporal API](https://tc39.es/proposal-temporal/): immutable dates, times, durations, time zones, and non-ISO calendars.
 
 Temporal is the modern replacement for JavaScript's `Date`, providing a precise, unambiguous date/time API. This library brings those semantics to PHP with full nanosecond precision, strict types, backed enums, and named arguments.
 

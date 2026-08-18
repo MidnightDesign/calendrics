@@ -1,8 +1,31 @@
 {
     "name": "midnight/calendrics",
-    "description": "PHP implementation of the TC39 Temporal API",
+    "description": "TC39 Temporal API for PHP — immutable dates, times, durations, and time zones with nanosecond precision",
     "type": "library",
+    "keywords": [
+        "temporal",
+        "tc39",
+        "datetime",
+        "date",
+        "time",
+        "timezone",
+        "calendar",
+        "duration",
+        "iso8601",
+        "nanosecond"
+    ],
+    "homepage": "https://github.com/MidnightDesign/calendrics",
     "license": "MIT",
+    "authors": [
+        {
+            "name": "Rudolph Gottesheim",
+            "email": "r.gottesheim@midnight-design.at"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/MidnightDesign/calendrics/issues",
+        "source": "https://github.com/MidnightDesign/calendrics"
+    },
     "require": {
         "php": ">=8.4",
         "ext-intl": "*"
