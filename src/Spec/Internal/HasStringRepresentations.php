@@ -7,7 +7,7 @@ namespace Calendrics\Spec\Internal;
 use Calendrics\Exception\TypeError;
 
 /** @internal */
-trait TemporalSerde
+trait HasStringRepresentations
 {
     abstract public function toString(): string;
 

@@ -10,9 +10,9 @@ use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\IsoFraction;
 use Calendrics\Spec\Internal\Options;
-use Calendrics\Spec\Internal\TemporalSerde;
 use Stringable;
 
 /**
@@ -25,7 +25,7 @@ use Stringable;
  */
 final class PlainTime implements Stringable
 {
-    use TemporalSerde;
+    use HasStringRepresentations;
 
     /**
      * The fields a PlainTime is built from. A time carries no calendar, so this list is

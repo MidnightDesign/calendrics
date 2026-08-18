@@ -9,9 +9,9 @@ use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
-use Calendrics\Spec\Internal\TemporalSerde;
 use Stringable;
 
 /**
@@ -24,7 +24,7 @@ use Stringable;
  */
 final class PlainMonthDay implements Stringable
 {
-    use TemporalSerde;
+    use HasStringRepresentations;
 
     /**
      * The calendar fields a PlainMonthDay is built from, as passed to

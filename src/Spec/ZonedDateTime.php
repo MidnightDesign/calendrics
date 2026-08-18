@@ -13,9 +13,9 @@ use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\EpochValue;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasEpochParts;
+use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\IntlFormatter;
 use Calendrics\Spec\Internal\Options;
-use Calendrics\Spec\Internal\TemporalSerde;
 use Calendrics\Spec\Internal\TimeZoneHelper;
 use Calendrics\Spec\Internal\ZonedArithmetic;
 use Calendrics\Spec\Internal\ZonedDifference;
@@ -38,7 +38,7 @@ use Stringable;
 final class ZonedDateTime implements Stringable
 {
     use HasEpochParts;
-    use TemporalSerde;
+    use HasStringRepresentations;
 
     private const int MS_PER_SECOND = 1_000;
 

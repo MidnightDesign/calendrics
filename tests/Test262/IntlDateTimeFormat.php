@@ -180,7 +180,7 @@ final class IntlDateTimeFormat
             \assert(is_string($components));
             $timestamp = new \ReflectionMethod($value, 'toLocaleTimestamp')->invoke($value);
             \assert(is_int($timestamp) || is_float($timestamp));
-            // Plain types always format in UTC (see TemporalSerde::toLocaleString).
+            // Plain types always format in UTC (see HasStringRepresentations::toLocaleString).
             return [IntlFormatter::buildIntlFormatter($locale, 'UTC', $opts, $components), (float) $timestamp];
         }
 
