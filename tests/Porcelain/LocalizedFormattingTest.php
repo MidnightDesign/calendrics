@@ -422,6 +422,38 @@ final class LocalizedFormattingTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // hourCycle across the locale dialects ICU accepts
+    // -------------------------------------------------------------------------
+
+    /** @return iterable<string, array{string, Calendar|null}> */
+    public static function hourCycleLocaleCases(): iterable
+    {
+        yield 'bare locale' => [self::LOCALE, null];
+        yield 'locale already carrying a -u- extension' => ['en-US-u-nu-latn', null];
+        yield 'calendar option, which ICU spells as an @keyword' => [self::LOCALE, Calendar::Hebrew];
+    }
+
+    /**
+     * Midnight is the hour the four cycles disagree about most: h11 renders it 0,
+     * h12 renders it 12, h23 renders it 00 and h24 renders it 24. Asking for all
+     * four and requiring four different answers is therefore enough to prove the
+     * cycle reached ICU — however the locale had to be spelled to carry it.
+     */
+    #[DataProvider('hourCycleLocaleCases')]
+    public function testHourCycleReachesIcuWhateverTheLocaleDialect(string $locale, ?Calendar $calendar): void
+    {
+        $midnight = new PlainDateTime(2020, 6, 15, 0, 30);
+
+        $rendered = array_map(static fn(HourCycle $hourCycle): string => $midnight->toLocaleString(
+            $locale,
+            hourCycle: $hourCycle,
+            calendar: $calendar,
+        ), HourCycle::cases());
+
+        static::assertSame($rendered, array_values(array_unique($rendered)));
+    }
+
+    // -------------------------------------------------------------------------
     // Locale resolution
     // -------------------------------------------------------------------------
 

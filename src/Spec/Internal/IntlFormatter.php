@@ -501,23 +501,22 @@ final class IntlFormatter
     }
 
     /**
-     * Appends a -u-hc-{hourCycle} extension to a BCP 47 locale string.
+     * Spells the hour cycle as a locale keyword, in the dialect $locale already uses.
+     *
+     * ICU reads a locale's keywords in one dialect at a time, so a BCP 47 `-u-`
+     * extension bolted onto a locale that carries a legacy `@keyword` section is
+     * dropped without complaint — `en-US-u-hc-h23@calendar=hebrew` formats in h12.
+     * The `@` case therefore has to extend the legacy keyword list instead, and it
+     * is reached whenever the `calendar` option is set, because that option is
+     * itself appended as `@calendar=`.
      */
     private static function applyHourCycle(string $locale, string $hourCycle): string
     {
-        // If there's already a -u- extension, append hc keyword
+        if (str_contains($locale, '@')) {
+            return sprintf('%s;hours=%s', $locale, $hourCycle);
+        }
         if (str_contains($locale, '-u-')) {
             return sprintf('%s-hc-%s', $locale, $hourCycle);
-        }
-        // If there's an @keyword section, insert before it
-        $atPos = strpos($locale, needle: '@');
-        if ($atPos !== false) {
-            return sprintf(
-                '%s-u-hc-%s%s',
-                substr($locale, offset: 0, length: $atPos),
-                $hourCycle,
-                substr($locale, $atPos),
-            );
         }
         return sprintf('%s-u-hc-%s', $locale, $hourCycle);
     }
