@@ -180,17 +180,6 @@ final class Duration implements Stringable
             if ($intSecFull > 9_007_199_254_740_991 || $intSecFull < -9_007_199_254_740_991) {
                 throw new RangeError('Duration time fields exceed the maximum representable range.');
             }
-            // At the exact boundary (effective seconds == MAX_SAFE_INT), the remaining
-            // sub-second nanoseconds must be < 1 s to stay within MaxTimeDuration.
-            if (abs($intSecFull) === 9_007_199_254_740_991) {
-                $remNs = $nanoseconds - ($carryNs * 1_000);
-                $remUs = $usEff - ($carryUs * 1_000);
-                $remMs = $msEff - ($carryMs * 1_000);
-                $remSubNs = ($remMs * 1_000_000) + ($remUs * 1_000) + $remNs;
-                if (abs($remSubNs) >= 1_000_000_000) {
-                    throw new RangeError('Duration time fields exceed the maximum representable range.');
-                }
-            }
         } else {
             // Float path: any field is a float (large µs/ns may exceed PHP int64).
             $MAX_SAFE_F = 9_007_199_254_740_992.0; // 2^53 exactly as float64
@@ -1344,9 +1333,6 @@ final class Duration implements Stringable
         $s2 = $d2->sign;
         if ($s1 !== $s2) {
             return $s1 <=> $s2;
-        }
-        if ($s1 === 0) {
-            return 0;
         }
         [$days1, $subNs1] = self::balanceToDayNs($d1);
         [$days2, $subNs2] = self::balanceToDayNs($d2);
