@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Calendrics\Tests\Spec;
 
 use Calendrics\Exception\RangeError;
+use Calendrics\Spec\Internal\IntlFormatter;
 use Calendrics\Spec\PlainDate;
 use Calendrics\Spec\ZonedDateTime;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -106,6 +107,10 @@ final class LocaleOptionValuesTest extends TestCase
      * GetOption stringifies before it compares, and nothing a number, a boolean or a
      * bare object stringifies to is ever a keyword.
      *
+     * A JS array is deliberately absent: `ToString(['long'])` is `'long'`, a member of
+     * the set, so the answer there turns on how faithfully a PHP array stands in for a
+     * JS one — a question this suite does not settle.
+     *
      * @return iterable<string, array{mixed}>
      */
     public static function nonStringValues(): iterable
@@ -114,7 +119,7 @@ final class LocaleOptionValuesTest extends TestCase
         yield 'float' => [2.0];
         yield 'true' => [true];
         yield 'false' => [false];
-        yield 'array' => [['long']];
+        yield 'object' => [new \stdClass()];
     }
 
     #[DataProvider('nonStringValues')]
@@ -140,6 +145,21 @@ final class LocaleOptionValuesTest extends TestCase
     {
         $this->expectException(RangeError::class);
         PlainDate::from('2020-06-15')->toLocaleString(self::LOCALE, ['weekday' => 'wide', 'timeStyle' => 'full']);
+    }
+
+    /**
+     * Every option `toLocaleString()` reads is either keyword-valued — and so listed
+     * above — or one of the four whose values have no fixed set. A new name in neither
+     * group has reached the formatter without anyone deciding how it is checked.
+     */
+    public function testEveryRecognizedOptionIsAccountedFor(): void
+    {
+        $noFixedValueSet = ['calendar', 'timeZone', 'hour12', 'fractionalSecondDigits'];
+
+        static::assertSame(
+            [],
+            array_values(array_diff(IntlFormatter::OPTION_NAMES, array_keys(self::keywordOptions()), $noFixedValueSet)),
+        );
     }
 
     private static function zoned(): ZonedDateTime

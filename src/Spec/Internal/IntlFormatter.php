@@ -113,7 +113,7 @@ final class IntlFormatter
     private const array HOUR_CYCLES = ['h11', 'h12', 'h23', 'h24'];
 
     /** The IntlDateFormatter constant each {@see self::FORMAT_STYLES} value selects. */
-    private const array STYLE_CONSTANTS = [
+    private const array FORMAT_STYLE_CONSTANTS = [
         'full' => \IntlDateFormatter::FULL,
         'long' => \IntlDateFormatter::LONG,
         'medium' => \IntlDateFormatter::MEDIUM,
@@ -241,9 +241,10 @@ final class IntlFormatter
      * the TypeErrors they raise for style conflicts and inapplicable styles, which
      * CreateDateTimeFormat only reaches after reading every component option.
      *
-     * Options with no fixed set are checked where they are consumed: `calendar` and
-     * `timeZone` by their own identifier lookups, `hour12` as a boolean, and
-     * `fractionalSecondDigits` as a number.
+     * Only options with a fixed value set are checked here. `calendar` and `timeZone`
+     * are identifiers, resolved by their own lookups; `hour12` is a boolean; and
+     * `fractionalSecondDigits` is a number, which ECMA-402 range-checks to 1-3 and
+     * this layer does not.
      *
      * @param array<string, mixed> $opts
      * @throws RangeError if any option carries a value outside its set.
@@ -404,7 +405,6 @@ final class IntlFormatter
 
         $timeZone = self::icuTimeZoneId($timeZone);
 
-        // Apply hourCycle as a locale keyword
         $hourCycle = self::checkedKeyword($opts, 'hourCycle', self::HOUR_CYCLES);
         if ($hourCycle !== null) {
             $locale = self::applyHourCycle($locale, $hourCycle);
@@ -439,8 +439,8 @@ final class IntlFormatter
         if ($dateStyle !== null || $timeStyle !== null) {
             self::validateStyleConflicts($opts);
 
-            $dateType = $dateStyle !== null ? self::STYLE_CONSTANTS[$dateStyle] : \IntlDateFormatter::NONE;
-            $timeType = $timeStyle !== null ? self::STYLE_CONSTANTS[$timeStyle] : \IntlDateFormatter::NONE;
+            $dateType = $dateStyle !== null ? self::FORMAT_STYLE_CONSTANTS[$dateStyle] : \IntlDateFormatter::NONE;
+            $timeType = $timeStyle !== null ? self::FORMAT_STYLE_CONSTANTS[$timeStyle] : \IntlDateFormatter::NONE;
 
             // For PlainYearMonth/PlainMonthDay, get the style pattern then strip
             // year or day components to avoid displaying them.

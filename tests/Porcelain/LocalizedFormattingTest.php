@@ -496,7 +496,7 @@ final class LocalizedFormattingTest extends TestCase
     #[DataProvider('everyOptionValueCases')]
     public function testEveryOptionValueRendersDistinctly(array $rendered): void
     {
-        static::assertSame($rendered, array_values(array_unique($rendered)));
+        self::assertAllDistinct($rendered);
     }
 
     // -------------------------------------------------------------------------
@@ -528,6 +528,12 @@ final class LocalizedFormattingTest extends TestCase
             calendar: $calendar,
         ), HourCycle::cases());
 
+        self::assertAllDistinct($rendered);
+    }
+
+    /** @param list<string> $rendered */
+    private static function assertAllDistinct(array $rendered): void
+    {
         static::assertSame($rendered, array_values(array_unique($rendered)));
     }
 
