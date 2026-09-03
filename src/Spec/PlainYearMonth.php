@@ -79,9 +79,7 @@ final class PlainYearMonth implements Stringable
      * @psalm-api
      */
     public int $year {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoYear
-            : CalendarFactory::get($this->calendarId)->year($this->isoYear, $this->isoMonth, $this->referenceISODay);
+        get => CalendarFactory::get($this->calendarId)->year($this->isoYear, $this->isoMonth, $this->referenceISODay);
     }
 
     /**
@@ -90,9 +88,7 @@ final class PlainYearMonth implements Stringable
      * @psalm-api
      */
     public int $month {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoMonth
-            : CalendarFactory::get($this->calendarId)->month($this->isoYear, $this->isoMonth, $this->referenceISODay);
+        get => CalendarFactory::get($this->calendarId)->month($this->isoYear, $this->isoMonth, $this->referenceISODay);
     }
 
     /**

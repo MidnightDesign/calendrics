@@ -73,9 +73,7 @@ final class ZonedDateTime implements Stringable
     public int $year {
         get {
             $c = $this->localComponents();
-            return $this->calendarId === 'iso8601'
-                ? $c['year']
-                : CalendarFactory::get($this->calendarId)->year($c['year'], $c['month'], $c['day']);
+            return CalendarFactory::get($this->calendarId)->year($c['year'], $c['month'], $c['day']);
         }
     }
 
@@ -88,9 +86,7 @@ final class ZonedDateTime implements Stringable
     public int $month {
         get {
             $c = $this->localComponents();
-            return $this->calendarId === 'iso8601'
-                ? $c['month']
-                : CalendarFactory::get($this->calendarId)->month($c['year'], $c['month'], $c['day']);
+            return CalendarFactory::get($this->calendarId)->month($c['year'], $c['month'], $c['day']);
         }
     }
 
@@ -103,9 +99,7 @@ final class ZonedDateTime implements Stringable
     public int $day {
         get {
             $c = $this->localComponents();
-            return $this->calendarId === 'iso8601'
-                ? $c['day']
-                : CalendarFactory::get($this->calendarId)->day($c['year'], $c['month'], $c['day']);
+            return CalendarFactory::get($this->calendarId)->day($c['year'], $c['month'], $c['day']);
         }
     }
 
@@ -271,9 +265,7 @@ final class ZonedDateTime implements Stringable
     public int $dayOfYear {
         get {
             $c = $this->localComponents();
-            return $this->calendarId === 'iso8601'
-                ? CalendarMath::calcDayOfYear($c['year'], $c['month'], $c['day'])
-                : CalendarFactory::get($this->calendarId)->dayOfYear($c['year'], $c['month'], $c['day']);
+            return CalendarFactory::get($this->calendarId)->dayOfYear($c['year'], $c['month'], $c['day']);
         }
     }
 
