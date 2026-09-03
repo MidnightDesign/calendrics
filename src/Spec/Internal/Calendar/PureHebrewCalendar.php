@@ -190,8 +190,8 @@ final class PureHebrewCalendar implements CalendarProtocol
             9 => 30, // Sivan
             10 => 29, // Tammuz
             11 => 30, // Av
-            12 => 29, // Elul
-            default => throw new RangeError("Invalid ordinal month {$ordinalMonth} for non-leap Hebrew year."),
+            // Elul (ordinal 12); the range check above rules out anything beyond it.
+            default => 29,
         };
         return self::$monthLengthCache[$key] = $v;
     }

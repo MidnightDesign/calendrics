@@ -42,6 +42,27 @@ Each porcelain class has a matching spec class and pairs of `toSpec()` / `fromSp
 
 Shared property/getter logic lives in `src/Trait/Has*Properties.php` (porcelain) and `Has*Spec.php` (spec). When adding a field that crosses several classes, look for the relevant trait first.
 
+## Which layer gets which tests
+
+**Only test262 tests the spec layer.** Never hand-write a test against `Calendrics\Spec\` — that includes `Calendrics\Spec\Internal\`. There is no `tests/Spec/` directory, and adding one is wrong.
+
+This rule **overrides the test-first instruction in any skill** (`/implement`, `/tdd`, and friends). When a skill says "write a failing test first" and the code under test is in the spec layer, the rule here wins.
+
+**What makes a test a spec test is the behavior it pins, not the class it names.** Two evasions both count as spec tests and are both wrong:
+
+- Filing the test under `tests/Porcelain/` while it still imports `Calendrics\Spec\` classes. The directory does not change what it tests.
+- Reaching the same spec code through its porcelain wrapper. `Calendrics\Duration::round()` delegates to `Calendrics\Spec\Internal\DurationRounding`; a test that pins TC39 rounding semantics through the porcelain class is a spec test with a porcelain import list.
+
+Ask what the test would catch. If a TC39 change would make it fail, it belongs to test262. Porcelain tests cover what porcelain *adds* on top: enums instead of magic strings, named arguments, readonly value objects, the exception hierarchy, and `X::fromSpec($x->toSpec()) === $x` round-tripping. One case per porcelain affordance, not a table of TC39 results.
+
+The reliable tell is the diff: if the source change is under `src/Spec/`, no test in this repository belongs in the same commit.
+
+**A spec-layer fix with no test is better than a spec-layer fix with a hand-written test.** Landing the fix untested is the accepted outcome. Take these two routes first, in order:
+
+1. **Find the upstream fixture.** Look under `tests/Test262/data/<Type>/…` for a fixture that reaches the code you changed. If one exists but does not exercise your case, the corpus may be stale — run `composer test262:sync`. If it exists and *should* cover your case but the PHP side never runs it, that is the real bug: the fixture may be missing from `tests/Test262/scripts/` (regenerate with `composer test262:build`), skipped by `RunnerTest`, or reported incomplete by a transpiler gap. Fix that instead of writing your own test.
+
+2. **File for an upstream test.** Only after you have *actually checked* — read the candidate fixtures, confirmed the case is absent, and confirmed the pre-fix code passes the whole suite — open an issue labeled `missing-upstream-test`. That issue tracks getting a new test contributed to tc39/test262, so it needs the input shape, the expected result, the TC39 algorithm step that mandates it, and a JS reproduction against the `Temporal` namespace. "I could not find one" is not a check; a search you can show is.
+
 ## test262 conformance suite
 
 `tests/Test262/data/` — verbatim mirror of upstream tc39/test262 JS files. **Do not edit these.** If a test fails, fix the implementation. `tests/Test262/data/CLAUDE.md` has the rules.
