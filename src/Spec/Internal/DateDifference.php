@@ -15,8 +15,7 @@ use Calendrics\Spec\PlainDate;
  * The gap between two dates is a fixed number of days — the work here is expressing
  * it in the units the caller asked for. Weeks and days are pure day-count arithmetic
  * on Julian Day Numbers. Months and years are calendrical: the date part is measured
- * via the calendar protocol's `dateUntil` for non-ISO calendars, or the ISO breakdown
- * in {@see calendarDiff()}, always in the spec's (receiver, other) order.
+ * via the calendar protocol's `dateUntil`, always in the spec's (receiver, other) order.
  *
  * A calendar `smallestUnit` rounds by *fractional progress through the current unit*
  * (TC39 NudgeToCalendarUnit), which needs the true length of that unit: the interval
@@ -204,41 +203,18 @@ final class DateDifference
 
         // Calendar units (months/years): compute via calendar protocol.
         // TC39 calls CalendarDateUntil(temporalDate, other) — preserving order.
-        $calendarId = $temporalDate->calendarId;
-        if ($calendarId !== 'iso8601') {
-            $cal = CalendarFactory::get($calendarId);
-            [$years, $months, , $days] = $cal->dateUntil(
-                $temporalDate->isoYear,
-                $temporalDate->isoMonth,
-                $temporalDate->isoDay,
-                $other->isoYear,
-                $other->isoMonth,
-                $other->isoDay,
-                $normLargest,
-            );
-        } else {
-            // ISO calendar: symmetric, so order doesn't matter for magnitudes.
-            // Keep the (earlier, later) convention for the existing calendarDiff.
-            $jdn1 = $tdJdn;
-            $jdn2 = $otherJdn;
-            $iY1 = $temporalDate->isoYear;
-            $iM1 = $temporalDate->isoMonth;
-            $iD1 = $temporalDate->isoDay;
-            $iY2 = $other->isoYear;
-            $iM2 = $other->isoMonth;
-            $iD2 = $other->isoDay;
-            $receiverIsLater = $jdn1 > $jdn2;
-            if ($receiverIsLater) {
-                [$iY1, $iM1, $iD1, $iY2, $iM2, $iD2] = [$iY2, $iM2, $iD2, $iY1, $iM1, $iD1];
-            }
-            [$years, $months, $days] = self::calendarDiff($iY1, $iM1, $iD1, $iY2, $iM2, $iD2, $receiverIsLater);
-            if ($jdn1 > $jdn2) {
-                // Going backward: negate to match the (temporalDate→other) direction
-                $years = -$years;
-                $months = -$months;
-                $days = -$days;
-            }
-        }
+        // Day and week returned above, so only these two units reach a calendar.
+        $calendarUnit = $normLargest === 'month' ? 'month' : 'year';
+        [$years, $months, , $days] = CalendarFactory::get($temporalDate->calendarId)->dateUntil(
+            $temporalDate->isoYear,
+            $temporalDate->isoMonth,
+            $temporalDate->isoDay,
+            $other->isoYear,
+            $other->isoMonth,
+            $other->isoDay,
+            $calendarUnit,
+            $tdJdn > $otherJdn,
+        );
 
         // TC39 spec: round BEFORE since negation (steps 8-10). The rounding mode
         // for "since" was already negated above, before the day/week branches.
@@ -377,7 +353,7 @@ final class DateDifference
         // Interval size in days (absolute value of the interval).
         $intervalDays = abs($nextJdn - $anchorJdn);
 
-        // Remaining distance from anchor toward target = |remainingDays| from calendarDiff.
+        // Remaining distance from anchor toward target = |remainingDays| from dateUntil.
         $progress = $intervalDays > 0 ? $absRemDays / $intervalDays : 0.0;
 
         // Apply rounding (for negative diffs, flip floor/ceil per spec §11.5.12).
@@ -489,79 +465,5 @@ final class DateDifference
     {
         [$y, $m, $d] = CalendarMath::fromJulianDay($jdn);
         return new PlainDate($y, $m, $d, $calendarId);
-    }
-
-    /**
-     * Returns [years, months, remainingDays] between two dates.
-     *
-     * Caller must pass dates in (earlier, later) order: (y1,m1,d1) ≤ (y2,m2,d2).
-     *
-     * $receiverIsY2: true when the caller's receiver corresponds to y2 (the later
-     * argument), false when it corresponds to y1 (the earlier argument).  The anchor
-     * for the day-remainder calculation is always derived from the RECEIVER's date so
-     * that since() and until() produce receiver-relative results as required by the spec.
-     *
-     * @param int<1, 12> $m1
-     * @param int<1, 12> $m2
-     * @return array{0: int, 1: int, 2: int}
-     */
-    private static function calendarDiff(
-        int $y1,
-        int $m1,
-        int $d1,
-        int $y2,
-        int $m2,
-        int $d2,
-        bool $receiverIsY2 = true,
-    ): array {
-        $years = $y2 - $y1;
-        $months = $m2 - $m1;
-
-        if ($months < 0) {
-            $years--;
-            $months += 12;
-        }
-
-        // Borrow one month if d2 hasn't reached the start day (d1).
-        // Compare d2 against the ORIGINAL d1 (not clamped to maxDay) to correctly
-        // handle leap-day cases (e.g. Feb 29 2020 → Feb 28 2021: d2=28 < d1=29, borrow).
-        if ($d2 < $d1) {
-            if ($months > 0) {
-                $months--;
-            } else {
-                $years--;
-                $months = 11;
-            }
-        }
-
-        if ($receiverIsY2) {
-            // Anchor from y2 (receiver) going backward.
-            $anchorMonth = $m2 - $months;
-            $anchorYear = $y2 - $years;
-            if ($anchorMonth <= 0) {
-                $anchorYear--;
-                $anchorMonth += 12;
-            }
-            $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
-            $anchorDay = min($d2, $anchorMaxDay);
-            $days =
-                CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay)
-                - CalendarMath::toJulianDay($y1, $m1, $d1);
-        } else {
-            // Anchor from y1 (receiver) going forward.
-            $anchorMonth = $m1 + $months;
-            $anchorYear = $y1 + $years;
-            if ($anchorMonth > 12) {
-                $anchorYear++;
-                $anchorMonth -= 12;
-            }
-            $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
-            $anchorDay = min($d1, $anchorMaxDay);
-            $days =
-                CalendarMath::toJulianDay($y2, $m2, $d2)
-                - CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay);
-        }
-
-        return [$years, $months, $days];
     }
 }
