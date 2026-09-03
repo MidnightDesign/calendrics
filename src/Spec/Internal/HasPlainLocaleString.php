@@ -19,6 +19,9 @@ use Calendrics\Exception\TypeError;
  * deliberately not users: both format an exact instant in a real time zone through
  * {@see IntlFormatter::formatEpoch()}, and each carries its own `toLocaleString()`.
  *
+ * A new user must also implement {@see PlainLocaleFormattable}: collaborators select
+ * this formatting path by that interface, and nothing else enforces the pairing.
+ *
  * @internal
  */
 trait HasPlainLocaleString
@@ -90,8 +93,6 @@ trait HasPlainLocaleString
         $timeZone = 'UTC';
 
         IntlFormatter::validateCalendar($this->localeCalendarId(), $locale, $opts, $defaultComponents);
-
-        $opts['_locale'] = $locale;
 
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, $defaultComponents);
 

@@ -56,16 +56,13 @@ final class RelativeTo
      * Reports whether a valid, non-null `relativeTo` is present in the options,
      * throwing if one is present but malformed.
      *
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed> $options An options bag already normalized by {@see Options}.
      * @throws RangeError for invalid relativeTo strings or property bags.
      * @throws TypeError for invalid relativeTo types.
      */
-    public static function isPresent(array|object|null $options): bool
+    public static function isPresent(array $options): bool
     {
-        if (is_object($options)) {
-            $options = Options::bagSnapshot($options, ['relativeTo']);
-        }
-        if ($options === null || !array_key_exists('relativeTo', $options)) {
+        if (!array_key_exists('relativeTo', $options)) {
             return false;
         }
         /** @var mixed $rt */
@@ -757,10 +754,9 @@ final class RelativeTo
         if ($targetSec === (float) EpochLimits::MAX_EPOCH_SECONDS && $targetSubNs > 0.0) {
             return true;
         }
+        // The floor-based carry leaves $targetSubNs in [0, 1e9), so exactly -MAX seconds is
+        // always in range — hence no sub-nanosecond mirror of the +MAX check above.
         if ($targetSec < -EpochLimits::MAX_EPOCH_SECONDS) {
-            return true;
-        }
-        if ($targetSec === -(float) EpochLimits::MAX_EPOCH_SECONDS && $targetSubNs < 0.0) {
             return true;
         }
 

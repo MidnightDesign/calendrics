@@ -942,9 +942,6 @@ final class ZonedDateTime implements Stringable
             defaultComponents: LocaleComponents::DateTime,
         );
 
-        $timeZone = $this->timeZoneId;
-        $opts['_locale'] = $locale;
-
         // TC39: ZDT's default format includes the timezone name — but only when the
         // caller named no components at all. Asking for one component (`{year:'numeric'}`)
         // asks for that component alone, exactly as it would from a legacy Date.
@@ -955,6 +952,7 @@ final class ZonedDateTime implements Stringable
         // Validate style + component conflicts
         IntlFormatter::validateStyleConflicts($opts);
 
+        $timeZone = $this->timeZoneId;
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, LocaleComponents::DateTime);
         [$epochSec, $subNs] = $this->epochParts();
         $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs, $timeZone, $locale);

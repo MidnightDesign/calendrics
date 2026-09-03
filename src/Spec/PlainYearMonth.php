@@ -14,6 +14,7 @@ use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\LocaleComponents;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
 
 /**
@@ -23,7 +24,7 @@ use Stringable;
  *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-plainyearmonth-objects
  */
-final class PlainYearMonth implements Stringable
+final class PlainYearMonth implements PlainLocaleFormattable, Stringable
 {
     use HasPlainLocaleString;
     use HasStringRepresentations;
@@ -1064,20 +1065,19 @@ final class PlainYearMonth implements Stringable
         }
 
         if ($normLargest === 'month') {
-            if ($normSmallest === 'month') {
-                if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
-                    return new Duration(months: $sinceSign * $totalMonths);
-                }
-                $rounded = self::roundCalendarYearMonths(
-                    $totalMonths,
-                    $temporalDate,
-                    $roundingIncrement,
-                    $roundingMode,
-                    false,
-                );
-                return new Duration(months: $sinceSign * $rounded);
+            // $normSmallest is 'month' too: the rank check above rejects a year-ranked
+            // smallestUnit against a month-ranked largestUnit.
+            if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
+                return new Duration(months: $sinceSign * $totalMonths);
             }
-            return new Duration(months: $sinceSign * $totalMonths);
+            $rounded = self::roundCalendarYearMonths(
+                $totalMonths,
+                $temporalDate,
+                $roundingIncrement,
+                $roundingMode,
+                false,
+            );
+            return new Duration(months: $sinceSign * $rounded);
         }
 
         // normLargest === 'year'
