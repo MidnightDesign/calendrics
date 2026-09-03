@@ -86,28 +86,16 @@ final class ZonedArithmetic
     ): ZonedDateTime {
         $lc = $zdt->localComponents();
 
-        if ($zdt->calendarId !== 'iso8601') {
-            [$newYear, $newMonth, $newDay] = CalendarFactory::get($zdt->calendarId)->dateAdd(
-                $lc['year'],
-                $lc['month'],
-                $lc['day'],
-                $years,
-                $months,
-                $weeks,
-                $days,
-                $overflow,
-            );
-        } else {
-            [$newYear, $newMonth, $newDay] = self::addIsoDate(
-                $lc['year'],
-                $lc['month'],
-                $lc['day'],
-                $years,
-                $months,
-                ($weeks * 7) + $days,
-                $overflow,
-            );
-        }
+        [$newYear, $newMonth, $newDay] = CalendarFactory::get($zdt->calendarId)->dateAdd(
+            $lc['year'],
+            $lc['month'],
+            $lc['day'],
+            $years,
+            $months,
+            $weeks,
+            $days,
+            $overflow,
+        );
 
         if ($timeNs === 0) {
             return ZonedFields::fromLocal(
@@ -149,48 +137,6 @@ final class ZonedArithmetic
             $zdt->timeZoneId,
             $zdt->calendarId,
         );
-    }
-
-    /**
-     * Adds years, months and whole days to an ISO date.
-     *
-     * Years and months land first, with the day clamped or rejected against the resulting
-     * month's length; the day count is then applied through the Julian day number, which
-     * keeps month and year carries correct without a normalization loop.
-     *
-     * @return array{0: int, 1: int, 2: int} [year, month, day]
-     * @throws RangeError if $overflow is `'reject'` and the day exceeds the new month.
-     */
-    private static function addIsoDate(
-        int $year,
-        int $month,
-        int $day,
-        int $addYears,
-        int $addMonths,
-        int $addDays,
-        string $overflow,
-    ): array {
-        $newYear = $year + $addYears;
-        $newMonth = $month + $addMonths;
-
-        if ($newMonth > 12) {
-            $newYear += intdiv(num1: $newMonth - 1, num2: 12);
-            $newMonth = (($newMonth - 1) % 12) + 1;
-        } elseif ($newMonth < 1) {
-            $newYear += intdiv(num1: $newMonth - 12, num2: 12);
-            $newMonth = (((($newMonth - 1) % 12) + 12) % 12) + 1;
-        }
-
-        $newDay = $day;
-        $maxDay = CalendarMath::calcDaysInMonth($newYear, $newMonth);
-        if ($newDay > $maxDay) {
-            if ($overflow !== 'constrain') {
-                throw new RangeError("Day {$newDay} is out of range for {$newYear}-{$newMonth}.");
-            }
-            $newDay = $maxDay;
-        }
-
-        return CalendarMath::fromJulianDay(CalendarMath::toJulianDay($newYear, $newMonth, $newDay) + $addDays);
     }
 
     /**

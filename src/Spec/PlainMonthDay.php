@@ -61,9 +61,7 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
      * @psalm-api
      */
     public int $month {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoMonth
-            : CalendarFactory::get($this->calendarId)->month($this->referenceISOYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->month($this->referenceISOYear, $this->isoMonth, $this->isoDay);
     }
 
     /**
@@ -72,9 +70,7 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
      * @psalm-api
      */
     public int $day {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoDay
-            : CalendarFactory::get($this->calendarId)->day($this->referenceISOYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->day($this->referenceISOYear, $this->isoMonth, $this->isoDay);
     }
 
     // -------------------------------------------------------------------------
