@@ -608,14 +608,17 @@ final class ZonedDateTime implements Stringable
     /**
      * Returns a new ZonedDateTime with a different calendar.
      *
-     * Only 'iso8601' is supported (case-insensitive).
+     * Per TC39 ToTemporalCalendarIdentifier, $calendar may be a bare calendar ID,
+     * an ISO date string, or a Temporal date-bearing object whose `calendarId`
+     * slot is read directly.
      *
+     * @throws TypeError if $calendar is neither a string nor a calendar-bearing Temporal object.
      * @throws RangeError if an unsupported calendar is given.
      * @psalm-api
      */
-    public function withCalendar(string $calendar): self
+    public function withCalendar(mixed $calendar): self
     {
-        $calId = CalendarFactory::extractCalendarFromString($calendar);
+        $calId = CalendarFactory::resolveBagCalendar($calendar, 'ZonedDateTime');
         [$epochSec, $subNs] = $this->epochParts();
         return self::fromEpochParts($epochSec, $subNs, $this->timeZoneId, $calId);
     }
