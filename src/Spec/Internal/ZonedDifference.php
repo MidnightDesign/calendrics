@@ -900,10 +900,9 @@ final class ZonedDifference
         $remDays = $receiverIsLater ? $floorJdn - $farJdn : $farJdn - $floorJdn;
 
         $nextJdn = CalendarMath::toJulianDay($nextDate[0], $nextDate[1], $nextDate[2]);
+        // Non-zero by construction: the two anchors are $increment (>= 1) ISO months or
+        // years apart, and the shortest ISO month is 28 days.
         $intervalDays = abs($nextJdn - $floorJdn);
-        if ($intervalDays === 0) {
-            return 0.0;
-        }
 
         $totalRemNs = (float) (($remDays * self::NS_PER_DAY) + $timeDiffNs);
         return $totalRemNs / ((float) $intervalDays * self::NS_PER_DAY_F);
