@@ -168,7 +168,7 @@ final class ZonedDifference
      * `until($x, ['smallestUnit' => 'day'])` work without also naming a largest unit.
      *
      * @param array<array-key, mixed>|object|null $options
-     * @return array{0: string, 1: string, 2: string, 3: int} [largestUnit, smallestUnit, roundingMode, roundingIncrement]
+     * @return array{0: string, 1: string, 2: string, 3: int<1, max>} [largestUnit, smallestUnit, roundingMode, roundingIncrement]
      */
     private static function resolveOptions(ZonedDateTime $temporalDate, array|object|null $options): array
     {
@@ -338,6 +338,7 @@ final class ZonedDifference
      * Difference with a calendar `largestUnit`.
      *
      * @throws RangeError if the intermediate arithmetic leaves the representable range.
+     * @param int<1, max> $roundingIncrement
      */
     private static function calendarDifference(
         ZonedDateTime $temporalDate,
@@ -561,6 +562,7 @@ final class ZonedDifference
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $tdLocal
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $earlierLocal
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $laterLocal
+     * @param int<1, max> $roundingIncrement
      */
     private static function roundToCalendarUnit(
         array $tdLocal,
@@ -801,6 +803,7 @@ final class ZonedDifference
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $recLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $earlierLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $laterLocal
+     * @param int<1, max> $increment
      */
     private static function calcYearProgress(
         array $recLocal,
@@ -829,6 +832,7 @@ final class ZonedDifference
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $recLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $earlierLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $laterLocal
+     * @param int<1, max> $increment
      */
     private static function calcMonthProgress(
         array $recLocal,
@@ -863,6 +867,7 @@ final class ZonedDifference
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $recLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $earlierLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $laterLocal
+     * @param int<1, max> $increment
      */
     private static function calcProgress(
         array $recLocal,
@@ -900,10 +905,9 @@ final class ZonedDifference
         $remDays = $receiverIsLater ? $floorJdn - $farJdn : $farJdn - $floorJdn;
 
         $nextJdn = CalendarMath::toJulianDay($nextDate[0], $nextDate[1], $nextDate[2]);
+        // Non-zero by construction: the two anchors are $increment ISO months or years
+        // apart, and the shortest ISO month is 28 days.
         $intervalDays = abs($nextJdn - $floorJdn);
-        if ($intervalDays === 0) {
-            return 0.0;
-        }
 
         $totalRemNs = (float) (($remDays * self::NS_PER_DAY) + $timeDiffNs);
         return $totalRemNs / ((float) $intervalDays * self::NS_PER_DAY_F);
