@@ -2211,11 +2211,9 @@ class Emitter {
       if (node.object.type === 'Identifier' && node.object.name === 'Number') {
         switch (node.property.name) {
           case 'MAX_SAFE_INTEGER': return '9_007_199_254_740_991';
-          case 'MAX_VALUE':
-            // Number.MAX_VALUE ≈ 1.8e308 has no PHP int equivalent; PHP_INT_MAX µs/ns
-            // is within the valid Duration range, so this test cannot be faithfully translated.
-            this.emitIncomplete('Number.MAX_VALUE exceeds PHP_INT_MAX; no exact PHP int equivalent');
-            return null;
+          // PHP_FLOAT_MAX is bit-for-bit Number.MAX_VALUE; the fixtures that use it
+          // pass it where a JS Number is expected, which the spec layer takes as a float.
+          case 'MAX_VALUE':        return 'PHP_FLOAT_MAX';
           case 'MIN_SAFE_INTEGER': return '-9_007_199_254_740_991';
           case 'MIN_VALUE':        return '5.0E-324';
           case 'EPSILON':          return '2.220446049250313E-16';
