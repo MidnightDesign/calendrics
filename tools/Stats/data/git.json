@@ -1,5 +1,5 @@
 {
-    "ref_collected_at": "2026-09-03T18:34:58+00:00",
+    "ref_collected_at": "2026-09-03T18:40:53+00:00",
     "commits": [
         {
             "sha": "6f44d2dc8c077070299eb2f8be485fe9dc58e183",
@@ -6401,6 +6401,52 @@
                 "docs": 41294,
                 "config": 13905,
                 "total": 41246491
+            }
+        },
+        {
+            "sha": "1ca223f8cf0facb996b1887cf1819c4595be2f47",
+            "short": "1ca223f8c",
+            "timestamp": 1788460700,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "build: run the php container as the developer's uid (#100)",
+            "type": "build",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 18,
+                "deleted": 2,
+                "files_touched": 2
+            },
+            "loc": {
+                "src": 30992,
+                "tests": 13154,
+                "test262_data": 340292,
+                "test262_scripts": 274605,
+                "tools": 5591,
+                "docs": 781,
+                "config": 445,
+                "total": 665860
+            },
+            "files": {
+                "src": 86,
+                "tests": 41,
+                "test262_data": 6628,
+                "test262_scripts": 11370,
+                "tools": 7,
+                "docs": 3,
+                "config": 16,
+                "total": 18151
+            },
+            "bytes": {
+                "src": 1255795,
+                "tests": 451423,
+                "test262_data": 13144961,
+                "test262_scripts": 26073466,
+                "tools": 265647,
+                "docs": 41294,
+                "config": 14525,
+                "total": 41247111
             }
         }
     ]
