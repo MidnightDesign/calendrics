@@ -1374,7 +1374,7 @@ final class DurationRounding
      * Finds the nearest month (or year) boundary and rounds.
      *
      * @param \DateTimeImmutable $startDate UTC midnight on relativeTo date.
-     * @param int $totalNs Signed total nanoseconds from start to end.
+     * @param int|float $totalNs Signed total nanoseconds from start to end.
      * @param int $nsPerDay Nanoseconds per day (fixed 86400e9).
      * @param int $suIdx Smallest unit index (8=months, 9=years).
      * @param int $luIdx Largest unit index.
@@ -1408,28 +1408,14 @@ final class DurationRounding
         if ($zdtInfo !== null) {
             // Decompose $totalNs into (calendarDaysFromNs, timePartNs). The int branch
             // is the common case; the float branch is reached only when calendarDays ×
-            // NS_PER_DAY exceeds int64 (~106k days, ~292 years).
-            //
-            // Static analyzers (Psalm, Mago) infer $totalNs as `int` from the caller's
-            // own arithmetic and flag the float branch as dead. The runtime contract is
-            // wider — `nudgeToCalendarMonthsOrYears` is widened to `int|float` for exactly
-            // the overflow case the spec layer must support — so the suppressions are
-            // correct. Keeping the suppressions next to the branch they describe rather
-            // than the file head; remove them only if the analyzers learn that PHP's
-            // int*int can overflow to float.
-            /**
-             * @psalm-suppress RedundantCondition
-             */
+            // NS_PER_DAY exceeds int64 (~106k days, ~292 years) and PHP promotes the
+            // product to float.
             if (is_int($totalNs)) {
                 $calendarDaysFromNs = intdiv($totalNs - ($totalNs % $nsPerDay), $nsPerDay);
                 $timePartNs = $totalNs % $nsPerDay;
             } else {
-                // @mago-ignore analysis:unreachable-else-clause
-                // @mago-ignore analysis:no-value
                 $nsPerDayF = (float) $nsPerDay;
-                /** @psalm-suppress NoValue */
                 $calendarDaysFromNs = (int) (($totalNs - fmod(num1: $totalNs, num2: $nsPerDayF)) / $nsPerDayF);
-                /** @psalm-suppress NoValue */
                 $timePartNs = (int) fmod(num1: $totalNs, num2: $nsPerDayF);
             }
             $actualDaysSec = (int) AnchorMath::zdtDaysToSec(
@@ -1531,7 +1517,11 @@ final class DurationRounding
         }
 
         $denominator = $r2Ns - $r1Ns;
-        $progress = $denominator === 0 ? 0.0 : (float) ($totalNs - $r1Ns) / (float) $denominator;
+        // $totalNs and $r1Ns are close together and can both exceed 2^53, where casting
+        // each to float before subtracting would discard the low bits that make up the
+        // difference. Stay in int whenever $totalNs still is one.
+        $elapsedNs = is_int($totalNs) ? $totalNs - $r1Ns : $totalNs - (float) $r1Ns;
+        $progress = $denominator === 0 ? 0.0 : (float) $elapsedNs / (float) $denominator;
         $roundedUnits = self::applyCalendarRounding($r1, $r2, $progress, $roundingMode, $isPositive);
 
         // Balance rounded units into the largestUnit.

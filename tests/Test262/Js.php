@@ -241,7 +241,6 @@ final class Js
             $realEnd = $end >= 0 ? min($end, $len) : max($end + $len, 0);
             $length = max(0, $realEnd - $realStart);
         }
-        /** @var list<mixed> */
         return array_slice($arr, $realStart, $length);
     }
 }
