@@ -30,6 +30,11 @@ use PHPUnit\Framework\TestCase;
  * literal locale string. Instead each option is asserted to *change* the output
  * relative to the same value formatted with no options at all — which is what
  * the option is for, and which holds regardless of the CLDR data behind it.
+ *
+ * Every provider below yields closures rather than rendered strings. PHPUnit runs a
+ * data provider during collection, before coverage recording starts, so a provider
+ * that formatted eagerly would still assert correctly while recording no coverage at
+ * all for the formatter it exercises.
  */
 final class LocalizedFormattingTest extends TestCase
 {
@@ -441,62 +446,61 @@ final class LocalizedFormattingTest extends TestCase
      * Each case renders the same temporal value once per enum case and expects as
      * many distinct strings as the enum has cases, so nothing pins CLDR wording.
      *
-     * @return iterable<string, array{list<string>}>
+     * @return iterable<string, array{\Closure(): list<string>}>
      */
     public static function everyOptionValueCases(): iterable
     {
-        $date = self::date();
-        // The 5th, not the 15th: a two-digit day of the month renders the same either
-        // way, so the 15th would tell us nothing about the option.
-        $fifth = new PlainDate(2020, 6, 5);
-        $afternoon = new PlainTime(15, 0);
-        $zoned = self::zoned();
-
         // `hour`, `minute` and `second` have no case here: ICU's pattern generator
         // normalizes the hour field to the locale's own width, so 'numeric' and
         // '2-digit' render the same string. ECMA-402 pads the '2-digit' hour ('09 AM'
         // against '9 AM'), a deviation this suite cannot assert until the generated
         // pattern is widened afterwards.
-
-        yield 'PlainDate dateStyle' => [array_map(static fn(FormatStyle $style): string => $date->toLocaleString(
-            self::LOCALE,
-            dateStyle: $style,
-        ), FormatStyle::cases())];
-        yield 'PlainDate weekday' => [array_map(static fn(TextWidth $width): string => $date->toLocaleString(
-            self::LOCALE,
-            weekday: $width,
-        ), TextWidth::cases())];
-        yield 'PlainDate era' => [array_map(static fn(TextWidth $width): string => $date->toLocaleString(
-            self::LOCALE,
-            era: $width,
-        ), TextWidth::cases())];
-        yield 'PlainDate year' => [array_map(static fn(NumberWidth $width): string => $date->toLocaleString(
-            self::LOCALE,
-            year: $width,
-        ), NumberWidth::cases())];
-        yield 'PlainDate month' => [array_map(static fn(MonthWidth $width): string => $date->toLocaleString(
-            self::LOCALE,
-            month: $width,
-        ), MonthWidth::cases())];
-        yield 'PlainDate day' => [array_map(static fn(NumberWidth $width): string => $fifth->toLocaleString(
-            self::LOCALE,
-            day: $width,
-        ), NumberWidth::cases())];
-        yield 'PlainTime dayPeriod' => [array_map(static fn(TextWidth $width): string => $afternoon->toLocaleString(
-            self::DAY_PERIOD_LOCALE,
-            dayPeriod: $width,
-        ), TextWidth::cases())];
-        yield 'ZonedDateTime timeZoneName' => [array_map(
-            static fn(TimeZoneNameStyle $style): string => $zoned->toLocaleString(self::LOCALE, timeZoneName: $style),
-            TimeZoneNameStyle::cases(),
-        )];
+        yield 'PlainDate dateStyle' => [
+            static fn(): array => array_map(static fn(FormatStyle $style): string => self::date()
+                ->toLocaleString(self::LOCALE, dateStyle: $style), FormatStyle::cases()),
+        ];
+        yield 'PlainDate weekday' => [
+            static fn(): array => array_map(static fn(TextWidth $width): string => self::date()
+                ->toLocaleString(self::LOCALE, weekday: $width), TextWidth::cases()),
+        ];
+        yield 'PlainDate era' => [
+            static fn(): array => array_map(static fn(TextWidth $width): string => self::date()
+                ->toLocaleString(self::LOCALE, era: $width), TextWidth::cases()),
+        ];
+        yield 'PlainDate year' => [
+            static fn(): array => array_map(static fn(NumberWidth $width): string => self::date()
+                ->toLocaleString(self::LOCALE, year: $width), NumberWidth::cases()),
+        ];
+        yield 'PlainDate month' => [
+            static fn(): array => array_map(static fn(MonthWidth $width): string => self::date()
+                ->toLocaleString(self::LOCALE, month: $width), MonthWidth::cases()),
+        ];
+        // The 5th, not the 15th: a two-digit day of the month renders the same either
+        // way, so the 15th would tell us nothing about the option.
+        yield 'PlainDate day' => [
+            static fn(): array => array_map(static fn(NumberWidth $width): string => new PlainDate(
+                2020,
+                6,
+                5,
+            )->toLocaleString(self::LOCALE, day: $width), NumberWidth::cases()),
+        ];
+        yield 'PlainTime dayPeriod' => [
+            static fn(): array => array_map(static fn(TextWidth $width): string => new PlainTime(15, 0)->toLocaleString(
+                self::DAY_PERIOD_LOCALE,
+                dayPeriod: $width,
+            ), TextWidth::cases()),
+        ];
+        yield 'ZonedDateTime timeZoneName' => [
+            static fn(): array => array_map(static fn(TimeZoneNameStyle $style): string => self::zoned()
+                ->toLocaleString(self::LOCALE, timeZoneName: $style), TimeZoneNameStyle::cases()),
+        ];
     }
 
-    /** @param list<string> $rendered One rendering per value of a single option. */
+    /** @param \Closure(): list<string> $renderEveryValue One rendering per value of a single option. */
     #[DataProvider('everyOptionValueCases')]
-    public function testEveryOptionValueRendersDistinctly(array $rendered): void
+    public function testEveryOptionValueRendersDistinctly(\Closure $renderEveryValue): void
     {
-        self::assertAllDistinct($rendered);
+        self::assertAllDistinct($renderEveryValue());
     }
 
     // -------------------------------------------------------------------------
