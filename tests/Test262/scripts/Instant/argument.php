@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 Assert::throws(\TypeError::class, fn() => new \Calendrics\Spec\Instant(), 'undefined');
 Assert::throws(\TypeError::class, fn() => new \Calendrics\Spec\Instant(), 'undefined');
 Assert::throws(\TypeError::class, fn() => new \Calendrics\Spec\Instant(null), 'null');
-// JS-only (Number literal passed to new Temporal.Instant(); BigInt vs Number distinction not replicable in PHP): assert.throws(TypeError, () => new Temporal.Instant(42), "number")
+Assert::throws(\TypeError::class, fn() => new \Calendrics\Spec\Instant(42.0), 'number');
 Assert::throws(\TypeError::class, fn() => new \Calendrics\Spec\Instant(\Calendrics\Tests\Test262\JsSymbol::singleton()), 'symbol');
-Assert::incomplete('Number literal passed to new Temporal.Instant(); BigInt vs Number distinction not replicable in PHP');
