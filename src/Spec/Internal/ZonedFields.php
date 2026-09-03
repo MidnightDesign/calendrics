@@ -156,9 +156,7 @@ final class ZonedFields
         $nano = intval($ns);
 
         $calendar = CalendarFactory::get($calendarId);
-        // ISO exposes no eras, so era/eraYear are not among its CalendarExtraFields and
-        // the bag's values are never read — not even coerced.
-        $readsEraFields = $calendarId !== 'iso8601';
+        $readsEraFields = CalendarMath::readsEraFields($calendarId);
 
         if ($readsEraFields && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
             $resolved = CalendarMath::resolveYearFromEra($calendar, $bag['era'], $bag['eraYear'], 'ZonedDateTime');

@@ -318,6 +318,7 @@ final class DateTimeDifference
             } else {
                 // Day and week are handled above, so only these two reach a calendar.
                 $calendarUnit = $normLargest === 'month' ? 'month' : 'year';
+                $cal = CalendarFactory::get($calId);
                 if ($calId !== 'iso8601') {
                     // For non-ISO calendars, use CalendarDateUntil(temporalDate,
                     // adjustedOther) in (this, other) order per TC39 spec.
@@ -336,7 +337,6 @@ final class DateTimeDifference
                         }
                     }
                     [$adjY2b, $adjM2b, $adjD2b] = CalendarMath::fromJulianDay($nonIsoAdjJdn);
-                    $cal = CalendarFactory::get($calId);
                     [$years, $months, , $days] = $cal->dateUntil(
                         $temporalDate->isoYear,
                         $temporalDate->isoMonth,
@@ -354,7 +354,7 @@ final class DateTimeDifference
                     // ISO calendar: the endpoints are already in (earlier, later) order,
                     // so which one is the receiver has to be passed explicitly for the
                     // day remainder to be anchored at it.
-                    [$years, $months, , $days] = CalendarFactory::get($calId)->dateUntil(
+                    [$years, $months, , $days] = $cal->dateUntil(
                         $earlier->isoYear,
                         $earlier->isoMonth,
                         $earlier->isoDay,
@@ -488,11 +488,12 @@ final class DateTimeDifference
             if ($overflowDays > 0 && $normLargest !== 'day' && $normLargest !== 'week') {
                 // Overflow from time rounding: recompute calendar diff.
                 $calendarUnit = $normLargest === 'month' ? 'month' : 'year';
+                $cal = CalendarFactory::get($calId);
                 if ($calId !== 'iso8601') {
                     // Non-ISO: shift nonIsoAdjJdn by overflow in the diff direction.
                     $tc39Jdn2 = $nonIsoAdjJdn + ($sign >= 0 ? $overflowDays : -$overflowDays);
                     [$adjY3, $adjM3, $adjD3] = CalendarMath::fromJulianDay($tc39Jdn2);
-                    [$years, $months, , $days] = CalendarFactory::get($calId)->dateUntil(
+                    [$years, $months, , $days] = $cal->dateUntil(
                         $temporalDate->isoYear,
                         $temporalDate->isoMonth,
                         $temporalDate->isoDay,
@@ -508,7 +509,7 @@ final class DateTimeDifference
                     // ISO: add overflow to the swap-based adjOtherJdn.
                     $isoAdjJdn2 = $adjOtherJdn + $overflowDays;
                     [$adjY3, $adjM3, $adjD3] = CalendarMath::fromJulianDay($isoAdjJdn2);
-                    [$years, $months, , $days] = CalendarFactory::get($calId)->dateUntil(
+                    [$years, $months, , $days] = $cal->dateUntil(
                         $earlier->isoYear,
                         $earlier->isoMonth,
                         $earlier->isoDay,

@@ -765,8 +765,8 @@ final class ZonedDifference
      *
      * @param int<1, 12> $m1
      * @param int<1, 12> $m2
-     * @param bool $receiverIsY2 True when the caller's receiver is the larger date, which
-     *                           is where the day remainder then anchors.
+     * @param bool $receiverIsLater True when the caller's receiver is the larger date,
+     *                                which is where the day remainder then anchors.
      */
     private static function isoDateSpan(
         int $y1,
@@ -775,7 +775,7 @@ final class ZonedDifference
         int $y2,
         int $m2,
         int $d2,
-        bool $receiverIsY2,
+        bool $receiverIsLater,
     ): DateSpan {
         [$years, $months, , $days] = CalendarFactory::get('iso8601')->dateUntil(
             $y1,
@@ -785,7 +785,7 @@ final class ZonedDifference
             $m2,
             $d2,
             'year',
-            $receiverIsY2,
+            $receiverIsLater,
         );
 
         return new DateSpan(years: $years, months: $months, days: $days);

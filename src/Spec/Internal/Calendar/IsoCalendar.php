@@ -121,17 +121,7 @@ final class IsoCalendar implements CalendarProtocol
         int $days,
         string $overflow,
     ): array {
-        $newYear = $isoYear + $years;
-        $newMonth = $isoMonth + $months;
-
-        // Normalize month into 1-12, carrying into year.
-        if ($newMonth > 12) {
-            $newYear += intdiv(num1: $newMonth - 1, num2: 12);
-            $newMonth = (($newMonth - 1) % 12) + 1;
-        } elseif ($newMonth < 1) {
-            $newYear += intdiv(num1: $newMonth - 12, num2: 12);
-            $newMonth = (((($newMonth - 1) % 12) + 12) % 12) + 1;
-        }
+        [$newYear, $newMonth] = self::normalizeMonth($isoYear + $years, $isoMonth + $months);
 
         // Clamp or reject day within new month.
         $newDay = $isoDay;
@@ -203,26 +193,14 @@ final class IsoCalendar implements CalendarProtocol
         // endpoint after the swap above, so the receiver is date2 exactly when it is the
         // later of the two.
         if ($receiverIsLater) {
-            $anchorMonth = $isoM2 - $months;
-            $anchorYear = $isoY2 - $years;
-            if ($anchorMonth < 1) {
-                $anchorYear += intdiv($anchorMonth - 12, num2: 12);
-                $anchorMonth = (((($anchorMonth - 1) % 12) + 12) % 12) + 1;
-            }
-            $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
-            $anchorDay = min($isoD2, $anchorMaxDay);
+            [$anchorYear, $anchorMonth] = self::normalizeMonth($isoY2 - $years, $isoM2 - $months);
+            $anchorDay = min($isoD2, CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth));
             $days =
                 CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay)
                 - CalendarMath::toJulianDay($isoY1, $isoM1, $isoD1);
         } else {
-            $anchorMonth = $isoM1 + $months;
-            $anchorYear = $isoY1 + $years;
-            if ($anchorMonth > 12) {
-                $anchorYear += intdiv($anchorMonth - 1, num2: 12);
-                $anchorMonth = (($anchorMonth - 1) % 12) + 1;
-            }
-            $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
-            $anchorDay = min($isoD1, $anchorMaxDay);
+            [$anchorYear, $anchorMonth] = self::normalizeMonth($isoY1 + $years, $isoM1 + $months);
+            $anchorDay = min($isoD1, CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth));
             $days =
                 CalendarMath::toJulianDay($isoY2, $isoM2, $isoD2)
                 - CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay);
@@ -257,6 +235,20 @@ final class IsoCalendar implements CalendarProtocol
     // -------------------------------------------------------------------------
 
     /**
+     * Carries an out-of-range month into the year, so that any integer month names the
+     * same point on the timeline as its normalized 1-12 form ("month 0" is the previous
+     * December, "month 13" the next January).
+     *
+     * @return array{0: int, 1: int<1, 12>} [year, month]
+     */
+    private static function normalizeMonth(int $year, int $month): array
+    {
+        $zeroBased = $month - 1;
+
+        return [$year + CalendarMath::floorDiv($zeroBased, 12), ((($zeroBased % 12) + 12) % 12) + 1];
+    }
+
+    /**
      * Validates and optionally constrains an ISO date.
      *
      * @return array{0: int, 1: int, 2: int} [isoYear, isoMonth, isoDay]
@@ -268,11 +260,11 @@ final class IsoCalendar implements CalendarProtocol
             $day = max(1, min(CalendarMath::calcDaysInMonth($year, $month), $day));
         } else {
             if ($month < 1 || $month > 12) {
-                throw new RangeError("Month {$month} is out of range 1–12 for this calendar year.");
+                throw new RangeError("Month {$month} is out of range 1–12.");
             }
             $maxDay = CalendarMath::calcDaysInMonth($year, $month);
             if ($day < 1 || $day > $maxDay) {
-                throw new RangeError("Day {$day} exceeds maximum {$maxDay} for {$year}-{$month}.");
+                throw new RangeError("Day {$day} is out of range 1–{$maxDay} for {$year}-{$month}.");
             }
         }
 

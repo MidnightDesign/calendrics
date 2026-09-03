@@ -66,9 +66,7 @@ final class DateFields
         }
 
         $calendar = CalendarFactory::get($calendarId ?? 'iso8601');
-        // ISO exposes no eras, so era/eraYear are not among its CalendarExtraFields and
-        // the bag's values are never read — not even coerced.
-        $readsEraFields = $calendarId !== null && $calendarId !== 'iso8601';
+        $readsEraFields = CalendarMath::readsEraFields($calendarId);
 
         // TC39 PrepareCalendarFields: a monthCode value's TYPE (must be a string) and its
         // SYNTAX (well-formedness) are validated before the year value's type is coerced.
@@ -142,7 +140,6 @@ final class DateFields
             throw new RangeError("Invalid PlainDate: day {$day} must be at least 1.");
         }
 
-        // Resolve calendar fields to ISO via the calendar protocol.
         [$isoY, $isoM, $isoD] = $monthCode !== null
             ? $calendar->calendarToIsoFromMonthCode($year, $monthCode, $day, $overflow)
             : $calendar->calendarToIso($year, $month, $day, $overflow);
