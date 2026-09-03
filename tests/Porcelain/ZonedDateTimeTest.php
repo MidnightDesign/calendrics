@@ -15,6 +15,7 @@ use Calendrics\Overflow;
 use Calendrics\PlainTime;
 use Calendrics\RoundingMode;
 use Calendrics\TimeZoneDisplay;
+use Calendrics\TransitionDirection;
 use Calendrics\Unit;
 use Calendrics\ZonedDateTime;
 
@@ -784,6 +785,46 @@ final class ZonedDateTimeTest extends CalendricsTestCase
         static::assertSame(2020, $sod->year);
         static::assertSame(12, $sod->month);
         static::assertSame(31, $sod->day);
+    }
+
+    // -------------------------------------------------------------------------
+    // getTimeZoneTransition()
+    // -------------------------------------------------------------------------
+
+    public function testGetTimeZoneTransitionNext(): void
+    {
+        // US Eastern has DST transitions. The method returns the next transition
+        // point after the current instant.
+        $zdt = ZonedDateTime::parse('2020-01-01T00:00:00-05:00[America/New_York]');
+        $next = $zdt->getTimeZoneTransition(TransitionDirection::Next);
+
+        static::assertNotNull($next);
+        static::assertSame('America/New_York', $next->timeZoneId);
+    }
+
+    public function testGetTimeZoneTransitionPrevious(): void
+    {
+        $zdt = ZonedDateTime::parse('2020-06-01T00:00:00-04:00[America/New_York]');
+        $prev = $zdt->getTimeZoneTransition(TransitionDirection::Previous);
+
+        static::assertNotNull($prev);
+        // Previous transition from June 2020 should be March 2020 (spring forward)
+        static::assertSame(2020, $prev->year);
+        static::assertSame(3, $prev->month);
+    }
+
+    public function testGetTimeZoneTransitionFixedOffsetReturnsNull(): void
+    {
+        $zdt = new ZonedDateTime(0, '+05:30');
+
+        static::assertNull($zdt->getTimeZoneTransition(TransitionDirection::Next));
+    }
+
+    public function testGetTimeZoneTransitionUtcReturnsNull(): void
+    {
+        $zdt = new ZonedDateTime(0, 'UTC');
+
+        static::assertNull($zdt->getTimeZoneTransition(TransitionDirection::Next));
     }
 
     // -------------------------------------------------------------------------
