@@ -9,6 +9,7 @@ use Calendrics\Exception\RangeError;
 use Calendrics\PlainDate;
 use Calendrics\RoundingMode;
 use Calendrics\Unit;
+use Calendrics\ZonedDateTime;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class DurationTest extends CalendricsTestCase
@@ -406,6 +407,106 @@ final class DurationTest extends CalendricsTestCase
         $this->expectException(RangeError::class);
 
         $d->round();
+    }
+
+    /**
+     * TC39 rounds the *signed* total, so on a negative duration `ceil` moves toward
+     * zero and `floor` away from it, while on a positive one they do the opposite.
+     *
+     * @return array<string, array{string, Unit, RoundingMode, int, string}>
+     */
+    public static function directedRoundingProvider(): array
+    {
+        return [
+            'ceil toward zero when negative' => ['-P100DT30M', Unit::Hour, RoundingMode::Ceil, 1, '-P100D'],
+            'ceil away from zero when positive' => ['P100DT30M', Unit::Hour, RoundingMode::Ceil, 1, 'P100DT1H'],
+            'floor away from zero when negative' => ['-P100DT30M', Unit::Hour, RoundingMode::Floor, 1, '-P100DT1H'],
+            'floor toward zero when positive' => ['P100DT30M', Unit::Hour, RoundingMode::Floor, 1, 'P100D'],
+            'ceil on a sub-second total' => ['-PT1.0004S', Unit::Millisecond, RoundingMode::Ceil, 1, '-PT1S'],
+            'floor on a sub-second total' => ['-PT1.0004S', Unit::Millisecond, RoundingMode::Floor, 1, '-PT1.001S'],
+            'halfCeil on a negative tie' => ['-PT1.0005S', Unit::Millisecond, RoundingMode::HalfCeil, 1, '-PT1S'],
+            'halfCeil on a positive tie' => ['PT1.0005S', Unit::Millisecond, RoundingMode::HalfCeil, 1, 'PT1.001S'],
+            'halfFloor on a negative tie' => ['-PT1.0005S', Unit::Millisecond, RoundingMode::HalfFloor, 1, '-PT1.001S'],
+            'halfFloor on a positive tie' => ['PT1.0005S', Unit::Millisecond, RoundingMode::HalfFloor, 1, 'PT1S'],
+            'ceil to days' => ['-P1DT13H', Unit::Day, RoundingMode::Ceil, 1, '-P1D'],
+            'floor to days' => ['-P1DT13H', Unit::Day, RoundingMode::Floor, 1, '-P2D'],
+            'halfCeil to days on a tie' => ['-P1DT12H', Unit::Day, RoundingMode::HalfCeil, 1, '-P1D'],
+            'halfFloor to days on a tie' => ['-P1DT12H', Unit::Day, RoundingMode::HalfFloor, 1, '-P2D'],
+            'ceil to a day increment' => ['-P3DT12H', Unit::Day, RoundingMode::Ceil, 2, '-P2D'],
+            'floor to a day increment' => ['-P3DT12H', Unit::Day, RoundingMode::Floor, 2, '-P4D'],
+        ];
+    }
+
+    #[DataProvider('directedRoundingProvider')]
+    public function testRoundDirectedModesFollowTheSignedTotal(
+        string $duration,
+        Unit $smallestUnit,
+        RoundingMode $roundingMode,
+        int $roundingIncrement,
+        string $expected,
+    ): void {
+        $rounded = Duration::parse($duration)->round(
+            smallestUnit: $smallestUnit,
+            roundingMode: $roundingMode,
+            roundingIncrement: $roundingIncrement,
+        );
+
+        static::assertSame($expected, $rounded->toString());
+    }
+
+    /**
+     * @return array<string, array{RoundingMode, string}>
+     */
+    public static function directedRoundingWithZonedAnchorProvider(): array
+    {
+        return [
+            'ceil' => [RoundingMode::Ceil, '-P1D'],
+            'floor' => [RoundingMode::Floor, '-P1DT1H'],
+            'halfCeil' => [RoundingMode::HalfCeil, '-P1D'],
+            'halfFloor' => [RoundingMode::HalfFloor, '-P1DT1H'],
+        ];
+    }
+
+    #[DataProvider('directedRoundingWithZonedAnchorProvider')]
+    public function testRoundDirectedModesFollowTheSignedTotalWithAZonedAnchor(
+        RoundingMode $roundingMode,
+        string $expected,
+    ): void {
+        $rounded = Duration::parse('-P1DT30M')->round(
+            smallestUnit: Unit::Hour,
+            largestUnit: Unit::Day,
+            roundingMode: $roundingMode,
+            relativeTo: ZonedDateTime::parse('2024-01-15T00:00:00[America/New_York]'),
+        );
+
+        static::assertSame($expected, $rounded->toString());
+    }
+
+    /**
+     * The sign-symmetric modes must stay untouched by the directed-mode swap.
+     *
+     * @return array<string, array{string, RoundingMode, string}>
+     */
+    public static function negativeSymmetricRoundingProvider(): array
+    {
+        return [
+            'trunc' => ['-PT1.0004S', RoundingMode::Trunc, '-PT1S'],
+            'expand' => ['-PT1.0004S', RoundingMode::Expand, '-PT1.001S'],
+            'halfExpand' => ['-PT1.0005S', RoundingMode::HalfExpand, '-PT1.001S'],
+            'halfTrunc' => ['-PT1.0005S', RoundingMode::HalfTrunc, '-PT1S'],
+            'halfEven' => ['-PT1.0005S', RoundingMode::HalfEven, '-PT1S'],
+        ];
+    }
+
+    #[DataProvider('negativeSymmetricRoundingProvider')]
+    public function testRoundSymmetricModesAreUnaffectedByANegativeSign(
+        string $duration,
+        RoundingMode $roundingMode,
+        string $expected,
+    ): void {
+        $rounded = Duration::parse($duration)->round(smallestUnit: Unit::Millisecond, roundingMode: $roundingMode);
+
+        static::assertSame($expected, $rounded->toString());
     }
 
     // -------------------------------------------------------------------------
