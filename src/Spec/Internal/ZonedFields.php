@@ -339,15 +339,11 @@ final class ZonedFields
     /**
      * Resolves the `disambiguation` option, defaulting to `'compatible'`.
      *
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed> $options An options bag already normalized by {@see Options}.
      * @throws RangeError if the value is not one of the four keywords.
      */
-    public static function disambiguationFromBag(array|object|null $options): string
+    public static function disambiguationFromBag(array $options): string
     {
-        if ($options === null) {
-            return 'compatible';
-        }
-        $options = Options::normalizeOptions($options, ['disambiguation']);
         if (!array_key_exists('disambiguation', $options)) {
             return 'compatible';
         }

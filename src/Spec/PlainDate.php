@@ -18,6 +18,7 @@ use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Calendrics\Spec\Internal\TimeZoneHelper;
 use Stringable;
 
@@ -29,7 +30,7 @@ use Stringable;
  *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-plaindate-objects
  */
-final class PlainDate implements Stringable
+final class PlainDate implements PlainLocaleFormattable, Stringable
 {
     use HasPlainLocaleString;
     use HasStringRepresentations;
