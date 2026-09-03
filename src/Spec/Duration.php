@@ -21,6 +21,12 @@ use Stringable;
  * months, weeks) cannot be converted to nanoseconds without a reference date,
  * so no internal nanosecond total is maintained.
  *
+ * A field holds a float only when its magnitude reaches PHP_INT_MAX, where int64 cannot carry
+ * it; every smaller value is stored as an exact int. TC39 has no int/float split — every field
+ * is a Number, where 1 and 1.0 are one value — so without that narrowing the `===` field
+ * comparisons in equals() would separate two equal Durations, and the `!== 0` emptiness tests
+ * throughout this class and its collaborators would read a float zero as a set field.
+ *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-duration-objects
  */
 final class Duration implements Stringable
@@ -81,32 +87,42 @@ final class Duration implements Stringable
         get => $this->sign === 0;
     }
 
+    public readonly int|float $years;
+
+    public readonly int|float $months;
+
+    public readonly int|float $weeks;
+
+    public readonly int|float $days;
+
+    public readonly int|float $hours;
+
+    public readonly int|float $minutes;
+
+    public readonly int|float $seconds;
+
+    public readonly int|float $milliseconds;
+
+    public readonly int|float $microseconds;
+
+    public readonly int|float $nanoseconds;
+
     /**
-     * @throws RangeError when fields are out of range or non-zero fields do not all share the same sign.
+     * @throws RangeError when a field is not a finite integer, is out of range, or when non-zero
+     *   fields do not all share the same sign.
      */
     public function __construct(
-        public readonly int|float $years = 0,
-        public readonly int|float $months = 0,
-        public readonly int|float $weeks = 0,
-        public readonly int|float $days = 0,
-        public readonly int|float $hours = 0,
-        public readonly int|float $minutes = 0,
-        public readonly int|float $seconds = 0,
-        public readonly int|float $milliseconds = 0,
-        public readonly int|float $microseconds = 0,
-        public readonly int|float $nanoseconds = 0,
+        int|float $years = 0,
+        int|float $months = 0,
+        int|float $weeks = 0,
+        int|float $days = 0,
+        int|float $hours = 0,
+        int|float $minutes = 0,
+        int|float $seconds = 0,
+        int|float $milliseconds = 0,
+        int|float $microseconds = 0,
+        int|float $nanoseconds = 0,
     ) {
-        $years = $this->years;
-        $months = $this->months;
-        $weeks = $this->weeks;
-        $days = $this->days;
-        $hours = $this->hours;
-        $minutes = $this->minutes;
-        $seconds = $this->seconds;
-        $milliseconds = $this->milliseconds;
-        $microseconds = $this->microseconds;
-        $nanoseconds = $this->nanoseconds;
-
         $allInt =
             is_int($years)
             && is_int($months)
@@ -119,33 +135,31 @@ final class Duration implements Stringable
             && is_int($microseconds)
             && is_int($nanoseconds);
 
-        // TC39: each Duration field must be finite and integer-valued.
-        // Skip validation entirely in the common all-int case.
+        // normalizeField() returns an int unchanged, so this guard is a fast path, not a
+        // correctness gate: it keeps ten calls off the all-int case every construction takes.
         if (!$allInt) {
-            foreach ([
-                $years,
-                $months,
-                $weeks,
-                $days,
-                $hours,
-                $minutes,
-                $seconds,
-                $milliseconds,
-                $microseconds,
-                $nanoseconds,
-            ] as $field) {
-                if (!is_float($field)) {
-                    continue;
-                }
-
-                if (!is_finite($field)) {
-                    throw new RangeError('Duration fields must be finite; Infinity and NaN are not allowed.');
-                }
-                if (fmod(num1: $field, num2: 1.0) !== 0.0) {
-                    throw new RangeError('Duration fields must be integer-valued; fractional values are not allowed.');
-                }
-            }
+            $years = self::normalizeField($years);
+            $months = self::normalizeField($months);
+            $weeks = self::normalizeField($weeks);
+            $days = self::normalizeField($days);
+            $hours = self::normalizeField($hours);
+            $minutes = self::normalizeField($minutes);
+            $seconds = self::normalizeField($seconds);
+            $milliseconds = self::normalizeField($milliseconds);
+            $microseconds = self::normalizeField($microseconds);
+            $nanoseconds = self::normalizeField($nanoseconds);
         }
+
+        $this->years = $years;
+        $this->months = $months;
+        $this->weeks = $weeks;
+        $this->days = $days;
+        $this->hours = $hours;
+        $this->minutes = $minutes;
+        $this->seconds = $seconds;
+        $this->milliseconds = $milliseconds;
+        $this->microseconds = $microseconds;
+        $this->nanoseconds = $nanoseconds;
 
         // TC39 §7.5.10 IsValidDuration — calendar fields capped at 2^32.
         /** @infection-ignore-all GreaterThanOrEqual |x| >= 2^32 vs > 2^32-1 are identical for integers */
@@ -210,7 +224,7 @@ final class Duration implements Stringable
             $microseconds,
             $nanoseconds,
         ] as $v) {
-            if ($v === 0 || $v === 0.0) {
+            if ($v === 0) {
                 continue;
             }
             /** @infection-ignore-all GreaterThan > 0 ≡ >= 0 when $v is guaranteed non-zero (guarded above) */
@@ -841,6 +855,29 @@ final class Duration implements Stringable
     // -------------------------------------------------------------------------
 
     /**
+     * Returns a field in the class's storage form: an exact int unless int64 cannot carry it.
+     *
+     * `-0.0 === 0.0` holds in PHP, so negative zero narrows to the int 0 as well, matching
+     * TC39's normalization of -0 to +0.
+     *
+     * @throws RangeError if the value is not a finite integer.
+     */
+    private static function normalizeField(int|float $value): int|float
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+        // TC39: each Duration field must be finite and integer-valued.
+        if (!is_finite($value)) {
+            throw new RangeError('Duration fields must be finite; Infinity and NaN are not allowed.');
+        }
+        if (fmod(num1: $value, num2: 1.0) !== 0.0) {
+            throw new RangeError('Duration fields must be integer-valued; fractional values are not allowed.');
+        }
+        return abs($value) >= (float) PHP_INT_MAX ? $value : (int) $value;
+    }
+
+    /**
      * Distributes a decimal fraction of a time unit into smaller units.
      *
      * Uses float64 arithmetic (same precision as JS) to match TC39 test262 expected values.
@@ -912,8 +949,8 @@ final class Duration implements Stringable
                 if (!is_numeric($v)) {
                     throw new RangeError("Duration field \"{$field}\" must be a finite integer.");
                 }
-                // Numeric string → number. Cast to float; the integer-value check
-                // and the large-float guard below normalise it back to int when exact.
+                // Numeric string → number. Cast to float; the constructor normalizes it
+                // back to int when the value fits.
                 $v = (float) $v;
             }
             if (!is_int($v) && !is_float($v)) {
@@ -927,9 +964,9 @@ final class Duration implements Stringable
                     throw new RangeError("Duration field \"{$field}\" must be an integer, got non-integer {$v}.");
                 }
             }
-            // Keep large floats (> PHP_INT_MAX) as float; cast the rest to int.
-            // Values within int64 range are cast for exact integer semantics.
-            $values[] = is_float($v) && abs($v) >= (float) PHP_INT_MAX ? $v : (int) $v;
+            // The constructor repeats the finite and integer-valued checks; they are made here
+            // too because only this method knows which field is at fault.
+            $values[] = $v;
         }
 
         return new self(...$values);
