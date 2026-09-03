@@ -21,6 +21,10 @@ use Stringable;
  * months, weeks) cannot be converted to nanoseconds without a reference date,
  * so no internal nanosecond total is maintained.
  *
+ * A zero field is always the int 0, never 0.0. TC39 has no int/float split — every field is a
+ * Number, where 0 and 0.0 are one value — so without that guarantee the `!== 0` emptiness tests
+ * throughout this class and its collaborators would count a float zero as a set field.
+ *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-duration-objects
  */
 final class Duration implements Stringable
@@ -81,31 +85,62 @@ final class Duration implements Stringable
         get => $this->sign === 0;
     }
 
+    public readonly int|float $years;
+
+    public readonly int|float $months;
+
+    public readonly int|float $weeks;
+
+    public readonly int|float $days;
+
+    public readonly int|float $hours;
+
+    public readonly int|float $minutes;
+
+    public readonly int|float $seconds;
+
+    public readonly int|float $milliseconds;
+
+    public readonly int|float $microseconds;
+
+    public readonly int|float $nanoseconds;
+
     /**
      * @throws RangeError when fields are out of range or non-zero fields do not all share the same sign.
      */
     public function __construct(
-        public readonly int|float $years = 0,
-        public readonly int|float $months = 0,
-        public readonly int|float $weeks = 0,
-        public readonly int|float $days = 0,
-        public readonly int|float $hours = 0,
-        public readonly int|float $minutes = 0,
-        public readonly int|float $seconds = 0,
-        public readonly int|float $milliseconds = 0,
-        public readonly int|float $microseconds = 0,
-        public readonly int|float $nanoseconds = 0,
+        int|float $years = 0,
+        int|float $months = 0,
+        int|float $weeks = 0,
+        int|float $days = 0,
+        int|float $hours = 0,
+        int|float $minutes = 0,
+        int|float $seconds = 0,
+        int|float $milliseconds = 0,
+        int|float $microseconds = 0,
+        int|float $nanoseconds = 0,
     ) {
-        $years = $this->years;
-        $months = $this->months;
-        $weeks = $this->weeks;
-        $days = $this->days;
-        $hours = $this->hours;
-        $minutes = $this->minutes;
-        $seconds = $this->seconds;
-        $milliseconds = $this->milliseconds;
-        $microseconds = $this->microseconds;
-        $nanoseconds = $this->nanoseconds;
+        $years = self::normalizeZero($years);
+        $months = self::normalizeZero($months);
+        $weeks = self::normalizeZero($weeks);
+        $days = self::normalizeZero($days);
+        $hours = self::normalizeZero($hours);
+        $minutes = self::normalizeZero($minutes);
+        $seconds = self::normalizeZero($seconds);
+        $milliseconds = self::normalizeZero($milliseconds);
+        $microseconds = self::normalizeZero($microseconds);
+        $nanoseconds = self::normalizeZero($nanoseconds);
+
+        $this->years = $years;
+        $this->months = $months;
+        $this->weeks = $weeks;
+        $this->days = $days;
+        $this->hours = $hours;
+        $this->minutes = $minutes;
+        $this->seconds = $seconds;
+        $this->milliseconds = $milliseconds;
+        $this->microseconds = $microseconds;
+        $this->nanoseconds = $nanoseconds;
 
         $allInt =
             is_int($years)
@@ -210,7 +245,7 @@ final class Duration implements Stringable
             $microseconds,
             $nanoseconds,
         ] as $v) {
-            if ($v === 0 || $v === 0.0) {
+            if ($v === 0) {
                 continue;
             }
             /** @infection-ignore-all GreaterThan > 0 ≡ >= 0 when $v is guaranteed non-zero (guarded above) */
@@ -839,6 +874,15 @@ final class Duration implements Stringable
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * Collapses a float zero to the int 0. `-0.0 === 0.0` holds in PHP, so negative zero is
+     * covered too, matching TC39's normalization of -0 to +0.
+     */
+    private static function normalizeZero(int|float $value): int|float
+    {
+        return $value === 0.0 ? 0 : $value;
+    }
 
     /**
      * Distributes a decimal fraction of a time unit into smaller units.
