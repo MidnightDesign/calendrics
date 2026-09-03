@@ -21,6 +21,10 @@ use Stringable;
  * months, weeks) cannot be converted to nanoseconds without a reference date,
  * so no internal nanosecond total is maintained.
  *
+ * The constructor narrows every field an int holds exactly, so a field is a float
+ * only from 2^53 up — never zero. That is what lets this class and the rest of the
+ * spec layer test a field against `0` with `===` / `!==`.
+ *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-duration-objects
  */
 final class Duration implements Stringable
@@ -81,32 +85,41 @@ final class Duration implements Stringable
         get => $this->sign === 0;
     }
 
+    public readonly int|float $years;
+
+    public readonly int|float $months;
+
+    public readonly int|float $weeks;
+
+    public readonly int|float $days;
+
+    public readonly int|float $hours;
+
+    public readonly int|float $minutes;
+
+    public readonly int|float $seconds;
+
+    public readonly int|float $milliseconds;
+
+    public readonly int|float $microseconds;
+
+    public readonly int|float $nanoseconds;
+
     /**
      * @throws RangeError when fields are out of range or non-zero fields do not all share the same sign.
      */
     public function __construct(
-        public readonly int|float $years = 0,
-        public readonly int|float $months = 0,
-        public readonly int|float $weeks = 0,
-        public readonly int|float $days = 0,
-        public readonly int|float $hours = 0,
-        public readonly int|float $minutes = 0,
-        public readonly int|float $seconds = 0,
-        public readonly int|float $milliseconds = 0,
-        public readonly int|float $microseconds = 0,
-        public readonly int|float $nanoseconds = 0,
+        int|float $years = 0,
+        int|float $months = 0,
+        int|float $weeks = 0,
+        int|float $days = 0,
+        int|float $hours = 0,
+        int|float $minutes = 0,
+        int|float $seconds = 0,
+        int|float $milliseconds = 0,
+        int|float $microseconds = 0,
+        int|float $nanoseconds = 0,
     ) {
-        $years = $this->years;
-        $months = $this->months;
-        $weeks = $this->weeks;
-        $days = $this->days;
-        $hours = $this->hours;
-        $minutes = $this->minutes;
-        $seconds = $this->seconds;
-        $milliseconds = $this->milliseconds;
-        $microseconds = $this->microseconds;
-        $nanoseconds = $this->nanoseconds;
-
         $allInt =
             is_int($years)
             && is_int($months)
@@ -145,7 +158,29 @@ final class Duration implements Stringable
                     throw new RangeError('Duration fields must be integer-valued; fractional values are not allowed.');
                 }
             }
+
+            $years = self::narrowField($years);
+            $months = self::narrowField($months);
+            $weeks = self::narrowField($weeks);
+            $days = self::narrowField($days);
+            $hours = self::narrowField($hours);
+            $minutes = self::narrowField($minutes);
+            $seconds = self::narrowField($seconds);
+            $milliseconds = self::narrowField($milliseconds);
+            $microseconds = self::narrowField($microseconds);
+            $nanoseconds = self::narrowField($nanoseconds);
         }
+
+        $this->years = $years;
+        $this->months = $months;
+        $this->weeks = $weeks;
+        $this->days = $days;
+        $this->hours = $hours;
+        $this->minutes = $minutes;
+        $this->seconds = $seconds;
+        $this->milliseconds = $milliseconds;
+        $this->microseconds = $microseconds;
+        $this->nanoseconds = $nanoseconds;
 
         // TC39 §7.5.10 IsValidDuration — calendar fields capped at 2^32.
         /** @infection-ignore-all GreaterThanOrEqual |x| >= 2^32 vs > 2^32-1 are identical for integers */
@@ -210,7 +245,7 @@ final class Duration implements Stringable
             $microseconds,
             $nanoseconds,
         ] as $v) {
-            if ($v === 0 || $v === 0.0) {
+            if ($v === 0) {
                 continue;
             }
             /** @infection-ignore-all GreaterThan > 0 ≡ >= 0 when $v is guaranteed non-zero (guarded above) */
@@ -223,6 +258,25 @@ final class Duration implements Stringable
                 throw new RangeError('All non-zero Duration fields must have the same sign.');
             }
         }
+    }
+
+    /**
+     * Returns $value as an int below 2^53, unchanged from 2^53 up.
+     *
+     * Fields are int|float because TC39 stores them as float64 Numbers, which from 2^53
+     * up hold values an int does not; the rounding engine hands those back as floats at
+     * that same threshold, so narrowing here leaves each field with one type per
+     * magnitude rather than one per code path. The float 0.0 a caller or the engine may
+     * pass is the case that matters: as a float it is neither identical to 0 nor greater
+     * than it, so every `!== 0` test in the spec layer would read it as a negative field.
+     */
+    private static function narrowField(int|float $value): int|float
+    {
+        if (is_int($value) || abs($value) >= 9_007_199_254_740_992.0) {
+            return $value;
+        }
+
+        return (int) $value;
     }
 
     // -------------------------------------------------------------------------
