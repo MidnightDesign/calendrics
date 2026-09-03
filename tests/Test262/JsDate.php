@@ -57,7 +57,6 @@ final class JsDate
         $tzOpt = $opts['timeZone'] ?? null;
         $timeZone = is_string($tzOpt) ? $tzOpt : 'UTC';
 
-        $opts['_locale'] = $locale;
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts);
         $result = $formatter->format((float) $this->epochMilliseconds / 1000.0);
         if ($result === false) {
