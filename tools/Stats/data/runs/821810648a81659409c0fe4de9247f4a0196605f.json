@@ -1,0 +1,91 @@
+{
+    "sha": "821810648a81659409c0fe4de9247f4a0196605f",
+    "status": "ok",
+    "duration_seconds": 3,
+    "coverage": {
+        "lines": {
+            "total": 2175,
+            "code": 1544,
+            "comments": 631,
+            "executable": 994,
+            "executed": 913,
+            "percent": 91.85
+        },
+        "methods": {
+            "count": 45,
+            "tested": 27,
+            "percent": 60
+        },
+        "classes": {
+            "count": 2,
+            "tested": 0,
+            "percent": 0
+        },
+        "traits": {
+            "count": 0,
+            "tested": 0,
+            "percent": 0
+        },
+        "by_dir": {
+            "/": {
+                "lines": {
+                    "total": 2175,
+                    "code": 1544,
+                    "comments": 631,
+                    "executable": 994,
+                    "executed": 913,
+                    "percent": 91.85
+                },
+                "methods": {
+                    "count": 45,
+                    "tested": 27,
+                    "percent": 60
+                },
+                "classes": {
+                    "count": 2,
+                    "tested": 0,
+                    "percent": 0
+                },
+                "traits": {
+                    "count": 0,
+                    "tested": 0,
+                    "percent": 0
+                }
+            }
+        }
+    },
+    "tests": {
+        "tests": 1127,
+        "assertions": 3640,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 657,
+        "time": 1.18,
+        "by_suite": {
+            "porcelain": {
+                "tests": 0,
+                "assertions": 0,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0,
+                "time": 0
+            },
+            "test262": {
+                "tests": 978,
+                "assertions": 3433,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 657,
+                "time": 0.93
+            },
+            "other": {
+                "tests": 149,
+                "assertions": 207,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0,
+                "time": 0.25
+            }
+        }
+    }
+}

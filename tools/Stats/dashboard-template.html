@@ -1,0 +1,798 @@
+<title>Calendrics Chronograph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f2f3f4;
+    --surface: #fcfcfb;
+    --surface-2: #f7f7f5;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --ink-3: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --rule: rgba(11, 11, 11, 0.10);
+    --rule-strong: rgba(11, 11, 11, 0.18);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
+    --tag: #4a3aa7;
+    --shadow: 0 1px 2px rgba(11, 11, 11, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --surface-2: #201f1e;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --ink-3: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --rule: rgba(255, 255, 255, 0.10);
+      --rule-strong: rgba(255, 255, 255, 0.18);
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --series-4: #c98500;
+      --series-5: #d55181;
+      --series-6: #008300;
+      --series-7: #9085e9;
+      --series-8: #e66767;
+      --tag: #9085e9;
+      --shadow: none;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #201f1e;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --ink-3: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --rule: rgba(255, 255, 255, 0.10);
+    --rule-strong: rgba(255, 255, 255, 0.18);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --tag: #9085e9;
+    --shadow: none;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 24px 72px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  header.masthead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--rule-strong);
+  }
+
+  header.masthead h1 {
+    margin: 6px 0 0;
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  header.masthead p {
+    margin: 8px 0 0;
+    max-width: 62ch;
+    color: var(--ink-2);
+  }
+
+  .runmeta {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    color: var(--ink-3);
+    text-align: right;
+    line-height: 1.8;
+    white-space: nowrap;
+  }
+
+  .runmeta b { color: var(--ink-2); font-weight: 500; }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    margin: 28px 0 0;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .tile {
+    background: var(--surface);
+    padding: 14px 16px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .tile .k {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .tile .v {
+    font-size: 25px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+  }
+
+  .tile .c {
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+
+  section { margin-top: 40px; }
+
+  .sechead {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+
+  .sechead h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+  }
+
+  .sechead .line {
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  .sechead .hint { font-size: 12.5px; color: var(--ink-3); }
+
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.thirds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid .span2 { grid-column: 1 / -1; }
+
+  @media (max-width: 860px) {
+    .grid, .grid.thirds { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 15px 16px 12px;
+    box-shadow: var(--shadow);
+    min-width: 0;
+  }
+
+  .panel h3 {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+
+  .panel .sub {
+    margin: 3px 0 0;
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin: 10px 0 2px;
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+  .legend i {
+    width: 11px;
+    height: 3px;
+    border-radius: 2px;
+    background: currentColor;
+    flex: none;
+  }
+
+  .plot { position: relative; margin-top: 4px; }
+  .plot svg { display: block; width: 100%; overflow: visible; }
+
+  .tip {
+    position: absolute;
+    z-index: 5;
+    pointer-events: none;
+    background: var(--surface);
+    border: 1px solid var(--rule-strong);
+    border-radius: 3px;
+    box-shadow: 0 4px 14px rgba(11, 11, 11, 0.13);
+    padding: 8px 10px;
+    font-size: 12px;
+    min-width: 168px;
+    opacity: 0;
+    transition: opacity 90ms linear;
+  }
+
+  .tip.on { opacity: 1; }
+  .tip .d { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; color: var(--ink-3); }
+  .tip .s { margin: 3px 0 6px; color: var(--ink); line-height: 1.35; }
+  .tip dl { display: grid; grid-template-columns: auto 1fr auto; gap: 3px 8px; margin: 0; align-items: center; }
+  .tip dt { display: contents; color: var(--ink-2); }
+  .tip .sw { width: 9px; height: 3px; border-radius: 2px; }
+  .tip .val { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+
+  .tk { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; font-variant-numeric: tabular-nums; fill: var(--ink-3); }
+  .tklabel { font-family: "IBM Plex Sans", sans-serif; font-size: 11px; font-weight: 500; }
+  .tagtx { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 9.5px; fill: var(--tag); letter-spacing: 0.04em; }
+
+  details.tablewrap { margin-top: 16px; }
+  details.tablewrap summary { cursor: pointer; font-size: 12.5px; color: var(--ink-2); padding: 4px 0; }
+  details.tablewrap summary:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; border-radius: 2px; }
+  .tablescroll { overflow-x: auto; margin-top: 10px; border: 1px solid var(--rule); border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+  th { background: var(--surface-2); font-weight: 600; color: var(--ink-2); position: sticky; top: 0; }
+  td { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  tbody tr:hover td { background: var(--surface-2); }
+
+  footer { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--ink-3); }
+  footer code { font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-2); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tip { transition: none; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">MidnightDesign / calendrics</div>
+      <h1>Calendrics Chronograph</h1>
+      <p>Every commit on <code>master</code>, measured. Size and churn come straight from git; the test, assertion and coverage series come from replaying the PHPUnit suite at each commit.</p>
+    </div>
+    <div class="runmeta" id="runmeta"></div>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section>
+    <div class="sechead">
+      <h2>Code</h2>
+      <div class="line"></div>
+      <div class="hint">hand-written and generated code are graphed apart — the corpus is 20&times; the size of the library</div>
+    </div>
+    <div class="grid">
+      <div class="panel span2" data-chart="handwritten"></div>
+      <div class="panel" data-chart="corpus"></div>
+      <div class="panel" data-chart="churn"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sechead">
+      <h2>Tests &amp; coverage</h2>
+      <div class="line"></div>
+      <div class="hint" id="measurednote"></div>
+    </div>
+    <div class="grid">
+      <div class="panel" data-chart="coverage"></div>
+      <div class="panel" data-chart="tests"></div>
+      <div class="panel" data-chart="assertions"></div>
+      <div class="panel" data-chart="runtime"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sechead">
+      <h2>Ratios</h2>
+      <div class="line"></div>
+      <div class="hint">the shape of the code, independent of how much of it there is</div>
+    </div>
+    <div class="grid thirds">
+      <div class="panel" data-chart="testratio"></div>
+      <div class="panel" data-chart="assertdensity"></div>
+      <div class="panel" data-chart="commentshare"></div>
+    </div>
+  </section>
+
+  <details class="tablewrap">
+    <summary>Show the numbers as a table (one row per commit, newest first)</summary>
+    <div class="tablescroll" id="tablehost"></div>
+  </details>
+
+  <footer>
+    Regenerate with <code>tools/Stats/collect-git.sh</code>, <code>tools/Stats/collect-tests.sh</code> and <code>tools/Stats/bin/render.php</code>.
+    Coverage is line coverage of <code>src/</code> reported by PHPUnit; tests and assertions come from the same run's JUnit log.
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var DATA = /*__STATS_DATA__*/null;
+  var rows = DATA.commits;
+  var measured = rows.filter(function (r) { return r.run !== null; });
+  var last = rows[rows.length - 1];
+  var lastRun = measured.length ? measured[measured.length - 1].run : null;
+
+  var fmt = {
+    int: function (n) { return Math.round(n).toLocaleString("en-US"); },
+    pct: function (n) { return n.toFixed(1) + "%"; },
+    pct2: function (n) { return n.toFixed(2) + "%"; },
+    ratio: function (n) { return n.toFixed(2); },
+    sec: function (n) { return n < 10 ? n.toFixed(1) + "s" : Math.round(n) + "s"; },
+    compact: function (n) {
+      if (n >= 1000000) { return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1) + "M"; }
+      if (n >= 1000) { return (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k"; }
+      return String(Math.round(n));
+    }
+  };
+
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  /* ---------- header + tiles ---------- */
+
+  document.getElementById("runmeta").innerHTML =
+    "<div>" + rows.length + " commits &middot; <b>" + rows[0].date + " &rarr; " + last.date + "</b></div>" +
+    "<div>" + measured.length + " of " + rows.length + " replayed for tests</div>" +
+    "<div>generated " + DATA.generated_at + "</div>";
+
+  document.getElementById("measurednote").textContent = measured.length === rows.length
+    ? "one PHPUnit run per commit, replayed across the whole history"
+    : "replay in progress — " + measured.length + " of " + rows.length + " commits measured so far";
+
+  var tiles = [
+    { k: "src", v: fmt.int(last.loc.src), c: "lines of library code" },
+    { k: "hand-written tests", v: fmt.int(last.loc.tests), c: fmt.ratio(last.loc.tests / last.loc.src) + " lines per src line" },
+    { k: "test262 corpus", v: fmt.compact(last.loc.test262_data + last.loc.test262_scripts), c: fmt.int(last.files.test262_data + last.files.test262_scripts) + " vendored + generated files" },
+    lastRun
+      ? { k: "tests", v: fmt.int(lastRun.tests), c: fmt.int(lastRun.assertions) + " assertions" }
+      : { k: "tests", v: "—", c: "replay pending" },
+    lastRun
+      ? { k: "line coverage", v: fmt.pct2(lastRun.coverage), c: fmt.int(lastRun.executed) + " of " + fmt.int(lastRun.executable) + " lines" }
+      : { k: "line coverage", v: "—", c: "replay pending" },
+    lastRun
+      ? { k: "public surface", v: fmt.int(lastRun.methods), c: lastRun.classes + " classes in src/" }
+      : { k: "public surface", v: "—", c: "replay pending" }
+  ];
+
+  document.getElementById("tiles").innerHTML = tiles.map(function (t) {
+    return '<div class="tile"><div class="k">' + t.k + '</div><div class="v">' + t.v + '</div><div class="c">' + t.c + "</div></div>";
+  }).join("");
+
+  /* ---------- chart engine ---------- */
+
+  var PAD = { t: 12, r: 16, b: 22, l: 46 };
+  var LABEL_R = 66;
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function niceTicks(min, max, count) {
+    var span = max - min;
+    if (span <= 0) { return [min]; }
+    var raw = span / count;
+    var mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    var norm = raw / mag;
+    var step = (norm >= 5 ? 5 : norm >= 2 ? 2 : 1) * mag;
+    var out = [];
+    for (var v = Math.ceil(min / step) * step; v <= max + step * 0.001; v += step) {
+      out.push(Math.abs(v) < step * 0.001 ? 0 : v);
+    }
+    return out;
+  }
+
+  function monthTicks(t0, t1) {
+    var out = [];
+    var d = new Date(t0);
+    d.setUTCDate(1);
+    d.setUTCHours(0, 0, 0, 0);
+    while (d.getTime() <= t1) {
+      if (d.getTime() >= t0) { out.push(d.getTime()); }
+      d.setUTCMonth(d.getUTCMonth() + 1);
+    }
+    return out;
+  }
+
+  var MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function Chart(panel, spec) {
+    this.panel = panel;
+    this.spec = spec;
+    this.height = spec.height || 190;
+
+    panel.innerHTML =
+      "<h3>" + esc(spec.title) + "</h3>" +
+      '<p class="sub">' + esc(spec.sub) + "</p>" +
+      (spec.series.length > 1
+        ? '<div class="legend">' + spec.series.map(function (s) {
+            return '<span style="color:' + s.color + '"><i></i><span style="color:var(--ink-2)">' + esc(s.name) + "</span></span>";
+          }).join("") + "</div>"
+        : "") +
+      '<div class="plot"><svg></svg><div class="tip"></div></div>';
+
+    this.plot = panel.querySelector(".plot");
+    this.svg = panel.querySelector("svg");
+    this.tip = panel.querySelector(".tip");
+    this.draw();
+    this.bind();
+  }
+
+  Chart.prototype.points = function () {
+    var spec = this.spec;
+    return spec.series.map(function (s) {
+      return rows.map(function (r, i) {
+        var v = s.get(r);
+        return (v === null || v === undefined || !isFinite(v)) ? null : { i: i, t: r.timestamp * 1000, v: v };
+      }).filter(function (p) { return p !== null; });
+    });
+  };
+
+  Chart.prototype.draw = function () {
+    var spec = this.spec;
+    var w = this.plot.clientWidth || 520;
+    var h = this.height;
+    var series = this.points();
+
+    var t0 = rows[0].timestamp * 1000;
+    var t1 = rows[rows.length - 1].timestamp * 1000;
+
+    var vals = [];
+    series.forEach(function (pts) { pts.forEach(function (p) { vals.push(p.v); }); });
+    if (!vals.length) {
+      this.svg.setAttribute("height", h);
+      this.svg.innerHTML = '<text x="12" y="' + (h / 2) + '" class="tk">no measurements yet</text>';
+      return;
+    }
+
+    var lo = spec.yMin !== undefined ? spec.yMin : Math.min.apply(null, vals);
+    var hi = spec.yMax !== undefined ? spec.yMax : Math.max.apply(null, vals);
+    if (spec.zero) { lo = 0; }
+    if (hi === lo) { hi = lo + 1; }
+    var padY = (hi - lo) * 0.08;
+    if (spec.yMax === undefined) { hi += padY; }
+    if (spec.yMin === undefined && !spec.zero) { lo -= padY; }
+    if (spec.zero) { lo = 0; }
+
+    var padR = (spec.series.length > 1 && !spec.bars) ? LABEL_R : PAD.r;
+    var iw = w - PAD.l - padR;
+    var ih = h - PAD.t - PAD.b;
+    var X = function (t) { return PAD.l + (t - t0) / (t1 - t0) * iw; };
+    var Y = function (v) { return PAD.t + ih - (v - lo) / (hi - lo) * ih; };
+    this.X = X; this.Y = Y; this.iw = iw; this.ih = ih; this.t0 = t0; this.t1 = t1;
+
+    var out = [];
+    var yts = niceTicks(lo, hi, 4);
+    yts.forEach(function (v) {
+      var y = Y(v);
+      if (y < PAD.t - 1 || y > PAD.t + ih + 1) { return; }
+      out.push('<line x1="' + PAD.l + '" x2="' + (PAD.l + iw) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" style="stroke:var(--grid)" stroke-width="1"/>');
+      out.push('<text x="' + (PAD.l - 8) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end" class="tk">' + spec.tick(v) + "</text>");
+    });
+
+    monthTicks(t0, t1).forEach(function (t) {
+      var x = X(t);
+      out.push('<text x="' + x.toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle" class="tk">' + MONTH[new Date(t).getUTCMonth()] + "</text>");
+    });
+
+    out.push('<line x1="' + PAD.l + '" x2="' + (PAD.l + iw) + '" y1="' + (PAD.t + ih) + '" y2="' + (PAD.t + ih) + '" style="stroke:var(--axis)" stroke-width="1"/>');
+
+    if (spec.tags) {
+      rows.forEach(function (r) {
+        if (!r.tags.length) { return; }
+        var x = X(r.timestamp * 1000);
+        out.push('<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + PAD.t + '" y2="' + (PAD.t + ih) + '" style="stroke:var(--tag)" stroke-width="1" stroke-dasharray="2 3" opacity="0.55"/>');
+        out.push('<text x="' + (x - 3).toFixed(1) + '" y="' + (PAD.t + 8) + '" text-anchor="end" class="tagtx">' + esc(r.tags[0]) + "</text>");
+      });
+    }
+
+    if (spec.bars) {
+      var zero = Y(0);
+      var bw = Math.max(1.5, iw / rows.length - 1.5);
+      spec.series.forEach(function (s, si) {
+        series[si].forEach(function (p) {
+          var y = Y(p.v);
+          var top = Math.min(y, zero);
+          var height = Math.max(1, Math.abs(y - zero));
+          out.push('<rect x="' + (X(p.t) - bw / 2).toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + height.toFixed(1) + '" rx="1" style="fill:' + s.color + '" opacity="0.9"/>');
+        });
+      });
+      out.push('<line x1="' + PAD.l + '" x2="' + (PAD.l + iw) + '" y1="' + zero.toFixed(1) + '" y2="' + zero.toFixed(1) + '" style="stroke:var(--axis)" stroke-width="1"/>');
+    } else {
+      var ends = [];
+      spec.series.forEach(function (s, si) {
+        var pts = series[si];
+        if (!pts.length) { return; }
+        var d = pts.map(function (p, i) { return (i ? "L" : "M") + X(p.t).toFixed(1) + " " + Y(p.v).toFixed(1); }).join(" ");
+        out.push('<path d="' + d + '" fill="none" style="stroke:' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>');
+        var e = pts[pts.length - 1];
+        out.push('<circle cx="' + X(e.t).toFixed(1) + '" cy="' + Y(e.v).toFixed(1) + '" r="3.5" style="fill:' + s.color + ';stroke:var(--surface)" stroke-width="2"/>');
+        ends.push({ x: X(e.t), y: Y(e.v), name: s.name });
+      });
+
+      if (spec.series.length > 1) {
+        // Nudge coincident end labels apart so converging series stay readable.
+        ends.sort(function (a, b) { return a.y - b.y; });
+        for (var k = 1; k < ends.length; k++) {
+          if (ends[k].y - ends[k - 1].y < 12) { ends[k].y = ends[k - 1].y + 12; }
+        }
+        ends.forEach(function (e) {
+          out.push('<text x="' + (e.x + 7).toFixed(1) + '" y="' + (e.y + 3.5).toFixed(1) + '" class="tklabel" style="fill:var(--ink-2)">' + esc(e.name) + "</text>");
+        });
+      }
+    }
+
+    this.svg.setAttribute("height", h);
+    this.svg.setAttribute("width", w);
+    this.svg.innerHTML =
+      out.join("") +
+      '<g class="hoverlayer"><line class="cross" y1="' + PAD.t + '" y2="' + (PAD.t + ih) + '" style="stroke:var(--ink-3)" stroke-width="1" stroke-dasharray="2 2" opacity="0"/></g>';
+    this.cross = this.svg.querySelector(".cross");
+  };
+
+  Chart.prototype.bind = function () {
+    var self = this;
+    var spec = this.spec;
+
+    function move(ev) {
+      var box = self.plot.getBoundingClientRect();
+      var x = ev.clientX - box.left;
+      var frac = (x - PAD.l) / self.iw;
+      var t = self.t0 + frac * (self.t1 - self.t0);
+      var best = 0;
+      var bestD = Infinity;
+      rows.forEach(function (r, i) {
+        var d = Math.abs(r.timestamp * 1000 - t);
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      var r = rows[best];
+      var px = self.X(r.timestamp * 1000);
+
+      self.cross.setAttribute("x1", px);
+      self.cross.setAttribute("x2", px);
+      self.cross.setAttribute("opacity", "0.8");
+
+      var body = spec.series.map(function (s) {
+        var v = s.get(r);
+        var shown = (v === null || v === undefined || !isFinite(v)) ? "—" : spec.value(v);
+        return '<dt><span class="sw" style="background:' + s.color + '"></span><span>' + esc(s.name) + '</span><span class="val">' + shown + "</span></dt>";
+      }).join("");
+
+      self.tip.innerHTML =
+        '<div class="d">' + r.date + " &middot; " + r.sha + (r.tags.length ? " &middot; " + esc(r.tags[0]) : "") + "</div>" +
+        '<div class="s">' + esc(r.subject.length > 76 ? r.subject.slice(0, 74) + "…" : r.subject) + "</div>" +
+        "<dl>" + body + "</dl>";
+
+      self.tip.classList.add("on");
+      var tw = self.tip.offsetWidth;
+      var left = px + 14;
+      if (left + tw > box.width) { left = px - tw - 14; }
+      self.tip.style.left = Math.max(0, left) + "px";
+      self.tip.style.top = "6px";
+    }
+
+    function leave() {
+      self.tip.classList.remove("on");
+      if (self.cross) { self.cross.setAttribute("opacity", "0"); }
+    }
+
+    this.plot.addEventListener("mousemove", move);
+    this.plot.addEventListener("mouseleave", leave);
+  };
+
+  /* ---------- the charts ---------- */
+
+  var run = function (key) {
+    return function (r) { return r.run ? r.run[key] : null; };
+  };
+
+  var specs = {
+    handwritten: {
+      title: "Hand-written code",
+      sub: "Lines the team actually wrote, by area. Dashed rules mark releases.",
+      height: 220,
+      zero: true,
+      tags: true,
+      tick: fmt.compact,
+      value: fmt.int,
+      series: [
+        { name: "src/", color: "var(--series-1)", get: function (r) { return r.loc.src; } },
+        { name: "tests/ (hand-written)", color: "var(--series-2)", get: function (r) { return r.loc.tests; } },
+        { name: "tools/", color: "var(--series-3)", get: function (r) { return r.loc.tools; } }
+      ]
+    },
+    corpus: {
+      title: "test262 corpus",
+      sub: "Vendored upstream tests and the PHP transpiled from them.",
+      zero: true,
+      tick: fmt.compact,
+      value: fmt.int,
+      series: [
+        { name: "transpiled scripts", color: "var(--series-7)", get: function (r) { return r.loc.test262_scripts; } },
+        { name: "upstream .js data", color: "var(--series-4)", get: function (r) { return r.loc.test262_data; } }
+      ]
+    },
+    churn: {
+      title: "Churn per commit",
+      sub: "Lines added above the axis, removed below — every tracked file.",
+      bars: true,
+      tick: function (v) { return fmt.compact(Math.abs(v)); },
+      value: function (v) { return fmt.int(Math.abs(v)); },
+      series: [
+        { name: "added", color: "var(--series-1)", get: function (r) { return r.churn.added; } },
+        { name: "removed", color: "var(--series-8)", get: function (r) { return -r.churn.deleted; } }
+      ]
+    },
+    coverage: {
+      title: "Line coverage of src/",
+      sub: "PHPUnit line coverage, overall and for the spec layer.",
+      tick: function (v) { return v.toFixed(0) + "%"; },
+      value: fmt.pct2,
+      tags: true,
+      series: [
+        { name: "all of src/", color: "var(--series-1)", get: run("coverage") },
+        { name: "src/Spec/", color: "var(--series-5)", get: run("spec_coverage") }
+      ]
+    },
+    tests: {
+      title: "Tests",
+      sub: "Test cases per run, split by suite.",
+      zero: true,
+      tick: fmt.compact,
+      value: fmt.int,
+      tags: true,
+      series: [
+        { name: "test262", color: "var(--series-7)", get: run("test262_tests") },
+        { name: "porcelain", color: "var(--series-2)", get: run("porcelain_tests") },
+        { name: "other", color: "var(--series-3)", get: run("other_tests") }
+      ]
+    },
+    assertions: {
+      title: "Assertions",
+      sub: "Total assertions executed by the whole suite.",
+      zero: true,
+      tick: fmt.compact,
+      value: fmt.int,
+      series: [
+        { name: "assertions", color: "var(--series-1)", get: run("assertions") }
+      ]
+    },
+    runtime: {
+      title: "Suite runtime",
+      sub: "Wall time PHPUnit reports for the run, with coverage enabled.",
+      zero: true,
+      tick: function (v) { return Math.round(v) + "s"; },
+      value: fmt.sec,
+      series: [
+        { name: "seconds", color: "var(--series-3)", get: run("suite_time") }
+      ]
+    },
+    testratio: {
+      title: "Test lines per src line",
+      sub: "Hand-written tests only.",
+      height: 150,
+      tick: fmt.ratio,
+      value: fmt.ratio,
+      series: [
+        { name: "tests/ ÷ src/", color: "var(--series-2)", get: function (r) { return r.loc.src > 0 ? r.loc.tests / r.loc.src : null; } }
+      ]
+    },
+    assertdensity: {
+      title: "Assertions per test",
+      sub: "A fall means new tests assert less.",
+      height: 150,
+      tick: function (v) { return v.toFixed(0); },
+      value: fmt.ratio,
+      series: [
+        { name: "assertions ÷ tests", color: "var(--series-1)", get: function (r) { return r.run && r.run.tests > 0 ? r.run.assertions / r.run.tests : null; } }
+      ]
+    },
+    commentshare: {
+      title: "Comment share of src/",
+      sub: "Comment lines as a share of all non-blank lines.",
+      height: 150,
+      tick: function (v) { return v.toFixed(0) + "%"; },
+      value: fmt.pct,
+      series: [
+        { name: "comments", color: "var(--series-7)", get: function (r) {
+          if (!r.run) { return null; }
+          var total = r.run.code_lines + r.run.comment_lines;
+          return total > 0 ? r.run.comment_lines / total * 100 : null;
+        } }
+      ]
+    }
+  };
+
+  var charts = [];
+  Object.keys(specs).forEach(function (key) {
+    var panel = document.querySelector('[data-chart="' + key + '"]');
+    if (panel) { charts.push(new Chart(panel, specs[key])); }
+  });
+
+  var resizeTimer = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      charts.forEach(function (c) { c.draw(); });
+    }, 120);
+  });
+
+  /* ---------- table view ---------- */
+
+  var head = ["Date", "Commit", "src LOC", "test LOC", "Tests", "Assertions", "Coverage", "Runtime"];
+  var body = rows.slice().reverse().map(function (r) {
+    return "<tr><td>" + r.date + "</td><td>" + r.sha + "</td><td>" + fmt.int(r.loc.src) + "</td><td>" + fmt.int(r.loc.tests) + "</td>" +
+      "<td>" + (r.run ? fmt.int(r.run.tests) : "—") + "</td>" +
+      "<td>" + (r.run ? fmt.int(r.run.assertions) : "—") + "</td>" +
+      "<td>" + (r.run ? fmt.pct2(r.run.coverage) : "—") + "</td>" +
+      "<td>" + (r.run ? fmt.sec(r.run.suite_time) : "—") + "</td></tr>";
+  }).join("");
+
+  document.getElementById("tablehost").innerHTML =
+    "<table><thead><tr>" + head.map(function (h) { return "<th>" + h + "</th>"; }).join("") + "</tr></thead><tbody>" + body + "</tbody></table>";
+})();
+</script>
