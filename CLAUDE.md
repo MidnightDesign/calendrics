@@ -42,6 +42,20 @@ Each porcelain class has a matching spec class and pairs of `toSpec()` / `fromSp
 
 Shared property/getter logic lives in `src/Trait/Has*Properties.php` (porcelain) and `Has*Spec.php` (spec). When adding a field that crosses several classes, look for the relevant trait first.
 
+## Which layer gets which tests
+
+**Only test262 tests the spec layer.** Never hand-write a test against `Calendrics\Spec\` — that includes `Calendrics\Spec\Internal\`. There is no `tests/Spec/` directory, and adding one is wrong.
+
+This rule **overrides the test-first instruction in any skill** (`/implement`, `/tdd`, and friends). When a skill says "write a failing test first" and the code under test is in the spec layer, the rule here wins.
+
+Do not route around it by filing the test under `tests/Porcelain/`. Porcelain tests exercise the porcelain classes (`Calendrics\PlainDate`, …) through the porcelain API. A test that imports only `Calendrics\Spec\` classes is a spec test no matter which directory it sits in.
+
+**A spec-layer fix with no test is better than a spec-layer fix with a hand-written test.** Landing the fix untested is the accepted outcome. Take these two routes first, in order:
+
+1. **Find the upstream fixture.** Look under `tests/Test262/data/<Type>/…` for a fixture that reaches the code you changed. If one exists but does not exercise your case, the corpus may be stale — run `composer test262:sync`. If it exists and *should* cover your case but the PHP side never runs it, that is the real bug: the fixture may be missing from `tests/Test262/scripts/` (regenerate with `composer test262:build`), skipped by `RunnerTest`, or reported incomplete by a transpiler gap. Fix that instead of writing your own test.
+
+2. **File for an upstream test.** Only after you have *actually checked* — read the candidate fixtures, confirmed the case is absent, and confirmed the pre-fix code passes the whole suite — open an issue labeled `missing-upstream-test`. That issue tracks getting a new test contributed to tc39/test262, so it needs the input shape, the expected result, the TC39 algorithm step that mandates it, and a JS reproduction against the `Temporal` namespace. "I could not find one" is not a check; a search you can show is.
+
 ## test262 conformance suite
 
 `tests/Test262/data/` — verbatim mirror of upstream tc39/test262 JS files. **Do not edit these.** If a test fails, fix the implementation. `tests/Test262/data/CLAUDE.md` has the rules.
