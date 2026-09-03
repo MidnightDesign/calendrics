@@ -833,7 +833,6 @@ final class Instant implements Stringable
         $tzOpt = $opts['timeZone'] ?? null;
         $timeZone = is_string($tzOpt) ? $tzOpt : 'UTC';
 
-        $opts['_locale'] = $locale;
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts);
         [$seconds, $subNs] = $this->epochParts();
         $result = IntlFormatter::formatEpoch($formatter, $seconds, $subNs, $timeZone, $locale);
