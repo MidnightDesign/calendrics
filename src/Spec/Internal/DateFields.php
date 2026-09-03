@@ -65,7 +65,10 @@ final class DateFields
             throw new TypeError('PlainDate property bag must have a day field.');
         }
 
-        $calendar = $calendarId !== null && $calendarId !== 'iso8601' ? CalendarFactory::get($calendarId) : null;
+        $calendar = CalendarFactory::get($calendarId ?? 'iso8601');
+        // ISO exposes no eras, so era/eraYear are not among its CalendarExtraFields and
+        // the bag's values are never read — not even coerced.
+        $readsEraFields = $calendarId !== null && $calendarId !== 'iso8601';
 
         // TC39 PrepareCalendarFields: a monthCode value's TYPE (must be a string) and its
         // SYNTAX (well-formedness) are validated before the year value's type is coerced.
@@ -89,7 +92,7 @@ final class DateFields
         }
 
         // Resolve era + eraYear if present (overrides year for era-based calendars).
-        if ($calendar !== null && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
+        if ($readsEraFields && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
             $resolved = CalendarMath::resolveYearFromEra($calendar, $bag['era'], $bag['eraYear'], 'PlainDate');
             if ($resolved !== null) {
                 $year = $resolved;
@@ -106,9 +109,7 @@ final class DateFields
             // Type and well-formedness were validated above (before year coercion).
             // Suitability (valid month value) is resolved here, after the year.
             $monthCode = $validatedMonthCode;
-            $month = $calendar !== null
-                ? $calendar->monthCodeToMonth($monthCode, $year)
-                : CalendarMath::monthCodeToMonth($monthCode);
+            $month = $calendar->monthCodeToMonth($monthCode, $year);
         }
 
         if ($hasMonth) {
@@ -141,25 +142,11 @@ final class DateFields
             throw new RangeError("Invalid PlainDate: day {$day} must be at least 1.");
         }
 
-        // Non-ISO calendar: resolve calendar fields to ISO via the calendar protocol.
-        if ($calendar !== null) {
-            if ($monthCode !== null) {
-                [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($year, $monthCode, $day, $overflow);
-            } else {
-                [$isoY, $isoM, $isoD] = $calendar->calendarToIso($year, $month, $day, $overflow);
-            }
-            return new PlainDate($isoY, $isoM, $isoD, $calendarId);
-        }
+        // Resolve calendar fields to ISO via the calendar protocol.
+        [$isoY, $isoM, $isoD] = $monthCode !== null
+            ? $calendar->calendarToIsoFromMonthCode($year, $monthCode, $day, $overflow)
+            : $calendar->calendarToIso($year, $month, $day, $overflow);
 
-        if ($overflow === 'constrain') {
-            /**
-             * @psalm-suppress UnnecessaryVarAnnotation — Mago can't narrow min()
-             */
-            $month = min(12, $month);
-            $maxDay = CalendarMath::calcDaysInMonth($year, $month);
-            $day = min($maxDay, $day);
-        }
-
-        return new PlainDate($year, $month, $day, $calendarId ?? 'iso8601');
+        return new PlainDate($isoY, $isoM, $isoD, $calendarId ?? 'iso8601');
     }
 }

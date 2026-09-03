@@ -270,11 +270,11 @@ final class IsoCalendar implements CalendarProtocol
             $day = max(1, min(CalendarMath::calcDaysInMonth($year, $month), $day));
         } else {
             if ($month < 1 || $month > 12) {
-                throw new RangeError("Invalid PlainDate: month {$month} is out of range 1-12.");
+                throw new RangeError("Month {$month} is out of range 1–12 for this calendar year.");
             }
             $maxDay = CalendarMath::calcDaysInMonth($year, $month);
             if ($day < 1 || $day > $maxDay) {
-                throw new RangeError("Invalid PlainDate: day {$day} is out of range for {$year}-{$month}.");
+                throw new RangeError("Day {$day} exceeds maximum {$maxDay} for {$year}-{$month}.");
             }
         }
 
