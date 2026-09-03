@@ -38,6 +38,13 @@ final class LocalizedFormattingTest extends TestCase
     /** A locale whose default calendar is not Gregorian, used to observe the `calendar` option. */
     private const string BUDDHIST_LOCALE = 'th-TH';
 
+    /**
+     * A locale that spells all three day-period widths differently: at 15:00 French
+     * renders 'ap.m.', 'après-midi' and 'de l'après-midi'. English collapses two of
+     * the three at every hour of the day.
+     */
+    private const string DAY_PERIOD_LOCALE = 'fr-FR';
+
     private static function date(): PlainDate
     {
         return new PlainDate(2020, 6, 15);
@@ -419,6 +426,71 @@ final class LocalizedFormattingTest extends TestCase
     {
         $this->expectException(RangeError::class);
         new PlainMonthDay(6, 15)->toLocaleString(self::LOCALE);
+    }
+
+    // -------------------------------------------------------------------------
+    // Every value of every option renders as itself
+    // -------------------------------------------------------------------------
+
+    /**
+     * The one-value-per-option cases above prove an option is read at all. These
+     * prove every one of its values is read as itself — the distinction that
+     * separates a real value-to-skeleton mapping from a single skeleton every
+     * value happens to collapse onto.
+     *
+     * Each case renders the same temporal value once per enum case and expects as
+     * many distinct strings as the enum has cases, so nothing pins CLDR wording.
+     *
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function everyOptionValueCases(): iterable
+    {
+        $date = self::date();
+        // The 5th, not the 15th: a two-digit day of the month renders the same either
+        // way, so the 15th would tell us nothing about the option.
+        $fifth = new PlainDate(2020, 6, 5);
+        $afternoon = new PlainTime(15, 0);
+        $zoned = self::zoned();
+
+        yield 'PlainDate dateStyle' => [array_map(static fn(FormatStyle $style): string => $date->toLocaleString(
+            self::LOCALE,
+            dateStyle: $style,
+        ), FormatStyle::cases())];
+        yield 'PlainDate weekday' => [array_map(static fn(TextWidth $width): string => $date->toLocaleString(
+            self::LOCALE,
+            weekday: $width,
+        ), TextWidth::cases())];
+        yield 'PlainDate era' => [array_map(static fn(TextWidth $width): string => $date->toLocaleString(
+            self::LOCALE,
+            era: $width,
+        ), TextWidth::cases())];
+        yield 'PlainDate year' => [array_map(static fn(NumberWidth $width): string => $date->toLocaleString(
+            self::LOCALE,
+            year: $width,
+        ), NumberWidth::cases())];
+        yield 'PlainDate month' => [array_map(static fn(MonthWidth $width): string => $date->toLocaleString(
+            self::LOCALE,
+            month: $width,
+        ), MonthWidth::cases())];
+        yield 'PlainDate day' => [array_map(static fn(NumberWidth $width): string => $fifth->toLocaleString(
+            self::LOCALE,
+            day: $width,
+        ), NumberWidth::cases())];
+        yield 'PlainTime dayPeriod' => [array_map(static fn(TextWidth $width): string => $afternoon->toLocaleString(
+            self::DAY_PERIOD_LOCALE,
+            dayPeriod: $width,
+        ), TextWidth::cases())];
+        yield 'ZonedDateTime timeZoneName' => [array_map(
+            static fn(TimeZoneNameStyle $style): string => $zoned->toLocaleString(self::LOCALE, timeZoneName: $style),
+            TimeZoneNameStyle::cases(),
+        )];
+    }
+
+    /** @param list<string> $rendered One rendering per value of a single option. */
+    #[DataProvider('everyOptionValueCases')]
+    public function testEveryOptionValueRendersDistinctly(array $rendered): void
+    {
+        static::assertSame($rendered, array_values(array_unique($rendered)));
     }
 
     // -------------------------------------------------------------------------
