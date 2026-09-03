@@ -556,7 +556,6 @@ docker compose exec php composer check
 |--------|---------|
 | All tests | `composer test` |
 | Porcelain tests | `phpunit --testsuite porcelain` |
-| Spec-layer tests | `phpunit --testsuite spec` |
 | test262 conformance | `composer test262:run` |
 | Transpile test262 | `composer test262:build` |
 | Tests + coverage | `composer test-coverage` |
@@ -575,8 +574,6 @@ docker compose exec php composer test262:run
 ```
 
 Currently **11,074 test262 scripts passing** (0 failures, 296 incomplete — mostly JS-only features like Symbol, Proxy, and property descriptor access, plus a handful of Chinese-calendar fixtures that need ICU ≥ 76).
-
-A handful of inputs the corpus cannot express — an explicit `null` where JS writes `undefined`, a `\Stringable` where JS uses a `valueOf()` observer — are covered by hand-written tests in `tests/Spec/` instead.
 
 ---
 

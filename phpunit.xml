@@ -8,10 +8,6 @@
             <directory>tests/</directory>
             <exclude>tests/Test262</exclude>
             <exclude>tests/Porcelain</exclude>
-            <exclude>tests/Spec</exclude>
-        </testsuite>
-        <testsuite name="spec">
-            <directory>tests/Spec</directory>
         </testsuite>
         <testsuite name="porcelain">
             <directory>tests/Porcelain</directory>
