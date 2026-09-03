@@ -181,6 +181,9 @@ final class IsoCalendar implements CalendarProtocol
             $months += 12;
         }
 
+        // Borrow a month when date2's day has not reached date1's. The comparison uses
+        // the original day, not one clamped to the month's length, so Feb 29 2020 → Feb
+        // 28 2021 borrows (28 < 29) and comes out as 11 months rather than a whole year.
         if ($isoD2 < $isoD1) {
             if ($months > 0) {
                 $months--;
