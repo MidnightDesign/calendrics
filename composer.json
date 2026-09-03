@@ -62,8 +62,8 @@
         "test262:sync": "bash tools/sync-test262.sh",
         "test262:build": "@test262:transpile",
         "test262:run": "phpunit --testsuite test262",
-        "infection": "php -d memory_limit=512M vendor/bin/infection --threads=max",
-        "phpstan": "phpstan analyse --memory-limit=512M",
+        "infection": "infection --threads=max",
+        "phpstan": "phpstan analyse",
         "psalm": "psalm",
         "mago": [
             "mago lint",

@@ -9,9 +9,11 @@ use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
 
 /**
@@ -21,8 +23,9 @@ use Stringable;
  *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-plainyearmonth-objects
  */
-final class PlainYearMonth implements Stringable
+final class PlainYearMonth implements PlainLocaleFormattable, Stringable
 {
+    use HasPlainLocaleString;
     use HasStringRepresentations;
 
     /**
@@ -79,9 +82,7 @@ final class PlainYearMonth implements Stringable
      * @psalm-api
      */
     public int $year {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoYear
-            : CalendarFactory::get($this->calendarId)->year($this->isoYear, $this->isoMonth, $this->referenceISODay);
+        get => CalendarFactory::get($this->calendarId)->year($this->isoYear, $this->isoMonth, $this->referenceISODay);
     }
 
     /**
@@ -90,9 +91,7 @@ final class PlainYearMonth implements Stringable
      * @psalm-api
      */
     public int $month {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoMonth
-            : CalendarFactory::get($this->calendarId)->month($this->isoYear, $this->isoMonth, $this->referenceISODay);
+        get => CalendarFactory::get($this->calendarId)->month($this->isoYear, $this->isoMonth, $this->referenceISODay);
     }
 
     /**
@@ -797,7 +796,8 @@ final class PlainYearMonth implements Stringable
             throw new TypeError('PlainYearMonth property bag must have a month or monthCode field.');
         }
 
-        $calendar = $calendarId !== null && $calendarId !== 'iso8601' ? CalendarFactory::get($calendarId) : null;
+        $calendar = CalendarFactory::get($calendarId ?? 'iso8601');
+        $readsEraFields = CalendarMath::readsEraFields($calendarId);
 
         // Read/validate monthCode FORMAT before reading year. Per TC39, fields are read in
         // alphabetical order ("monthCode" before "year"), and ToMonthCode validates the
@@ -821,7 +821,7 @@ final class PlainYearMonth implements Stringable
         }
 
         // Resolve era + eraYear if present (overrides year for era-based calendars).
-        if ($calendar !== null && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
+        if ($readsEraFields && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
             $resolved = CalendarMath::resolveYearFromEra($calendar, $bag['era'], $bag['eraYear'], 'PlainYearMonth');
             if ($resolved !== null) {
                 $year = $resolved;
@@ -836,9 +836,7 @@ final class PlainYearMonth implements Stringable
 
         if ($monthCodeStr !== null) {
             $monthCode = $monthCodeStr;
-            $month = $calendar !== null
-                ? $calendar->monthCodeToMonth($monthCode, $year, $overflow)
-                : CalendarMath::monthCodeToMonth($monthCode);
+            $month = $calendar->monthCodeToMonth($monthCode, $year, $overflow);
         }
 
         if ($hasMonth) {
@@ -861,22 +859,12 @@ final class PlainYearMonth implements Stringable
             throw new RangeError("Invalid PlainYearMonth: month {$month} must be at least 1.");
         }
 
-        // Non-ISO calendar: resolve calendar fields to ISO via the calendar protocol.
-        // Use day=1 as the reference day for year-month resolution.
-        if ($calendar !== null) {
-            if ($monthCode !== null) {
-                [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($year, $monthCode, 1, $overflow);
-            } else {
-                [$isoY, $isoM, $isoD] = $calendar->calendarToIso($year, $month, 1, $overflow);
-            }
-            return new self($isoY, $isoM, $calendarId, $isoD);
-        }
+        // Day 1 is the reference day for year-month resolution.
+        [$isoY, $isoM, $isoD] = $monthCode !== null
+            ? $calendar->calendarToIsoFromMonthCode($year, $monthCode, 1, $overflow)
+            : $calendar->calendarToIso($year, $month, 1, $overflow);
 
-        if ($overflow === 'constrain') {
-            $month = min(12, $month);
-        }
-
-        return new self($year, $month, $calendarId ?? 'iso8601', 1);
+        return new self($isoY, $isoM, $calendarId ?? 'iso8601', $isoD);
     }
 
     /**
@@ -1076,20 +1064,19 @@ final class PlainYearMonth implements Stringable
         }
 
         if ($normLargest === 'month') {
-            if ($normSmallest === 'month') {
-                if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
-                    return new Duration(months: $sinceSign * $totalMonths);
-                }
-                $rounded = self::roundCalendarYearMonths(
-                    $totalMonths,
-                    $temporalDate,
-                    $roundingIncrement,
-                    $roundingMode,
-                    false,
-                );
-                return new Duration(months: $sinceSign * $rounded);
+            // $normSmallest is 'month' too: the rank check above rejects a year-ranked
+            // smallestUnit against a month-ranked largestUnit.
+            if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
+                return new Duration(months: $sinceSign * $totalMonths);
             }
-            return new Duration(months: $sinceSign * $totalMonths);
+            $rounded = self::roundCalendarYearMonths(
+                $totalMonths,
+                $temporalDate,
+                $roundingIncrement,
+                $roundingMode,
+                false,
+            );
+            return new Duration(months: $sinceSign * $rounded);
         }
 
         // normLargest === 'year'

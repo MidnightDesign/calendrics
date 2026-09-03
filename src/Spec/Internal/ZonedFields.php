@@ -155,9 +155,10 @@ final class ZonedFields
         $micro = intval($us);
         $nano = intval($ns);
 
-        $calendar = $calendarId !== 'iso8601' ? CalendarFactory::get($calendarId) : null;
+        $calendar = CalendarFactory::get($calendarId);
+        $readsEraFields = CalendarMath::readsEraFields($calendarId);
 
-        if ($calendar !== null && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
+        if ($readsEraFields && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
             $resolved = CalendarMath::resolveYearFromEra($calendar, $bag['era'], $bag['eraYear'], 'ZonedDateTime');
             if ($resolved !== null) {
                 $year = $resolved;
@@ -173,7 +174,7 @@ final class ZonedFields
             /** @var string $mc — well-formedness established by validateMonthCodeSyntax() */
             $mc = $bag['monthCode'];
             $monthCode = $mc;
-            $month = $calendar !== null ? $calendar->monthCodeToMonth($mc, $year) : CalendarMath::monthCodeToMonth($mc);
+            $month = $calendar->monthCodeToMonth($mc, $year);
         }
         if ($hasMonth) {
             $newMonth = CalendarMath::toFiniteInt($bag['month'] ?? null, 'ZonedDateTime month');
@@ -191,23 +192,9 @@ final class ZonedFields
             throw new RangeError("Invalid day {$day}: must be at least 1.");
         }
 
-        if ($calendar !== null) {
-            [$year, $month, $day] = $monthCode !== null
-                ? $calendar->calendarToIsoFromMonthCode($year, $monthCode, $day, $overflow)
-                : $calendar->calendarToIso($year, $month, $day, $overflow);
-        } elseif ($overflow === 'constrain') {
-            /** @psalm-suppress UnnecessaryVarAnnotation — Mago can't narrow min() */
-            $month = min(12, $month);
-            $day = min(CalendarMath::calcDaysInMonth($year, $month), $day);
-        } else {
-            if ($month > 12) {
-                throw new RangeError("Invalid month {$month}: must be 1–12.");
-            }
-            $maxDay = CalendarMath::calcDaysInMonth($year, $month);
-            if ($day > $maxDay) {
-                throw new RangeError("Invalid day {$day}: exceeds {$maxDay} for {$year}-{$month}.");
-            }
-        }
+        [$year, $month, $day] = $monthCode !== null
+            ? $calendar->calendarToIsoFromMonthCode($year, $monthCode, $day, $overflow)
+            : $calendar->calendarToIso($year, $month, $day, $overflow);
 
         if ($overflow === 'constrain') {
             $hour = max(0, min(23, $hour));
@@ -352,15 +339,11 @@ final class ZonedFields
     /**
      * Resolves the `disambiguation` option, defaulting to `'compatible'`.
      *
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed> $options An options bag already normalized by {@see Options}.
      * @throws RangeError if the value is not one of the four keywords.
      */
-    public static function disambiguationFromBag(array|object|null $options): string
+    public static function disambiguationFromBag(array $options): string
     {
-        if ($options === null) {
-            return 'compatible';
-        }
-        $options = Options::normalizeOptions($options, ['disambiguation']);
         if (!array_key_exists('disambiguation', $options)) {
             return 'compatible';
         }

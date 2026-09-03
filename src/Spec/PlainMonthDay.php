@@ -9,9 +9,11 @@ use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
 
 /**
@@ -22,8 +24,9 @@ use Stringable;
  *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-plainmonthday-objects
  */
-final class PlainMonthDay implements Stringable
+final class PlainMonthDay implements PlainLocaleFormattable, Stringable
 {
+    use HasPlainLocaleString;
     use HasStringRepresentations;
 
     /**
@@ -58,9 +61,7 @@ final class PlainMonthDay implements Stringable
      * @psalm-api
      */
     public int $month {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoMonth
-            : CalendarFactory::get($this->calendarId)->month($this->referenceISOYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->month($this->referenceISOYear, $this->isoMonth, $this->isoDay);
     }
 
     /**
@@ -69,9 +70,7 @@ final class PlainMonthDay implements Stringable
      * @psalm-api
      */
     public int $day {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoDay
-            : CalendarFactory::get($this->calendarId)->day($this->referenceISOYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->day($this->referenceISOYear, $this->isoMonth, $this->isoDay);
     }
 
     // -------------------------------------------------------------------------
@@ -303,24 +302,19 @@ final class PlainMonthDay implements Stringable
                 );
             }
 
-            // Resolve monthCode: use provided, or default to current.
+            // Resolve monthCode: use provided, or default to current. It stays null only
+            // when a month replaces it, which is what puts the resolution on the month path.
             $monthCode = null;
-            $useMonthCode = false;
             if ($hasMonthCode) {
                 // MonthCode::validate: non-string TYPE => TypeError, ill-formed STRING => RangeError.
                 $monthCode = MonthCode::validate($bag['monthCode']);
-                $useMonthCode = true;
+            } elseif (!$hasMonth) {
+                $monthCode = $this->monthCode;
             }
 
             $month = null;
             if ($hasMonth) {
                 $month = CalendarMath::toFiniteInt($bag['month'], 'PlainMonthDay::with() month');
-                $useMonthCode = false;
-            }
-            if (!$hasMonth && !$hasMonthCode) {
-                // Default: preserve current monthCode.
-                $monthCode = $this->monthCode;
-                $useMonthCode = true;
             }
 
             $day = $this->day;
@@ -343,16 +337,14 @@ final class PlainMonthDay implements Stringable
                 $overflow = $resolveOverflow();
 
                 // Validate month/monthCode conflict with year context.
-                if ($useMonthCode && $hasMonth) {
-                    assert($monthCode !== null, description: '$useMonthCode implies monthCode was provided');
-                    /** @var int $month */
+                if ($monthCode !== null && $month !== null) {
                     $resolvedMonth = $calendar->monthCodeToMonth($monthCode, $calYear);
                     if ($month !== $resolvedMonth) {
                         throw new RangeError('Conflicting month and monthCode fields.');
                     }
                 }
 
-                if ($useMonthCode && $monthCode !== null) {
+                if ($monthCode !== null) {
                     [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode(
                         $calYear,
                         $monthCode,
@@ -376,9 +368,9 @@ final class PlainMonthDay implements Stringable
             // No year: use monthCode path with reference year resolution. Resolve the
             // options object (GetOptionsObject) now that all fields have been read.
             $resolveOverflow();
-            // $useMonthCode is always true here: month-without-year-or-monthCode was
-            // rejected above, and every other no-year shape sets useMonthCode = true.
-            /** @var string $monthCode — guaranteed non-null when $useMonthCode is true */
+            // Never null here: month-without-year-or-monthCode was rejected above, so every
+            // remaining no-year shape either carries a monthCode or defaults to the current one.
+            /** @var string $monthCode */
             return self::resolveNonIsoReferenceYear($calendar, $this->calendarId, $monthCode, $day);
         }
 

@@ -423,6 +423,45 @@ final class CalendarFieldResolutionTest extends TestCase
         static::assertSame('M05', $md->monthCode);
     }
 
+    public function testPlainMonthDayFromRejectsConflictingMonthAndMonthCode(): void
+    {
+        $this->expectException(RangeError::class);
+        PlainMonthDay::from([
+            'year' => 2024,
+            'monthCode' => 'M01',
+            'month' => 2,
+            'day' => 1,
+            'calendar' => 'gregory',
+        ]);
+    }
+
+    public function testPlainMonthDayWithRejectsConflictingMonthAndMonthCode(): void
+    {
+        $md = PlainMonthDay::from([
+            'year' => 2024,
+            'monthCode' => 'M01',
+            'day' => 1,
+            'calendar' => 'gregory',
+        ]);
+
+        $this->expectException(RangeError::class);
+        $md->with(['year' => 2024, 'monthCode' => 'M01', 'month' => 2]);
+    }
+
+    public function testPlainMonthDayWithAcceptsAgreeingMonthAndMonthCode(): void
+    {
+        $md = PlainMonthDay::from([
+            'year' => 2024,
+            'monthCode' => 'M01',
+            'day' => 1,
+            'calendar' => 'gregory',
+        ]);
+
+        $updated = $md->with(['year' => 2024, 'monthCode' => 'M03', 'month' => 3]);
+
+        static::assertSame('M03', $updated->monthCode);
+    }
+
     // -------------------------------------------------------------------------
     // Overflow handling
     // -------------------------------------------------------------------------

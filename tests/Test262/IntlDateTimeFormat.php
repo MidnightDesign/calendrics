@@ -7,11 +7,7 @@ namespace Calendrics\Tests\Test262;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Instant;
 use Calendrics\Spec\Internal\IntlFormatter;
-use Calendrics\Spec\PlainDate;
-use Calendrics\Spec\PlainDateTime;
-use Calendrics\Spec\PlainMonthDay;
-use Calendrics\Spec\PlainTime;
-use Calendrics\Spec\PlainYearMonth;
+use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Calendrics\Spec\ZonedDateTime;
 
 /**
@@ -100,14 +96,7 @@ final class IntlDateTimeFormat
         if ($value instanceof ZonedDateTime) {
             throw new TypeError('Intl.DateTimeFormat cannot format a Temporal.ZonedDateTime; convert it first.');
         }
-        if (
-            $value instanceof Instant
-            || $value instanceof PlainDate
-            || $value instanceof PlainDateTime
-            || $value instanceof PlainTime
-            || $value instanceof PlainYearMonth
-            || $value instanceof PlainMonthDay
-        ) {
+        if ($value instanceof Instant || $value instanceof PlainLocaleFormattable) {
             return $value->toLocaleString($this->locales, $this->options);
         }
         if ($value instanceof JsDate) {
@@ -158,30 +147,28 @@ final class IntlDateTimeFormat
     /**
      * Builds the IntlDateFormatter and timestamp for a value, mirroring exactly
      * what that value's toLocaleString() builds: same default components, same
-     * forced-UTC rule for Plain types, same timestamp derivation (the protected
-     * trait hooks are read via reflection to guarantee the mirror can't drift).
+     * forced-UTC rule for {@see PlainLocaleFormattable} types, same timestamp
+     * derivation (the protected trait hooks are read via reflection to guarantee
+     * the mirror can't drift).
      *
      * @return array{\IntlDateFormatter, float}
      */
     private function formatterFor(mixed $value): array
     {
         $locale = IntlFormatter::resolveLocale($this->locales);
-        $opts = $this->options;
-        $opts['_locale'] = $locale;
 
-        if (
-            $value instanceof PlainDate
-            || $value instanceof PlainDateTime
-            || $value instanceof PlainTime
-            || $value instanceof PlainYearMonth
-            || $value instanceof PlainMonthDay
-        ) {
+        if ($value instanceof PlainLocaleFormattable) {
+            // Mago mis-resolves ReflectionMethod::invoke() once the receiver is typed as
+            // the interface, so the hooks' own declared return types are restated here.
+            /** @var string $components */
             $components = new \ReflectionMethod($value, 'localeDefaultComponents')->invoke($value);
-            \assert(is_string($components));
+            /** @var int|float $timestamp */
             $timestamp = new \ReflectionMethod($value, 'toLocaleTimestamp')->invoke($value);
-            \assert(is_int($timestamp) || is_float($timestamp));
-            // Plain types always format in UTC (see HasStringRepresentations::toLocaleString).
-            return [IntlFormatter::buildIntlFormatter($locale, 'UTC', $opts, $components), (float) $timestamp];
+            // Plain types always format in UTC (see HasPlainLocaleString::toLocaleString).
+            return [
+                IntlFormatter::buildIntlFormatter($locale, 'UTC', $this->options, $components),
+                (float) $timestamp,
+            ];
         }
 
         $epochMs = match (true) {
@@ -191,9 +178,12 @@ final class IntlDateTimeFormat
             default => throw new TypeError('Intl.DateTimeFormat.formatToParts(): unsupported value.'),
         };
         /** @var mixed $tzOpt */
-        $tzOpt = $opts['timeZone'] ?? null;
+        $tzOpt = $this->options['timeZone'] ?? null;
         $timeZone = is_string($tzOpt) ? $tzOpt : 'UTC';
-        return [IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts), (float) $epochMs / 1000.0];
+        return [
+            IntlFormatter::buildIntlFormatter($locale, $timeZone, $this->options),
+            (float) $epochMs / 1000.0,
+        ];
     }
 
     /**
