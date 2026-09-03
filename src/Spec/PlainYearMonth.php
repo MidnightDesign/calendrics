@@ -1000,18 +1000,10 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             default => $smallestUnit,
         };
 
-        /** @var array<string, int> $unitRank */
-        static $unitRank = ['year' => 2, 'years' => 2, 'month' => 1, 'months' => 1, 'auto' => 1];
-
-        $suRank = $unitRank[$smallestUnit];
-        $luRank = $unitRank[$largestUnit];
-
-        // smallestUnit larger than largestUnit is only reachable with an explicit
-        // largestUnit: the default largestUnit is 'year' (the maximum rank), and the
-        // only way largestUnit drops to 'month' rank is an explicit option value. So
-        // $suRank > $luRank always implies the throw; there is no auto-widening case to
-        // handle here.
-        if ($suRank > $luRank) {
+        // Only an explicit 'month' largestUnit can be exceeded: the default and 'auto'
+        // both resolve to 'year', the larger of the two units this type has, so unlike
+        // the other difference helpers there is no auto-widening case to handle.
+        if ($normSmallest === 'year' && $normLargest === 'month') {
             throw new RangeError(
                 "smallestUnit \"{$smallestUnit}\" cannot be larger than largestUnit \"{$largestUnit}\".",
             );
