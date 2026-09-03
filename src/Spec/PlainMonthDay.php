@@ -9,6 +9,7 @@ use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
@@ -24,6 +25,7 @@ use Stringable;
  */
 final class PlainMonthDay implements Stringable
 {
+    use HasPlainLocaleString;
     use HasStringRepresentations;
 
     /**

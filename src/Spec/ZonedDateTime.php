@@ -1846,38 +1846,4 @@ final class ZonedDateTime implements Stringable
             default => throw new RangeError("Invalid roundingMode \"{$mode}\"."),
         };
     }
-
-    #[\Override]
-    protected function localeDefaultComponents(): string
-    {
-        return 'datetime';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    #[\Override]
-    protected function toLocaleTimestamp(): int
-    {
-        // ZonedDateTime has its own toLocaleString implementation and does not
-        // rely on the trait's default formatter path; this value is not consumed
-        // by that override, but the trait contract requires it.
-        [$epochSec] = $this->epochParts();
-        return $epochSec;
-    }
 }
