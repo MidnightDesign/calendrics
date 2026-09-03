@@ -156,8 +156,6 @@ final class IntlDateTimeFormat
     private function formatterFor(mixed $value): array
     {
         $locale = IntlFormatter::resolveLocale($this->locales);
-        $opts = $this->options;
-        $opts['_locale'] = $locale;
 
         if ($value instanceof PlainLocaleFormattable) {
             // Mago mis-resolves ReflectionMethod::invoke() once the receiver is typed as
@@ -167,7 +165,10 @@ final class IntlDateTimeFormat
             /** @var int|float $timestamp */
             $timestamp = new \ReflectionMethod($value, 'toLocaleTimestamp')->invoke($value);
             // Plain types always format in UTC (see HasPlainLocaleString::toLocaleString).
-            return [IntlFormatter::buildIntlFormatter($locale, 'UTC', $opts, $components), (float) $timestamp];
+            return [
+                IntlFormatter::buildIntlFormatter($locale, 'UTC', $this->options, $components),
+                (float) $timestamp,
+            ];
         }
 
         $epochMs = match (true) {
@@ -177,9 +178,12 @@ final class IntlDateTimeFormat
             default => throw new TypeError('Intl.DateTimeFormat.formatToParts(): unsupported value.'),
         };
         /** @var mixed $tzOpt */
-        $tzOpt = $opts['timeZone'] ?? null;
+        $tzOpt = $this->options['timeZone'] ?? null;
         $timeZone = is_string($tzOpt) ? $tzOpt : 'UTC';
-        return [IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts), (float) $epochMs / 1000.0];
+        return [
+            IntlFormatter::buildIntlFormatter($locale, $timeZone, $this->options),
+            (float) $epochMs / 1000.0,
+        ];
     }
 
     /**
