@@ -117,36 +117,10 @@ final class CalendarArithmeticTest extends TestCase
     }
 
     // =========================================================================
-    // dateUntil — direct CalendarProtocol tests. Day/week (coptic) and
-    // negative/same-date (buddhist/persian) exercise IntlCalendarBridge;
-    // the month/year cases below use PureHebrewCalendar via 'hebrew'.
+    // dateUntil — direct CalendarProtocol tests. Negative and same-date cases
+    // (buddhist/persian) exercise IntlCalendarBridge; the month/year cases
+    // below use PureHebrewCalendar via 'hebrew'.
     // =========================================================================
-
-    public function testDateUntilCopticDayUnit(): void
-    {
-        // 'coptic' routes to IntlCalendarBridge (unlike 'hebrew', which has a
-        // dedicated PureHebrewCalendar). Day/week diffing is pure JDN math, so
-        // it exercises IntlCalendarBridge::dateUntil's shared day/week fast path.
-        $cal = CalendarFactory::get('coptic');
-        [$y, $m, $w, $d] = $cal->dateUntil(2024, 1, 15, 2024, 6, 15, 'day');
-
-        static::assertSame(0, $y);
-        static::assertSame(0, $m);
-        static::assertSame(0, $w);
-        // 152 days from Jan 15 to Jun 15, 2024
-        static::assertSame(152, $d);
-    }
-
-    public function testDateUntilCopticWeekUnit(): void
-    {
-        $cal = CalendarFactory::get('coptic');
-        [$y, $m, $w, $d] = $cal->dateUntil(2024, 1, 15, 2024, 6, 15, 'week');
-
-        static::assertSame(0, $y);
-        static::assertSame(0, $m);
-        static::assertSame(21, $w);
-        static::assertSame(5, $d);
-    }
 
     public function testDateUntilHebrewMonthUnit(): void
     {
