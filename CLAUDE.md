@@ -28,7 +28,8 @@ Composer scripts (defined in `composer.json`):
 | `infection` | Mutation testing (target: 100% MSI) |
 | `check` | Full gate: phpstan + psalm + mago + mago-format-check + test-coverage + infection |
 
-PHPUnit suites (`phpunit.xml`): `default` (everything except Porcelain/Test262), `porcelain`, `test262`.
+PHPUnit suites (`phpunit.xml`): `default` (everything except Porcelain/Spec/Test262), `porcelain`, `spec`, `test262`.
+`tests/Spec/` holds hand-written spec-layer tests for inputs the transpiled corpus cannot deliver (explicit `null` in a bag, `\Stringable` field values, PHP float vs int at the Number/BigInt boundary). Reach for it only after checking that no test262 fixture covers the case.
 
 ## Architecture
 
