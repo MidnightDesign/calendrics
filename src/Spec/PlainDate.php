@@ -14,6 +14,7 @@ use Calendrics\Spec\Internal\DateFields;
 use Calendrics\Spec\Internal\DateParse;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
@@ -30,6 +31,7 @@ use Stringable;
  */
 final class PlainDate implements Stringable
 {
+    use HasPlainLocaleString;
     use HasStringRepresentations;
 
     // -------------------------------------------------------------------------
