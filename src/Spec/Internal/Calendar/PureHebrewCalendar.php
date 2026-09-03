@@ -512,11 +512,6 @@ final class PureHebrewCalendar implements CalendarProtocol
         string $largestUnit,
         bool $receiverIsLater = false,
     ): array {
-        $dayOrWeek = CalendarMath::dayOrWeekDateUntil($isoY1, $isoM1, $isoD1, $isoY2, $isoM2, $isoD2, $largestUnit);
-        if ($dayOrWeek !== null) {
-            return $dayOrWeek;
-        }
-
         $jdn1 = CalendarMath::toJulianDay($isoY1, $isoM1, $isoD1);
         $jdn2 = CalendarMath::toJulianDay($isoY2, $isoM2, $isoD2);
 

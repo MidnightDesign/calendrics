@@ -73,9 +73,7 @@ final class ZonedDateTime implements Stringable
     public int $year {
         get {
             $c = $this->localComponents();
-            return $this->calendarId === 'iso8601'
-                ? $c['year']
-                : CalendarFactory::get($this->calendarId)->year($c['year'], $c['month'], $c['day']);
+            return CalendarFactory::get($this->calendarId)->year($c['year'], $c['month'], $c['day']);
         }
     }
 
@@ -88,9 +86,7 @@ final class ZonedDateTime implements Stringable
     public int $month {
         get {
             $c = $this->localComponents();
-            return $this->calendarId === 'iso8601'
-                ? $c['month']
-                : CalendarFactory::get($this->calendarId)->month($c['year'], $c['month'], $c['day']);
+            return CalendarFactory::get($this->calendarId)->month($c['year'], $c['month'], $c['day']);
         }
     }
 
@@ -103,9 +99,7 @@ final class ZonedDateTime implements Stringable
     public int $day {
         get {
             $c = $this->localComponents();
-            return $this->calendarId === 'iso8601'
-                ? $c['day']
-                : CalendarFactory::get($this->calendarId)->day($c['year'], $c['month'], $c['day']);
+            return CalendarFactory::get($this->calendarId)->day($c['year'], $c['month'], $c['day']);
         }
     }
 
@@ -271,9 +265,7 @@ final class ZonedDateTime implements Stringable
     public int $dayOfYear {
         get {
             $c = $this->localComponents();
-            return $this->calendarId === 'iso8601'
-                ? CalendarMath::calcDayOfYear($c['year'], $c['month'], $c['day'])
-                : CalendarFactory::get($this->calendarId)->dayOfYear($c['year'], $c['month'], $c['day']);
+            return CalendarFactory::get($this->calendarId)->dayOfYear($c['year'], $c['month'], $c['day']);
         }
     }
 
@@ -1853,39 +1845,5 @@ final class ZonedDateTime implements Stringable
             'halfTrunc', 'halfFloor' => ($offsetNs * 2) > $dayLengthNs ? $dayLengthNs : 0,
             default => throw new RangeError("Invalid roundingMode \"{$mode}\"."),
         };
-    }
-
-    #[\Override]
-    protected function localeDefaultComponents(): string
-    {
-        return 'datetime';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    #[\Override]
-    protected function toLocaleTimestamp(): int
-    {
-        // ZonedDateTime has its own toLocaleString implementation and does not
-        // rely on the trait's default formatter path; this value is not consumed
-        // by that override, but the trait contract requires it.
-        [$epochSec] = $this->epochParts();
-        return $epochSec;
     }
 }
