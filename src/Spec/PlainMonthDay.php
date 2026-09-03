@@ -313,7 +313,9 @@ final class PlainMonthDay implements Stringable
             $month = null;
             if ($hasMonth) {
                 $month = CalendarMath::toFiniteInt($bag['month'], 'PlainMonthDay::with() month');
-                $useMonthCode = false;
+                // A month alongside a monthCode stays on the monthCode path so the two
+                // can be checked against each other; month alone replaces the code.
+                $useMonthCode = $hasMonthCode;
             }
             if (!$hasMonth && !$hasMonthCode) {
                 // Default: preserve current monthCode.
