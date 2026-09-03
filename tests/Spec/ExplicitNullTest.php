@@ -63,7 +63,7 @@ final class ExplicitNullTest extends TestCase
     // -------------------------------------------------------------------------
 
     /** @return iterable<string, array{array<string, mixed>}> */
-    public static function plainDateBagsWithANullField(): iterable
+    public static function dateBagsWithANullField(): iterable
     {
         yield 'year' => [['year' => null, 'month' => 1, 'day' => 1]];
         yield 'month' => [['year' => 2024, 'month' => null, 'day' => 1]];
@@ -73,10 +73,10 @@ final class ExplicitNullTest extends TestCase
     /**
      * @param array<string, mixed> $bag
      *
-     * PlainDate reports this as a RangeError where PlainDateTime and PlainYearMonth
-     * report a TypeError for the same bag; the split is observed, not designed.
+     * PlainDate reports a RangeError where PlainDateTime and PlainYearMonth report a
+     * TypeError for the same bag; the split is observed, not designed.
      */
-    #[DataProvider('plainDateBagsWithANullField')]
+    #[DataProvider('dateBagsWithANullField')]
     public function testPlainDateRejectsANullField(array $bag): void
     {
         $this->expectException(RangeError::class);
@@ -84,16 +84,8 @@ final class ExplicitNullTest extends TestCase
         PlainDate::from($bag);
     }
 
-    /** @return iterable<string, array{array<string, mixed>}> */
-    public static function plainDateTimeBagsWithANullField(): iterable
-    {
-        yield 'year' => [['year' => null, 'month' => 1, 'day' => 1]];
-        yield 'month' => [['year' => 2024, 'month' => null, 'day' => 1]];
-        yield 'day' => [['year' => 2024, 'month' => 1, 'day' => null]];
-    }
-
     /** @param array<string, mixed> $bag */
-    #[DataProvider('plainDateTimeBagsWithANullField')]
+    #[DataProvider('dateBagsWithANullField')]
     public function testPlainDateTimeRejectsANullDateField(array $bag): void
     {
         $this->expectException(TypeError::class);
@@ -129,8 +121,10 @@ final class ExplicitNullTest extends TestCase
     // The relativeTo option
     // -------------------------------------------------------------------------
 
-    public function testANullRelativeToIsIgnoredWhenNoAnchorIsNeeded(): void
+    public function testIdenticalDurationsCompareEqualWithoutResolvingRelativeTo(): void
     {
+        // TC39 returns 0 for two durations with identical fields before it ever reads
+        // relativeTo, so the null never has to stand for an anchor.
         $comparison = Duration::compare(Duration::from('P1D'), Duration::from('P1D'), ['relativeTo' => null]);
 
         static::assertSame(0, $comparison);

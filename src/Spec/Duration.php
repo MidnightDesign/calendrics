@@ -157,7 +157,6 @@ final class Duration implements Stringable
         // exceed MaxTimeDuration = 2^53 × 10^9 - 1 nanoseconds. The bound is checked on
         // $seconds itself rather than on an int cast of it: a float beyond int64 range
         // casts to 0, which would pass the check and then balance as zero seconds.
-        /** @infection-ignore-all */
         if (abs($seconds) > 9_007_199_254_740_991) {
             throw new RangeError('Duration time fields exceed the maximum representable range.');
         }
