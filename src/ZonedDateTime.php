@@ -238,12 +238,6 @@ final class ZonedDateTime implements
      */
     public static function fromDateTime(\DateTimeInterface $dt): self
     {
-        // Mago's stubs type \DateTimeInterface::getTimezone() as \DateTimeZone|false; in practice
-        // it never returns false for \DateTimeImmutable. PHPStan and Psalm correctly model the
-        // runtime. Suppress Mago here rather than adding a runtime check the other analyzers
-        // (correctly) flag as redundant.
-        // @mago-ignore analysis:invalid-method-access
-        // @mago-ignore analysis:mixed-argument
         $tzId = $dt->getTimezone()->getName();
 
         return new self(PhpDateTimeInterop::epochNanoseconds($dt), $tzId);

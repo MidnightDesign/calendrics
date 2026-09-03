@@ -522,7 +522,6 @@ final class CalendarMath
     public static function isoWeekday(int $year, int $month, int $day): int
     {
         $jdn = self::toJulianDay($year, $month, $day);
-        /** @var int<1, 7> */
         return ((($jdn % 7) + 7) % 7) + 1;
     }
 
