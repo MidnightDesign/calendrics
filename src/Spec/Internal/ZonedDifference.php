@@ -168,7 +168,7 @@ final class ZonedDifference
      * `until($x, ['smallestUnit' => 'day'])` work without also naming a largest unit.
      *
      * @param array<array-key, mixed>|object|null $options
-     * @return array{0: string, 1: string, 2: string, 3: int} [largestUnit, smallestUnit, roundingMode, roundingIncrement]
+     * @return array{0: string, 1: string, 2: string, 3: int<1, max>} [largestUnit, smallestUnit, roundingMode, roundingIncrement]
      */
     private static function resolveOptions(ZonedDateTime $temporalDate, array|object|null $options): array
     {
@@ -338,6 +338,7 @@ final class ZonedDifference
      * Difference with a calendar `largestUnit`.
      *
      * @throws RangeError if the intermediate arithmetic leaves the representable range.
+     * @param int<1, max> $roundingIncrement
      */
     private static function calendarDifference(
         ZonedDateTime $temporalDate,
@@ -379,9 +380,15 @@ final class ZonedDifference
             $weeks = intdiv(num1: $dateDiff, num2: 7);
             $span = new DateSpan(weeks: $weeks, days: $dateDiff - ($weeks * 7));
         } elseif ($calId !== 'iso8601') {
-            [$tc39AdjJdn, $span] = self::nonIsoDateDiff($tdLocal, $otherLocal, $calId, $normLargest);
+            // Day and week are handled above, so only these two reach a calendar.
+            [$tc39AdjJdn, $span] = self::nonIsoDateDiff(
+                $tdLocal,
+                $otherLocal,
+                $calId,
+                $normLargest === 'month' ? 'month' : 'year',
+            );
         } else {
-            $span = self::isoDateDiff(
+            $span = self::isoDateSpan(
                 $earlierLocal['year'],
                 $earlierLocal['month'],
                 $earlierLocal['day'],
@@ -470,6 +477,7 @@ final class ZonedDifference
      *
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $tdLocal
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $otherLocal
+     * @param 'month'|'year' $normLargest
      * @return array{0: int, 1: DateSpan} [adjustedJdn, span]
      */
     private static function nonIsoDateDiff(array $tdLocal, array $otherLocal, string $calId, string $normLargest): array
@@ -554,6 +562,7 @@ final class ZonedDifference
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $tdLocal
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $earlierLocal
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $laterLocal
+     * @param int<1, max> $roundingIncrement
      */
     private static function roundToCalendarUnit(
         array $tdLocal,
@@ -719,7 +728,7 @@ final class ZonedDifference
                 $span = new DateSpan(years: abs($years), months: abs($months), days: abs($days));
             } else {
                 [$anchorY, $anchorM, $anchorD] = CalendarMath::fromJulianDay($adjOtherJdn + $overflowDays);
-                $span = self::isoDateDiff(
+                $span = self::isoDateSpan(
                     $earlierLocal['year'],
                     $earlierLocal['month'],
                     $earlierLocal['day'],
@@ -753,72 +762,35 @@ final class ZonedDifference
     /**
      * Year/month/day breakdown between two ISO dates, in the (smaller, larger) direction.
      *
-     * The day count is measured against an anchor — the smaller date advanced by the whole
-     * years and months, or the larger date walked back by them — because "one month later"
-     * has no fixed length. Which end anchors depends on which value the caller is
-     * reporting the difference *from*, so Jan 31 → Mar 1 is not the mirror of Mar 1 →
-     * Jan 31.
+     * Always asks for a year breakdown: both callers flatten to months themselves when
+     * `largestUnit` says so, after the DST re-measurement has had its say.
      *
      * @param int<1, 12> $m1
      * @param int<1, 12> $m2
+     * @param bool $receiverIsLater True when the caller's receiver is the larger date,
+     *                                which is where the day remainder then anchors.
      */
-    private static function isoDateDiff(
+    private static function isoDateSpan(
         int $y1,
         int $m1,
         int $d1,
         int $y2,
         int $m2,
         int $d2,
-        bool $receiverIsY2 = true,
+        bool $receiverIsLater,
     ): DateSpan {
-        $sign = $y2 > $y1 || $y2 === $y1 && ($m2 > $m1 || $m2 === $m1 && $d2 >= $d1) ? 1 : -1;
+        [$years, $months, , $days] = CalendarFactory::get('iso8601')->dateUntil(
+            $y1,
+            $m1,
+            $d1,
+            $y2,
+            $m2,
+            $d2,
+            'year',
+            $receiverIsLater,
+        );
 
-        $receiverIsY2AfterSwap = $receiverIsY2;
-        if ($sign < 0) {
-            [$y1, $m1, $d1, $y2, $m2, $d2] = [$y2, $m2, $d2, $y1, $m1, $d1];
-            $receiverIsY2AfterSwap = !$receiverIsY2;
-        }
-
-        $years = $y2 - $y1;
-        $months = $m2 - $m1;
-        if ($months < 0) {
-            $years--;
-            $months += 12;
-        }
-        if ($d2 < $d1) {
-            if ($months > 0) {
-                $months--;
-            } else {
-                $years--;
-                $months = 11;
-            }
-        }
-
-        if ($receiverIsY2AfterSwap) {
-            $anchorMonth = $m2 - $months;
-            $anchorYear = $y2 - $years;
-            if ($anchorMonth <= 0) {
-                $anchorYear--;
-                $anchorMonth += 12;
-            }
-            $anchorDay = min($d2, CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth));
-            $days =
-                CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay)
-                - CalendarMath::toJulianDay($y1, $m1, $d1);
-        } else {
-            $anchorMonth = $m1 + $months;
-            $anchorYear = $y1 + $years;
-            if ($anchorMonth > 12) {
-                $anchorYear++;
-                $anchorMonth -= 12;
-            }
-            $anchorDay = min($d1, CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth));
-            $days =
-                CalendarMath::toJulianDay($y2, $m2, $d2)
-                - CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay);
-        }
-
-        return new DateSpan(years: $sign * $years, months: $sign * $months, days: $sign * $days);
+        return new DateSpan(years: $years, months: $months, days: $days);
     }
 
     /**
@@ -831,6 +803,7 @@ final class ZonedDifference
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $recLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $earlierLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $laterLocal
+     * @param int<1, max> $increment
      */
     private static function calcYearProgress(
         array $recLocal,
@@ -859,6 +832,7 @@ final class ZonedDifference
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $recLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $earlierLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $laterLocal
+     * @param int<1, max> $increment
      */
     private static function calcMonthProgress(
         array $recLocal,
@@ -893,6 +867,7 @@ final class ZonedDifference
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $recLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $earlierLocal
      * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $laterLocal
+     * @param int<1, max> $increment
      */
     private static function calcProgress(
         array $recLocal,
@@ -930,10 +905,9 @@ final class ZonedDifference
         $remDays = $receiverIsLater ? $floorJdn - $farJdn : $farJdn - $floorJdn;
 
         $nextJdn = CalendarMath::toJulianDay($nextDate[0], $nextDate[1], $nextDate[2]);
+        // Non-zero by construction: the two anchors are $increment ISO months or years
+        // apart, and the shortest ISO month is 28 days.
         $intervalDays = abs($nextJdn - $floorJdn);
-        if ($intervalDays === 0) {
-            return 0.0;
-        }
 
         $totalRemNs = (float) (($remDays * self::NS_PER_DAY) + $timeDiffNs);
         return $totalRemNs / ((float) $intervalDays * self::NS_PER_DAY_F);

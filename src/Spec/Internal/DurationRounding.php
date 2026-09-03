@@ -81,9 +81,7 @@ final class DurationRounding
             throw new RangeError('roundingIncrement must not exceed 10^9.');
         }
 
-        $roundingMode = $rmRaw === null
-            ? 'halfExpand'
-            : Options::roundingMode(Options::coerceEnumOption($rmRaw, 'roundingMode'));
+        $roundingMode = Options::roundingMode(Options::coerceEnumOption($rmRaw, 'roundingMode'));
 
         // At least one of smallestUnit or largestUnit must be provided.
         $suProvided = $suRaw !== null;
@@ -588,13 +586,7 @@ final class DurationRounding
         // JS stores Duration fields as float64; integers > 2^53 lose precision when stored.
         // We simulate this by casting to float, which PHP performs with float64 rounding.
         $floatMax = 9_007_199_254_740_992;
-        /** @return int|float */
-        $f64 = static function (int|float $v) use ($floatMax): int|float {
-            if (is_float($v)) {
-                return $v;
-            }
-            return $v >= $floatMax || $v <= -$floatMax ? (float) $v : $v;
-        };
+        $f64 = static fn(int $v): int|float => $v >= $floatMax || $v <= -$floatMax ? (float) $v : $v;
 
         return [$f64($days), $f64($h), $f64($m), $f64($s), $f64($ms), $f64($us), $f64($ns)];
     }

@@ -18,3 +18,20 @@ RUN apt-get update && apt-get install -y git rsync unzip libzip-dev libicu-dev \
     && docker-php-ext-enable pcov \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# php:8.4-cli ships PHP's 128M default, which the coverage step of `composer check`
+# exhausts. It belongs in the image rather than in per-script flags: CI gets the
+# same headroom from setup-php's memory_limit=-1.
+RUN echo 'memory_limit=512M' > /usr/local/etc/php/conf.d/memory-limit.ini
+
+# Run as the developer's own uid/gid. /app is a bind mount, so anything the
+# container writes into it — transpiled test262 scripts, coverage output, vendor/ —
+# keeps host ownership, and git no longer sees the checkout as owned by a stranger.
+ARG UID=1000
+ARG GID=1000
+RUN if ! getent group "$GID" > /dev/null; then groupadd -g "$GID" app; fi \
+    && useradd -u "$UID" -g "$GID" -m -s /bin/bash app \
+    && mkdir -p /home/app/.composer/cache \
+    && chown -R "$UID:$GID" /home/app
+ENV COMPOSER_HOME=/home/app/.composer
+USER app
