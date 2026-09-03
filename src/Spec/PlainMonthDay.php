@@ -671,7 +671,7 @@ final class PlainMonthDay implements Stringable
                 // TwoDashes (0 or 2) + 2 month digits + separator (0 or 1) + 2 day digits.
                 $dashPrefix = str_starts_with($s, '--') ? 2 : 0;
                 // A separator dash is present iff the month-day span exceeds MMDD (4 digits).
-                $hasSeparator = ($s[$dashPrefix + 2] ?? '') === '-';
+                $hasSeparator = $s[$dashPrefix + 2] === '-';
                 $dateLen = $dashPrefix + 2 + ($hasSeparator ? 1 : 0) + 2;
                 $afterDate = substr(string: $s, offset: $dateLen);
                 $bracketPos = strpos(haystack: $afterDate, needle: '[');

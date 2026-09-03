@@ -100,7 +100,7 @@ final class ExceptionHierarchyTest extends TestCase
 
     /**
      * @param class-string $class
-     * @return list<class-string>
+     * @return list<string>
      */
     private static function parentNames(string $class): array
     {

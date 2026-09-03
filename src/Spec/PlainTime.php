@@ -843,12 +843,16 @@ final class PlainTime implements Stringable
         }
 
         // DateSpecYearMonth: four-digit year, optional hyphen, two-digit month 01–12.
+        /** @var list<string> $ym */
+        $ym = [];
         if (preg_match('/^\d{4}-?(\d{2})$/', $body, $ym) === 1) {
             $month = (int) $ym[1];
             return $month >= 1 && $month <= 12;
         }
 
         // DateSpecMonthDay: optional leading "--", two-digit month, optional hyphen, two-digit day.
+        /** @var list<string> $md */
+        $md = [];
         if (preg_match('/^(?:--)?(\d{2})-?(\d{2})$/', $body, $md) === 1) {
             $month = (int) $md[1];
             $day = (int) $md[2];
