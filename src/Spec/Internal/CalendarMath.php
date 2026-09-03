@@ -431,6 +431,7 @@ final class CalendarMath
      * Duration, which performs its own operation-specific range check at the call
      * site after the increment is validated.
      *
+     * @return int<1, max>
      * @throws RangeError if the value is non-numeric, NaN, infinite, or outside 1–1000000000.
      * @throws TypeError if the value is a Symbol (its `__toString` throws).
      */

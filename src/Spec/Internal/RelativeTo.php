@@ -754,8 +754,8 @@ final class RelativeTo
         if ($targetSec === (float) EpochLimits::MAX_EPOCH_SECONDS && $targetSubNs > 0.0) {
             return true;
         }
-        // The +MAX case above has no negative mirror: the floor-based carry leaves
-        // $targetSubNs in [0, 1e9), so exactly -MAX seconds is always in range.
+        // The floor-based carry leaves $targetSubNs in [0, 1e9), so exactly -MAX seconds is
+        // always in range — hence no sub-nanosecond mirror of the +MAX check above.
         if ($targetSec < -EpochLimits::MAX_EPOCH_SECONDS) {
             return true;
         }

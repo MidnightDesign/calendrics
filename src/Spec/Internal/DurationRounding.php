@@ -585,8 +585,6 @@ final class DurationRounding
         // Apply float64 rounding to field values that exceed 2^53 (MAX_SAFE_INTEGER).
         // JS stores Duration fields as float64; integers > 2^53 lose precision when stored.
         // We simulate this by casting to float, which PHP performs with float64 rounding.
-        // The carry chain above stays inside int64 for any int64 ns total, so every field
-        // reaching the closure is still an int.
         $floatMax = 9_007_199_254_740_992;
         $f64 = static fn(int $v): int|float => $v >= $floatMax || $v <= -$floatMax ? (float) $v : $v;
 
