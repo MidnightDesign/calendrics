@@ -10,6 +10,7 @@ use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\IsoFraction;
 use Calendrics\Spec\Internal\Options;
@@ -25,6 +26,7 @@ use Stringable;
  */
 final class PlainTime implements Stringable
 {
+    use HasPlainLocaleString;
     use HasStringRepresentations;
 
     /**

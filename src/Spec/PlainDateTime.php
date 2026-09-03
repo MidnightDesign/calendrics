@@ -15,6 +15,7 @@ use Calendrics\Spec\Internal\DateTimeParse;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
@@ -32,6 +33,7 @@ use Stringable;
  */
 final class PlainDateTime implements Stringable
 {
+    use HasPlainLocaleString;
     use HasStringRepresentations;
 
     // -------------------------------------------------------------------------
@@ -71,9 +73,7 @@ final class PlainDateTime implements Stringable
      * @psalm-api
      */
     public int $year {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoYear
-            : CalendarFactory::get($this->calendarId)->year($this->isoYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->year($this->isoYear, $this->isoMonth, $this->isoDay);
     }
 
     /**
@@ -82,9 +82,7 @@ final class PlainDateTime implements Stringable
      * @psalm-api
      */
     public int $month {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoMonth
-            : CalendarFactory::get($this->calendarId)->month($this->isoYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->month($this->isoYear, $this->isoMonth, $this->isoDay);
     }
 
     /**
@@ -93,9 +91,7 @@ final class PlainDateTime implements Stringable
      * @psalm-api
      */
     public int $day {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoDay
-            : CalendarFactory::get($this->calendarId)->day($this->isoYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->day($this->isoYear, $this->isoMonth, $this->isoDay);
     }
 
     /**
@@ -118,9 +114,7 @@ final class PlainDateTime implements Stringable
      * @psalm-api
      */
     public int $dayOfYear {
-        get => $this->calendarId === 'iso8601'
-            ? CalendarMath::calcDayOfYear($this->isoYear, $this->isoMonth, $this->isoDay)
-            : CalendarFactory::get($this->calendarId)->dayOfYear($this->isoYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->dayOfYear($this->isoYear, $this->isoMonth, $this->isoDay);
     }
 
     /**

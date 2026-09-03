@@ -9,6 +9,7 @@ use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
@@ -24,6 +25,7 @@ use Stringable;
  */
 final class PlainMonthDay implements Stringable
 {
+    use HasPlainLocaleString;
     use HasStringRepresentations;
 
     /**
@@ -58,9 +60,7 @@ final class PlainMonthDay implements Stringable
      * @psalm-api
      */
     public int $month {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoMonth
-            : CalendarFactory::get($this->calendarId)->month($this->referenceISOYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->month($this->referenceISOYear, $this->isoMonth, $this->isoDay);
     }
 
     /**
@@ -69,9 +69,7 @@ final class PlainMonthDay implements Stringable
      * @psalm-api
      */
     public int $day {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoDay
-            : CalendarFactory::get($this->calendarId)->day($this->referenceISOYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->day($this->referenceISOYear, $this->isoMonth, $this->isoDay);
     }
 
     // -------------------------------------------------------------------------
