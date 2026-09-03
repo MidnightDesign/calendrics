@@ -14,6 +14,7 @@ use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\IsoFraction;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
 
 /**
@@ -24,7 +25,7 @@ use Stringable;
  *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-plaintime-objects
  */
-final class PlainTime implements Stringable
+final class PlainTime implements PlainLocaleFormattable, Stringable
 {
     use HasPlainLocaleString;
     use HasStringRepresentations;
