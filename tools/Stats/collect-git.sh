@@ -50,10 +50,7 @@ if [[ $FORCE -eq 0 && -f "$OUT" ]] && grep -q "\"$HEAD_SHA\"" "$OUT"; then
     fi
 fi
 
-# The php service runs as root, so anything it writes into the bind mount is
-# root-owned. Create the scratch dirs there and hand them back to the caller.
-docker compose exec -T php sh -c \
-    "mkdir -p /app/build/stats/raw && chown -R $(id -u):$(id -g) /app/build/stats"
+mkdir -p "$RAW"
 
 # Release tags annotate the charts. Annotated tags point at a tag object, so the
 # dereferenced target is the one that names a commit.

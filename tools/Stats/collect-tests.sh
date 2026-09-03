@@ -35,11 +35,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# build/coverage was tracked until 58f5ed3c, so git has to write those paths when
-# checking out the early commits. Running the php service as the host user keeps
-# root-owned artifacts out of the replay worktrees, which is what blocked it.
-DOCKER_USER="$(id -u):$(id -g)"
-
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 STATS="$ROOT/build/stats"
 RUNS="$ROOT/tools/Stats/data/runs"
@@ -47,9 +42,7 @@ LOG="$STATS/progress.log"
 
 cd "$ROOT"
 
-mkdir -p "$RUNS"
-docker compose exec -T php sh -c \
-    "mkdir -p /app/build/stats/work && chown -R $(id -u):$(id -g) /app/build/stats"
+mkdir -p "$RUNS" "$STATS/work"
 : >"$LOG"
 
 mapfile -t COMMITS < <(git rev-list --first-parent --reverse "$REF")
@@ -92,7 +85,7 @@ for ((w = 0; w < JOBS; w++)); do
     if [[ ! -d "$WT" ]]; then
         echo "==> preparing worker $w"
         git worktree add --detach --quiet "$WT" "${COMMITS[0]}"
-        docker compose exec -T --user "$DOCKER_USER" php \
+        docker compose exec -T php \
             cp -a /app/vendor "/app/build/stats/work/w$w/vendor"
     fi
 done
@@ -102,19 +95,20 @@ replay_one() {
     local wt="$STATS/work/w$worker"
     local rel="build/stats/work/w$worker"
 
-    # build/ only became gitignored partway through history, so it has to be
-    # excluded explicitly or git clean trips over the container's root-owned
-    # coverage artifacts at the early commits.
+    # build/coverage was tracked until 58f5ed3c, so checking out an earlier
+    # commit writes into build/ — hence --force. build/ and vendor/ are then
+    # excluded from the clean because they hold this worker's scratch: the
+    # shared vendor copy and the coverage output about to be parsed.
     (cd "$wt" && git checkout --detach --force --quiet "$sha" && git clean -qfd -e build -e vendor)
 
     # A crashed run must not leave the previous commit's artifacts behind for
     # the parser to read as if they belonged to this commit.
-    docker compose exec -T --user "$DOCKER_USER" php rm -rf "/app/$rel/build/coverage" || true
+    docker compose exec -T php rm -rf "/app/$rel/build/coverage" || true
 
     local start end seconds status=ok exit_code=0
     start=$(date +%s)
 
-    docker compose exec -T --user "$DOCKER_USER" -e COMPOSER_HOME=/tmp/composer php sh -c "
+    docker compose exec -T php sh -c "
         cd /app/$rel &&
         composer dump-autoload --no-scripts --quiet 2>/dev/null;
         timeout $TIMEOUT php -d memory_limit=1G vendor/bin/phpunit tests/ \
@@ -132,7 +126,7 @@ replay_one() {
     esac
 
     local summary
-    summary=$(docker compose exec -T --user "$DOCKER_USER" php \
+    summary=$(docker compose exec -T php \
         php -d memory_limit=1G /app/tools/Stats/bin/parse-run.php \
         "/app/$rel/build/coverage/coverage-xml/index.xml" \
         "/app/$rel/build/coverage/junit.xml" \
