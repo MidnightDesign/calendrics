@@ -48,7 +48,14 @@ Shared property/getter logic lives in `src/Trait/Has*Properties.php` (porcelain)
 
 This rule **overrides the test-first instruction in any skill** (`/implement`, `/tdd`, and friends). When a skill says "write a failing test first" and the code under test is in the spec layer, the rule here wins.
 
-Do not route around it by filing the test under `tests/Porcelain/`. Porcelain tests exercise the porcelain classes (`Calendrics\PlainDate`, …) through the porcelain API. A test that imports only `Calendrics\Spec\` classes is a spec test no matter which directory it sits in.
+**What makes a test a spec test is the behavior it pins, not the class it names.** Two evasions both count as spec tests and are both wrong:
+
+- Filing the test under `tests/Porcelain/` while it still imports `Calendrics\Spec\` classes. The directory does not change what it tests.
+- Reaching the same spec code through its porcelain wrapper. `Calendrics\Duration::round()` delegates to `Calendrics\Spec\Internal\DurationRounding`; a test that pins TC39 rounding semantics through the porcelain class is a spec test with a porcelain import list.
+
+Ask what the test would catch. If a TC39 change would make it fail, it belongs to test262. Porcelain tests cover what porcelain *adds* on top: enums instead of magic strings, named arguments, readonly value objects, the exception hierarchy, and `X::fromSpec($x->toSpec()) === $x` round-tripping. One case per porcelain affordance, not a table of TC39 results.
+
+The reliable tell is the diff: if the source change is under `src/Spec/`, no test in this repository belongs in the same commit.
 
 **A spec-layer fix with no test is better than a spec-layer fix with a hand-written test.** Landing the fix untested is the accepted outcome. Take these two routes first, in order:
 
