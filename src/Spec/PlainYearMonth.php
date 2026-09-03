@@ -13,6 +13,7 @@ use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
 
 /**
@@ -22,7 +23,7 @@ use Stringable;
  *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-plainyearmonth-objects
  */
-final class PlainYearMonth implements Stringable
+final class PlainYearMonth implements PlainLocaleFormattable, Stringable
 {
     use HasPlainLocaleString;
     use HasStringRepresentations;
