@@ -108,8 +108,6 @@ trait HasPlainLocaleString
 
         IntlFormatter::validateCalendar($this->localeCalendarId(), $locale, $opts, $defaultComponents);
 
-        $opts['_locale'] = $locale;
-
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, $defaultComponents);
 
         $timestamp = $this->toLocaleTimestamp();
