@@ -159,16 +159,16 @@ final class Duration implements Stringable
                 }
             }
 
-            $years = self::narrowField($years);
-            $months = self::narrowField($months);
-            $weeks = self::narrowField($weeks);
-            $days = self::narrowField($days);
-            $hours = self::narrowField($hours);
-            $minutes = self::narrowField($minutes);
-            $seconds = self::narrowField($seconds);
-            $milliseconds = self::narrowField($milliseconds);
-            $microseconds = self::narrowField($microseconds);
-            $nanoseconds = self::narrowField($nanoseconds);
+            $years = self::narrowToInt($years);
+            $months = self::narrowToInt($months);
+            $weeks = self::narrowToInt($weeks);
+            $days = self::narrowToInt($days);
+            $hours = self::narrowToInt($hours);
+            $minutes = self::narrowToInt($minutes);
+            $seconds = self::narrowToInt($seconds);
+            $milliseconds = self::narrowToInt($milliseconds);
+            $microseconds = self::narrowToInt($microseconds);
+            $nanoseconds = self::narrowToInt($nanoseconds);
         }
 
         $this->years = $years;
@@ -261,16 +261,15 @@ final class Duration implements Stringable
     }
 
     /**
-     * Returns $value as an int below 2^53, unchanged from 2^53 up.
-     *
      * Fields are int|float because TC39 stores them as float64 Numbers, which from 2^53
-     * up hold values an int does not; the rounding engine hands those back as floats at
-     * that same threshold, so narrowing here leaves each field with one type per
-     * magnitude rather than one per code path. The float 0.0 a caller or the engine may
-     * pass is the case that matters: as a float it is neither identical to 0 nor greater
-     * than it, so every `!== 0` test in the spec layer would read it as a negative field.
+     * up hold values an int does not; the rounding engine hands fields back as floats
+     * from that same magnitude, so this is the one threshold that leaves a field with one
+     * type per magnitude rather than one per construction path. The float 0.0 a caller or
+     * the engine may pass is the case that matters: as a float it is neither identical to
+     * 0 nor greater than it, so every `!== 0` test in the spec layer would read it as a
+     * negative field.
      */
-    private static function narrowField(int|float $value): int|float
+    private static function narrowToInt(int|float $value): int|float
     {
         if (is_int($value) || abs($value) >= 9_007_199_254_740_992.0) {
             return $value;
@@ -966,8 +965,8 @@ final class Duration implements Stringable
                 if (!is_numeric($v)) {
                     throw new RangeError("Duration field \"{$field}\" must be a finite integer.");
                 }
-                // Numeric string → number. Cast to float; the integer-value check
-                // and the large-float guard below normalise it back to int when exact.
+                // Numeric string → number. Cast to float; the check below rejects a
+                // non-integer, and the constructor narrows what an int holds back to int.
                 $v = (float) $v;
             }
             if (!is_int($v) && !is_float($v)) {
@@ -981,9 +980,7 @@ final class Duration implements Stringable
                     throw new RangeError("Duration field \"{$field}\" must be an integer, got non-integer {$v}.");
                 }
             }
-            // Keep large floats (> PHP_INT_MAX) as float; cast the rest to int.
-            // Values within int64 range are cast for exact integer semantics.
-            $values[] = is_float($v) && abs($v) >= (float) PHP_INT_MAX ? $v : (int) $v;
+            $values[] = $v;
         }
 
         return new self(...$values);
