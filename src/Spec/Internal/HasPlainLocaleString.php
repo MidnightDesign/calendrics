@@ -72,7 +72,8 @@ trait HasPlainLocaleString
      * @param array<array-key, mixed>|object|null $options
      * @psalm-api
      * @throws TypeError if a style option is not applicable to this type.
-     * @throws \Calendrics\Exception\RangeError if this value's calendar is incompatible with the formatter's.
+     * @throws \Calendrics\Exception\RangeError if an option carries a value outside its set,
+     *         or if this value's calendar is incompatible with the formatter's.
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
     {
@@ -82,6 +83,8 @@ trait HasPlainLocaleString
             $opts = Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES);
         }
         /** @psalm-var array<string, mixed> $opts */
+        IntlFormatter::validateOptionValues($opts);
+
         $hasTimeStyle = array_key_exists('timeStyle', $opts) && $opts['timeStyle'] !== null;
         $hasDateStyle = array_key_exists('dateStyle', $opts) && $opts['dateStyle'] !== null;
 

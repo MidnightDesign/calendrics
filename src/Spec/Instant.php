@@ -833,6 +833,8 @@ final class Instant implements Stringable
         /** @var array<string, mixed> $opts */
         $opts = $options === null ? [] : Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES);
 
+        IntlFormatter::validateOptionValues($opts);
+
         /** @var mixed $tzOpt */
         $tzOpt = $opts['timeZone'] ?? null;
         $timeZone = is_string($tzOpt) ? $tzOpt : 'UTC';

@@ -12,10 +12,11 @@ use Calendrics\Spec\Internal\Calendar\CalendarFactory;
  * Owns the IntlDateFormatter construction and locale/pattern helpers used by
  * toLocaleString() across all Temporal spec classes.
  *
- * The public surface is: buildIntlFormatter() (central entry point), resolveLocale(),
- * resolveCalendar(), validateCalendar(), validateStyleConflicts(), and
- * stripPatternComponents(). The private helpers applyHourCycle() and
- * buildPatternFromComponents() support buildIntlFormatter() internally.
+ * The public surface is: buildIntlFormatter() (central entry point) and formatEpoch(),
+ * the locale and calendar resolvers resolveLocale() and resolveCalendar(), the checks
+ * each caller runs in its own spec order — validateOptionValues(), validateCalendar()
+ * and validateStyleConflicts() — plus requestsAnyComponent() and
+ * stripPatternComponents(). Everything else is a private helper.
  *
  * @internal
  */
@@ -60,6 +61,63 @@ final class IntlFormatter
         'dayPeriod',
         'fractionalSecondDigits',
         'timeZoneName',
+    ];
+
+    /**
+     * Values ECMA-402 accepts for `weekday`, `era` and `dayPeriod`.
+     *
+     * @var non-empty-list<'narrow'|'short'|'long'>
+     */
+    private const array TEXT_WIDTHS = ['narrow', 'short', 'long'];
+
+    /**
+     * Values ECMA-402 accepts for `year`, `day`, `hour`, `minute` and `second`.
+     *
+     * @var non-empty-list<'numeric'|'2-digit'>
+     */
+    private const array NUMBER_WIDTHS = ['numeric', '2-digit'];
+
+    /**
+     * Values ECMA-402 accepts for `month`.
+     *
+     * @var non-empty-list<'numeric'|'2-digit'|'narrow'|'short'|'long'>
+     */
+    private const array MONTH_WIDTHS = ['numeric', '2-digit', 'narrow', 'short', 'long'];
+
+    /**
+     * Values ECMA-402 accepts for `timeZoneName`.
+     *
+     * @var non-empty-list<'short'|'long'|'shortOffset'|'longOffset'|'shortGeneric'|'longGeneric'>
+     */
+    private const array TIME_ZONE_NAME_STYLES = [
+        'short',
+        'long',
+        'shortOffset',
+        'longOffset',
+        'shortGeneric',
+        'longGeneric',
+    ];
+
+    /**
+     * Values ECMA-402 accepts for `dateStyle` and `timeStyle`.
+     *
+     * @var non-empty-list<'full'|'long'|'medium'|'short'>
+     */
+    private const array FORMAT_STYLES = ['full', 'long', 'medium', 'short'];
+
+    /**
+     * Values ECMA-402 accepts for `hourCycle`.
+     *
+     * @var non-empty-list<'h11'|'h12'|'h23'|'h24'>
+     */
+    private const array HOUR_CYCLES = ['h11', 'h12', 'h23', 'h24'];
+
+    /** The IntlDateFormatter constant each {@see self::FORMAT_STYLES} value selects. */
+    private const array STYLE_CONSTANTS = [
+        'full' => \IntlDateFormatter::FULL,
+        'long' => \IntlDateFormatter::LONG,
+        'medium' => \IntlDateFormatter::MEDIUM,
+        'short' => \IntlDateFormatter::SHORT,
     ];
 
     /**
@@ -175,6 +233,79 @@ final class IntlFormatter
     }
 
     /**
+     * Applies ECMA-402 GetOption's value check to every `toLocaleString()` option that
+     * has a fixed value set, in the order CreateDateTimeFormat reads them.
+     *
+     * A value outside the set is a mistake, and ECMA-402 says so: `{weekday: 'wide'}`
+     * is a RangeError, not a request for the short weekday. Callers run this before
+     * the TypeErrors they raise for style conflicts and inapplicable styles, which
+     * CreateDateTimeFormat only reaches after reading every component option.
+     *
+     * Options with no fixed set are checked where they are consumed: `calendar` and
+     * `timeZone` by their own identifier lookups, `hour12` as a boolean, and
+     * `fractionalSecondDigits` as a number.
+     *
+     * @param array<string, mixed> $opts
+     * @throws RangeError if any option carries a value outside its set.
+     */
+    public static function validateOptionValues(array $opts): void
+    {
+        self::checkedKeyword($opts, 'hourCycle', self::HOUR_CYCLES);
+        self::checkedKeyword($opts, 'weekday', self::TEXT_WIDTHS);
+        self::checkedKeyword($opts, 'era', self::TEXT_WIDTHS);
+        self::checkedKeyword($opts, 'year', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, 'month', self::MONTH_WIDTHS);
+        self::checkedKeyword($opts, 'day', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, 'dayPeriod', self::TEXT_WIDTHS);
+        self::checkedKeyword($opts, 'hour', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, 'minute', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, 'second', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, 'timeZoneName', self::TIME_ZONE_NAME_STYLES);
+        self::checkedKeyword($opts, 'dateStyle', self::FORMAT_STYLES);
+        self::checkedKeyword($opts, 'timeStyle', self::FORMAT_STYLES);
+    }
+
+    /**
+     * Reads one keyword-valued option exactly as ECMA-402's
+     * GetOption(options, name, string, values, undefined) does.
+     *
+     * Returns the matching element of $allowed rather than the coerced string, so the
+     * return type is the value set itself. That is what lets every consumer below
+     * `match` over the set with no fallback arm to hide a value the set does not
+     * contain — {@see self::validateOptionValues()} has already rejected those.
+     *
+     * @template TValue of string
+     * @param array<string, mixed> $opts
+     * @param non-empty-list<TValue> $allowed
+     * @return TValue|null null when the option was not supplied; TC39's `undefined`
+     *                     reaches PHP as `null`, which every option bag here reads
+     *                     as "field not supplied".
+     * @throws RangeError if the value does not coerce to a string listed in $allowed.
+     */
+    private static function checkedKeyword(array $opts, string $name, array $allowed): ?string
+    {
+        /** @var mixed $raw */
+        $raw = $opts[$name] ?? null;
+        if ($raw === null) {
+            return null;
+        }
+
+        $value = Options::coerceEnumOption($raw, $name);
+        foreach ($allowed as $candidate) {
+            if ($value === $candidate) {
+                return $candidate;
+            }
+        }
+
+        throw new RangeError(sprintf(
+            'toLocaleString(): invalid %s value "%s"; must be one of %s.',
+            $name,
+            $value,
+            implode(', ', $allowed),
+        ));
+    }
+
+    /**
      * Validates that dateStyle/timeStyle are not combined with individual component options.
      *
      * Per ECMA-402, mixing dateStyle or timeStyle with any individual date/time component
@@ -273,11 +404,10 @@ final class IntlFormatter
 
         $timeZone = self::icuTimeZoneId($timeZone);
 
-        // Apply hourCycle as a Unicode locale extension
-        /** @var mixed $hourCycleOpt */
-        $hourCycleOpt = $opts['hourCycle'] ?? null;
-        if (is_string($hourCycleOpt)) {
-            $locale = self::applyHourCycle($locale, $hourCycleOpt);
+        // Apply hourCycle as a locale keyword
+        $hourCycle = self::checkedKeyword($opts, 'hourCycle', self::HOUR_CYCLES);
+        if ($hourCycle !== null) {
+            $locale = self::applyHourCycle($locale, $hourCycle);
         } elseif (($opts['hour12'] ?? null) !== null) {
             // hour12=false -> h23, hour12=true -> h12
             /** @var mixed $hour12Raw */
@@ -303,29 +433,14 @@ final class IntlFormatter
             $calendarObj = null;
         }
 
-        $styleMap = [
-            'full' => \IntlDateFormatter::FULL,
-            'long' => \IntlDateFormatter::LONG,
-            'medium' => \IntlDateFormatter::MEDIUM,
-            'short' => \IntlDateFormatter::SHORT,
-        ];
-
-        /** @var mixed $dateStyleOpt */
-        $dateStyleOpt = $opts['dateStyle'] ?? null;
-        /** @var mixed $timeStyleOpt */
-        $timeStyleOpt = $opts['timeStyle'] ?? null;
-        $dateStyle = is_string($dateStyleOpt) ? $dateStyleOpt : null;
-        $timeStyle = is_string($timeStyleOpt) ? $timeStyleOpt : null;
+        $dateStyle = self::checkedKeyword($opts, 'dateStyle', self::FORMAT_STYLES);
+        $timeStyle = self::checkedKeyword($opts, 'timeStyle', self::FORMAT_STYLES);
 
         if ($dateStyle !== null || $timeStyle !== null) {
             self::validateStyleConflicts($opts);
 
-            $dateType = $dateStyle !== null
-                ? $styleMap[$dateStyle] ?? \IntlDateFormatter::MEDIUM
-                : \IntlDateFormatter::NONE;
-            $timeType = $timeStyle !== null
-                ? $styleMap[$timeStyle] ?? \IntlDateFormatter::SHORT
-                : \IntlDateFormatter::NONE;
+            $dateType = $dateStyle !== null ? self::STYLE_CONSTANTS[$dateStyle] : \IntlDateFormatter::NONE;
+            $timeType = $timeStyle !== null ? self::STYLE_CONSTANTS[$timeStyle] : \IntlDateFormatter::NONE;
 
             // For PlainYearMonth/PlainMonthDay, get the style pattern then strip
             // year or day components to avoid displaying them.
@@ -541,50 +656,55 @@ final class IntlFormatter
 
         // Date components
         if ($allowsDateComponents) {
-            if (($opts['weekday'] ?? null) !== null) {
-                $parts[] = match ($opts['weekday']) {
+            $weekday = self::checkedKeyword($opts, 'weekday', self::TEXT_WIDTHS);
+            if ($weekday !== null) {
+                $parts[] = match ($weekday) {
                     'narrow' => 'EEEEE',
                     'short' => 'EEE',
                     'long' => 'EEEE',
-                    default => 'EEE',
                 };
             }
-            if (($opts['era'] ?? null) !== null) {
-                $parts[] = match ($opts['era']) {
+            $era = self::checkedKeyword($opts, 'era', self::TEXT_WIDTHS);
+            if ($era !== null) {
+                $parts[] = match ($era) {
                     'narrow' => 'GGGGG',
                     'short' => 'GGG',
                     'long' => 'GGGG',
-                    default => 'GGG',
                 };
             }
-            if (($opts['year'] ?? null) !== null) {
-                $parts[] = $opts['year'] === '2-digit' ? 'yy' : 'y';
+            $year = self::checkedKeyword($opts, 'year', self::NUMBER_WIDTHS);
+            if ($year !== null) {
+                $parts[] = $year === '2-digit' ? 'yy' : 'y';
             }
-            if (($opts['month'] ?? null) !== null) {
-                $parts[] = match ($opts['month']) {
+            $month = self::checkedKeyword($opts, 'month', self::MONTH_WIDTHS);
+            if ($month !== null) {
+                $parts[] = match ($month) {
                     'numeric' => 'M',
                     '2-digit' => 'MM',
                     'narrow' => 'MMMMM',
                     'short' => 'MMM',
                     'long' => 'MMMM',
-                    default => 'M',
                 };
             }
-            if (($opts['day'] ?? null) !== null) {
-                $parts[] = $opts['day'] === '2-digit' ? 'dd' : 'd';
+            $day = self::checkedKeyword($opts, 'day', self::NUMBER_WIDTHS);
+            if ($day !== null) {
+                $parts[] = $day === '2-digit' ? 'dd' : 'd';
             }
         }
 
         // Time components
-        if (($opts['hour'] ?? null) !== null) {
+        $hour = self::checkedKeyword($opts, 'hour', self::NUMBER_WIDTHS);
+        if ($hour !== null) {
             // Use 'j' skeleton symbol which picks locale-appropriate hour cycle
-            $parts[] = $opts['hour'] === '2-digit' ? 'jj' : 'j';
+            $parts[] = $hour === '2-digit' ? 'jj' : 'j';
         }
-        if (($opts['minute'] ?? null) !== null) {
-            $parts[] = $opts['minute'] === '2-digit' ? 'mm' : 'm';
+        $minute = self::checkedKeyword($opts, 'minute', self::NUMBER_WIDTHS);
+        if ($minute !== null) {
+            $parts[] = $minute === '2-digit' ? 'mm' : 'm';
         }
-        if (($opts['second'] ?? null) !== null) {
-            $parts[] = $opts['second'] === '2-digit' ? 'ss' : 's';
+        $second = self::checkedKeyword($opts, 'second', self::NUMBER_WIDTHS);
+        if ($second !== null) {
+            $parts[] = $second === '2-digit' ? 'ss' : 's';
         }
         if (($opts['fractionalSecondDigits'] ?? null) !== null) {
             /** @var mixed $fsd */
@@ -592,23 +712,23 @@ final class IntlFormatter
             $digits = is_int($fsd) ? $fsd : (int) (is_string($fsd) ? $fsd : 0);
             $parts[] = str_repeat('S', times: max(0, $digits));
         }
-        if (($opts['dayPeriod'] ?? null) !== null) {
-            $parts[] = match ($opts['dayPeriod']) {
+        $dayPeriod = self::checkedKeyword($opts, 'dayPeriod', self::TEXT_WIDTHS);
+        if ($dayPeriod !== null) {
+            $parts[] = match ($dayPeriod) {
                 'narrow' => 'BBBBB',
                 'short' => 'B',
                 'long' => 'BBBB',
-                default => 'B',
             };
         }
-        if (($opts['timeZoneName'] ?? null) !== null) {
-            $parts[] = match ($opts['timeZoneName']) {
+        $timeZoneName = self::checkedKeyword($opts, 'timeZoneName', self::TIME_ZONE_NAME_STYLES);
+        if ($timeZoneName !== null) {
+            $parts[] = match ($timeZoneName) {
                 'short' => 'z',
                 'long' => 'zzzz',
                 'shortOffset' => 'O',
                 'longOffset' => 'OOOO',
                 'shortGeneric' => 'v',
                 'longGeneric' => 'vvvv',
-                default => 'z',
             };
         }
 
