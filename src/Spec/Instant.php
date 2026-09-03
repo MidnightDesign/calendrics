@@ -575,17 +575,17 @@ final class Instant implements Stringable
                 $tzOffsetSec = $resolved;
             } else {
                 // IANA timezone: extract the timezone name from the string.
-                // For bracket annotations, extract the bracket content.
+                // For bracket annotations, extract the bracket content (dropping the
+                // `!` critical flag, which is not part of the identifier).
                 $bm2 = null;
-                if (preg_match('/\[([^\]]+)\]/', $tzStr, $bm2) === 1) {
-                    // Group 1 is `[^\]]+`, so the capture is always non-empty (Psalm
-                    // does not infer non-emptiness from the pattern on its own).
-                    /** @var non-empty-string $bracketTz */
-                    $bracketTz = $bm2[1];
-                    $ianaTimeZone = $bracketTz;
+                if (preg_match('/\[!?([^\]]+)\]/', $tzStr, $bm2) === 1) {
+                    $ianaTimeZone = $bm2[1];
                 } else {
                     $ianaTimeZone = $tzStr;
                 }
+                // An unrecognized name is a RangeError; a bracket annotation's inline
+                // offset is not a fallback for one.
+                $ianaTimeZone = TimeZoneHelper::normalizeTimezoneId($ianaTimeZone);
             }
         }
 
@@ -755,15 +755,11 @@ final class Instant implements Stringable
                 $sign = $om[1] === '+' ? 1 : -1;
                 return $sign * (((int) $om[2] * 3600) + ((int) $om[3] * 60));
             }
-            // IANA timezone in bracket: return null to signal epoch-dependent resolution.
-            try {
-                new \DateTimeZone($bracket);
-                return null; // Caller will use ianaOffsetSeconds
-            } catch (\Exception $e) {
-                // Not a valid timezone; ignore the error and fall through to
-                // the inline-offset path below.
-                unset($e);
-            }
+            // IANA timezone in bracket: return null to signal epoch-dependent
+            // resolution. Whether the name is recognized is decided by the caller's
+            // normalization — an unknown one is a RangeError, and the inline offset
+            // is not a fallback for it.
+            return null;
         }
         // Datetime strings without bracket: use inline offset or Z.
         $om = null;
@@ -839,7 +835,6 @@ final class Instant implements Stringable
         $tzOpt = $opts['timeZone'] ?? null;
         $timeZone = is_string($tzOpt) ? $tzOpt : 'UTC';
 
-        $opts['_locale'] = $locale;
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts);
         [$seconds, $subNs] = $this->epochParts();
         $result = IntlFormatter::formatEpoch($formatter, $seconds, $subNs, $timeZone, $locale);

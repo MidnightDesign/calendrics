@@ -17,13 +17,18 @@ use Calendrics\Exception\RangeError;
  */
 final class TimeZoneHelper
 {
+    /**
+     * @return non-empty-string every accepted identifier is a non-empty literal, a
+     *   value built from matched offset parts, or a canonical IANA name from PHP's
+     *   own identifier list
+     */
     public static function normalizeTimezoneId(string $id, bool $rejectDatetimeStrings = false): string
     {
         // Split caches per flag so the hot path skips the "R\0"/"N\0" prefix
         // concat that the single-cache variant used to build the lookup key.
-        /** @var array<string, string> $cacheR */
+        /** @var array<string, non-empty-string> $cacheR */
         static $cacheR = [];
-        /** @var array<string, string> $cacheN */
+        /** @var array<string, non-empty-string> $cacheN */
         static $cacheN = [];
         if ($rejectDatetimeStrings) {
             if (array_key_exists($id, $cacheR)) {
@@ -45,6 +50,9 @@ final class TimeZoneHelper
         return $cacheN[$id] = $result;
     }
 
+    /**
+     * @return non-empty-string
+     */
     private static function normalizeTimezoneIdUncached(string $id, bool $rejectDatetimeStrings): string
     {
         if ($id === '') {
@@ -72,7 +80,7 @@ final class TimeZoneHelper
             }
             // Bracket annotation takes precedence.
             $bm = null;
-            if (preg_match('/\[(!?[^\]]+)\]/', $id, $bm) === 1) {
+            if (preg_match('/\[!?([^\]]+)\]/', $id, $bm) === 1) {
                 $bracket = $bm[1];
                 if (preg_match('/^[+\-]\d{2}:\d{2}:\d{2}/', $bracket) === 1) {
                     throw new RangeError("Invalid timeZoneId \"{$id}\": sub-minute offset in bracket annotation.");
@@ -80,17 +88,11 @@ final class TimeZoneHelper
                 if (strtoupper($bracket) === 'UTC') {
                     return 'UTC';
                 }
-                if (preg_match('/^[+\-]\d{2}:\d{2}$/', $bracket) === 1) {
-                    return $bracket;
+                $obm = null;
+                if (preg_match('/^([+\-]\d{2}):(\d{2})$/', $bracket, $obm) === 1) {
+                    return sprintf('%s:%s', $obm[1], $obm[2]);
                 }
-                // IANA name in bracket.
-                try {
-                    /** @psalm-suppress ArgumentTypeCoercion — $bracket is non-empty (matched by regex) */
-                    new \DateTimeZone($bracket);
-                    return $bracket;
-                } catch (\Exception) {
-                    throw new RangeError("Invalid timeZoneId \"{$id}\": unsupported bracket timezone \"{$bracket}\".");
-                }
+                return self::canonicalIanaName($bracket, $id);
             }
             // No bracket: use inline offset.
             if (preg_match('/[+\-]\d{2}:\d{2}:\d{2}/i', $id) === 1) {
@@ -126,15 +128,21 @@ final class TimeZoneHelper
             throw new RangeError("Invalid timeZoneId \"{$id}\": sub-minute offset is not a valid timezone identifier.");
         }
 
-        // IANA timezone name: validate via PHP DateTimeZone (case-insensitive).
-        try {
-            new \DateTimeZone($id);
-        } catch (\Exception) {
-            throw new RangeError("Invalid timeZoneId \"{$id}\": not a recognized timezone identifier.");
-        }
+        return self::canonicalIanaName($id, $id);
+    }
 
-        // Case-normalize the timezone ID using the canonical timezone list.
-        /** @var array<string, string>|null $lowerToCanonical */
+    /**
+     * Resolves an IANA name to its canonically-cased identifier.
+     *
+     * Shared by the bare-name and bracket-annotation paths so both accept exactly the
+     * same names. `$id` is the full identifier the caller was given, used only for the
+     * error message when `$name` came from a bracket annotation.
+     *
+     * @return non-empty-string
+     */
+    private static function canonicalIanaName(string $name, string $id): string
+    {
+        /** @var array<string, non-empty-string>|null $lowerToCanonical */
         static $lowerToCanonical = null;
         if ($lowerToCanonical === null) {
             $lowerToCanonical = [];
@@ -145,7 +153,7 @@ final class TimeZoneHelper
             $lowerToCanonical['etc/utc'] = 'Etc/UTC';
         }
         // Must be in the IANA timezone list — reject abbreviations like "AST", "EST".
-        $lower = strtolower($id);
+        $lower = strtolower($name);
         if (!array_key_exists($lower, $lowerToCanonical)) {
             throw new RangeError("Invalid timeZoneId \"{$id}\": not a recognized IANA timezone identifier.");
         }
