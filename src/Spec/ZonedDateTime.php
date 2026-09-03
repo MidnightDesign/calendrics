@@ -15,6 +15,7 @@ use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasEpochParts;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\LocaleComponents;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\TimeZoneHelper;
 use Calendrics\Spec\Internal\ZonedArithmetic;
@@ -942,7 +943,12 @@ final class ZonedDateTime implements Stringable
         }
 
         $locale = IntlFormatter::resolveLocale($locales);
-        IntlFormatter::validateCalendar($this->calendarId, $locale, $opts, defaultComponents: 'datetime');
+        IntlFormatter::validateCalendar(
+            $this->calendarId,
+            $locale,
+            $opts,
+            defaultComponents: LocaleComponents::DateTime,
+        );
 
         $timeZone = $this->timeZoneId;
         $opts['_locale'] = $locale;
@@ -957,7 +963,7 @@ final class ZonedDateTime implements Stringable
         // Validate style + component conflicts
         IntlFormatter::validateStyleConflicts($opts);
 
-        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, 'datetime');
+        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, LocaleComponents::DateTime);
         [$epochSec, $subNs] = $this->epochParts();
         $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs, $timeZone, $locale);
 

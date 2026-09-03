@@ -7,6 +7,7 @@ namespace Calendrics\Tests\Test262;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Instant;
 use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\LocaleComponents;
 use Calendrics\Spec\PlainDate;
 use Calendrics\Spec\PlainDateTime;
 use Calendrics\Spec\PlainMonthDay;
@@ -177,7 +178,7 @@ final class IntlDateTimeFormat
             || $value instanceof PlainMonthDay
         ) {
             $components = new \ReflectionMethod($value, 'localeDefaultComponents')->invoke($value);
-            \assert(is_string($components));
+            \assert($components instanceof LocaleComponents);
             $timestamp = new \ReflectionMethod($value, 'toLocaleTimestamp')->invoke($value);
             \assert(is_int($timestamp) || is_float($timestamp));
             // Plain types always format in UTC (see HasPlainLocaleString::toLocaleString).
