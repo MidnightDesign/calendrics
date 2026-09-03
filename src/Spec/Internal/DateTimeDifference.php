@@ -316,6 +316,8 @@ final class DateTimeDifference
                 $days = $dateDiff - ($weeks * 7);
                 [$years, $months] = [0, 0];
             } else {
+                // Day and week are handled above, so only these two reach a calendar.
+                $calendarUnit = $normLargest === 'month' ? 'month' : 'year';
                 if ($calId !== 'iso8601') {
                     // For non-ISO calendars, use CalendarDateUntil(temporalDate,
                     // adjustedOther) in (this, other) order per TC39 spec.
@@ -342,7 +344,7 @@ final class DateTimeDifference
                         $adjY2b,
                         $adjM2b,
                         $adjD2b,
-                        $normLargest,
+                        $calendarUnit,
                     );
                     // Take absolute values — the output sign is applied later.
                     $years = abs($years);
@@ -359,7 +361,7 @@ final class DateTimeDifference
                         $adjY2,
                         $adjM2,
                         $adjD2,
-                        $normLargest,
+                        $calendarUnit,
                         $sign < 0,
                     );
                 }
@@ -485,6 +487,7 @@ final class DateTimeDifference
             // from the updated position to properly rebalance months/years.
             if ($overflowDays > 0 && $normLargest !== 'day' && $normLargest !== 'week') {
                 // Overflow from time rounding: recompute calendar diff.
+                $calendarUnit = $normLargest === 'month' ? 'month' : 'year';
                 if ($calId !== 'iso8601') {
                     // Non-ISO: shift nonIsoAdjJdn by overflow in the diff direction.
                     $tc39Jdn2 = $nonIsoAdjJdn + ($sign >= 0 ? $overflowDays : -$overflowDays);
@@ -496,7 +499,7 @@ final class DateTimeDifference
                         $adjY3,
                         $adjM3,
                         $adjD3,
-                        $normLargest,
+                        $calendarUnit,
                     );
                     $years = abs($years);
                     $months = abs($months);
@@ -512,7 +515,7 @@ final class DateTimeDifference
                         $adjY3,
                         $adjM3,
                         $adjD3,
-                        $normLargest,
+                        $calendarUnit,
                         $sign < 0,
                     );
                 }

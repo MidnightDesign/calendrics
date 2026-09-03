@@ -165,11 +165,6 @@ final class IsoCalendar implements CalendarProtocol
         string $largestUnit,
         bool $receiverIsLater = false,
     ): array {
-        $dayOrWeek = CalendarMath::dayOrWeekDateUntil($isoY1, $isoM1, $isoD1, $isoY2, $isoM2, $isoD2, $largestUnit);
-        if ($dayOrWeek !== null) {
-            return $dayOrWeek;
-        }
-
         // Year/month decomposition.
         $sign =
             $isoY2 > $isoY1 || $isoY2 === $isoY1 && ($isoM2 > $isoM1 || $isoM2 === $isoM1 && $isoD2 >= $isoD1) ? 1 : -1;

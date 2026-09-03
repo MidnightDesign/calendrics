@@ -379,7 +379,13 @@ final class ZonedDifference
             $weeks = intdiv(num1: $dateDiff, num2: 7);
             $span = new DateSpan(weeks: $weeks, days: $dateDiff - ($weeks * 7));
         } elseif ($calId !== 'iso8601') {
-            [$tc39AdjJdn, $span] = self::nonIsoDateDiff($tdLocal, $otherLocal, $calId, $normLargest);
+            // Day and week are handled above, so only these two reach a calendar.
+            [$tc39AdjJdn, $span] = self::nonIsoDateDiff(
+                $tdLocal,
+                $otherLocal,
+                $calId,
+                $normLargest === 'month' ? 'month' : 'year',
+            );
         } else {
             $span = self::isoDateSpan(
                 $earlierLocal['year'],
@@ -470,6 +476,7 @@ final class ZonedDifference
      *
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $tdLocal
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $otherLocal
+     * @param 'month'|'year' $normLargest
      * @return array{0: int, 1: DateSpan} [adjustedJdn, span]
      */
     private static function nonIsoDateDiff(array $tdLocal, array $otherLocal, string $calId, string $normLargest): array

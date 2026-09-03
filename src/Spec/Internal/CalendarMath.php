@@ -654,38 +654,4 @@ final class CalendarMath
 
         return self::$fromJulianDayCache[$jdn] = [$year, $month, $day];
     }
-
-    /**
-     * Shared "day" / "week" early return for {@see CalendarProtocol::dateUntil()}.
-     *
-     * When `$largestUnit` is `'day'` or `'week'`, computes the signed difference
-     * purely from Julian Day Numbers — no calendar-specific year/month trial
-     * iteration is needed — and returns a `[years, months, weeks, days]` tuple.
-     * Returns `null` when `$largestUnit` is `'year'` or `'month'` so the caller
-     * falls through to its calendar-specific logic.
-     *
-     * @return array{int, int, int, int}|null
-     */
-    public static function dayOrWeekDateUntil(
-        int $isoY1,
-        int $isoM1,
-        int $isoD1,
-        int $isoY2,
-        int $isoM2,
-        int $isoD2,
-        string $largestUnit,
-    ): ?array {
-        if ($largestUnit !== 'day' && $largestUnit !== 'week') {
-            return null;
-        }
-
-        $totalDays = self::toJulianDay($isoY2, $isoM2, $isoD2) - self::toJulianDay($isoY1, $isoM1, $isoD1);
-
-        if ($largestUnit === 'week') {
-            $weeks = intdiv(num1: $totalDays, num2: 7);
-            return [0, 0, $weeks, $totalDays - ($weeks * 7)];
-        }
-
-        return [0, 0, 0, $totalDays];
-    }
 }

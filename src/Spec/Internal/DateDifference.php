@@ -203,6 +203,8 @@ final class DateDifference
 
         // Calendar units (months/years): compute via calendar protocol.
         // TC39 calls CalendarDateUntil(temporalDate, other) — preserving order.
+        // Day and week returned above, so only these two units reach a calendar.
+        $calendarUnit = $normLargest === 'month' ? 'month' : 'year';
         [$years, $months, , $days] = CalendarFactory::get($temporalDate->calendarId)->dateUntil(
             $temporalDate->isoYear,
             $temporalDate->isoMonth,
@@ -210,7 +212,7 @@ final class DateDifference
             $other->isoYear,
             $other->isoMonth,
             $other->isoDay,
-            $normLargest,
+            $calendarUnit,
             $tdJdn > $otherJdn,
         );
 
