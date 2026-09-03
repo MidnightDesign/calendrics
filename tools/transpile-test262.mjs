@@ -2901,19 +2901,20 @@ class Emitter {
       this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
       return null;
     }
-    let args;
     if (EPOCH_NANOSECONDS_CTORS.has(cls) && argNodes.length > 0) {
-      const rest = argNodes.length > 1 ? this.transpileArgs(argNodes.slice(1)) : '';
-      if (rest === null) return null;
       const epNsBig = this.evalBigInt(argNodes[0]);
-      if (epNsBig !== null && overflowsInt64(epNsBig)) return emitOverInt64Ctor(cls, epNsBig, rest);
+      if (epNsBig !== null && overflowsInt64(epNsBig)) {
+        const rest = this.transpileArgs(argNodes.slice(1));
+        return rest === null ? null : emitOverInt64Ctor(cls, epNsBig, rest);
+      }
       const epNsFloat = toBigIntArgAsPhpFloat(argNodes[0]);
-      args = epNsFloat === null
-        ? this.transpileArgs(argNodes)
-        : (rest === '' ? epNsFloat : `${epNsFloat}, ${rest}`);
-    } else {
-      args = this.transpileArgs(argNodes);
+      if (epNsFloat !== null) {
+        const rest = this.transpileArgs(argNodes.slice(1));
+        if (rest === null) return null;
+        return `new ${SPEC_NS}${cls}(${rest === '' ? epNsFloat : `${epNsFloat}, ${rest}`})`;
+      }
     }
+    const args = this.transpileArgs(argNodes);
     if (args === null) return null;
     return `new ${SPEC_NS}${cls}(${args})`;
   }
@@ -3641,20 +3642,15 @@ class Emitter {
       return null;
     }
 
-    // TypeError tests relying on JS BigInt-vs-Number type distinction can't be replicated in PHP.
-    if (classExpr.includes('TypeError') && fnNode) {
-      // X.add/subtract/with(7n): a BigInt arg throws the SAME TypeError as a Number
-      // arg would (the param rejects all primitives), so lower 7n → 7 and emit the
-      // assertion faithfully — fall through to the generic path below. Must run
-      // before arrowHasBigIntArg, which would otherwise skip it.
-      if (!arrowBigIntArgIsAlwaysTypeError(fnNode)) {
-        if (arrowHasBigIntArg(fnNode)) {
-          // BigInt arg where a Number would NOT throw (e.g. fromEpochMilliseconds(42n)):
-          // drop just this assertion but keep the rest of the fixture running.
-          this.emitSkipAndDefer(node, 'BigInt literal in TypeError assertion; BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-      }
+    // A BigInt arg where a Number would NOT throw (e.g. fromEpochMilliseconds(42n)):
+    // the distinction is not replicable, so drop just this assertion and keep the rest
+    // of the fixture running. X.add/subtract/with(7n) is exempt — its param rejects
+    // every primitive, so a BigInt throws the SAME TypeError a Number would and the
+    // assertion lowers faithfully (7n → 7) through the generic path below.
+    if (classExpr.includes('TypeError') && fnNode
+        && !arrowBigIntArgIsAlwaysTypeError(fnNode) && arrowHasBigIntArg(fnNode)) {
+      this.emitSkipAndDefer(node, 'BigInt literal in TypeError assertion; BigInt vs Number distinction not replicable in PHP');
+      return null;
     }
 
     // PHP comparison operators (<, <=, >, >=) do not call valueOf() and thus cannot
