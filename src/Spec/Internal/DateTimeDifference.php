@@ -19,9 +19,9 @@ use Calendrics\Spec\PlainDateTime;
  *   - **Time-only** (`hour` and below): every day is exactly 24 h, so the whole gap
  *     collapses into one nanosecond count that is rounded and re-decomposed.
  *   - **Calendar** (`day` and above, the default): the date part is measured with
- *     calendar-aware arithmetic — via the calendar protocol's `dateUntil` for non-ISO
- *     calendars, or the ISO breakdown in {@see calendarDiff()} — after borrowing a day
- *     when the time-of-day fragment runs backwards.
+ *     calendar-aware arithmetic via the calendar protocol's `dateUntil`, after borrowing
+ *     a day when the time-of-day fragment runs backwards. ISO and non-ISO calendars
+ *     borrow differently, so each computes its own second endpoint before dispatching.
  *
  * A calendar `smallestUnit` rounds by *fractional progress through the current unit*
  * (TC39 NudgeToCalendarUnit), which needs the true length of that unit: the interval
@@ -349,22 +349,19 @@ final class DateTimeDifference
                     $months = abs($months);
                     $days = abs($days);
                 } else {
-                    // ISO calendar: calendarDiff expects (smaller, larger).
-                    $receiverIsLater = $sign < 0;
-                    [$years, $months, $days] = self::calendarDiff(
+                    // ISO calendar: the endpoints are already in (earlier, later) order,
+                    // so which one is the receiver has to be passed explicitly for the
+                    // day remainder to be anchored at it.
+                    [$years, $months, , $days] = CalendarFactory::get($calId)->dateUntil(
                         $earlier->isoYear,
                         $earlier->isoMonth,
                         $earlier->isoDay,
                         $adjY2,
                         $adjM2,
                         $adjD2,
-                        $receiverIsLater,
+                        $normLargest,
+                        $sign < 0,
                     );
-                    // Convert years to months when largestUnit is 'month'.
-                    if ($normLargest === 'month') {
-                        $months = ($years * 12) + $months;
-                        $years = 0;
-                    }
                 }
                 $weeks = 0;
             }
@@ -508,19 +505,16 @@ final class DateTimeDifference
                     // ISO: add overflow to the swap-based adjOtherJdn.
                     $isoAdjJdn2 = $adjOtherJdn + $overflowDays;
                     [$adjY3, $adjM3, $adjD3] = CalendarMath::fromJulianDay($isoAdjJdn2);
-                    [$years, $months, $days] = self::calendarDiff(
+                    [$years, $months, , $days] = CalendarFactory::get($calId)->dateUntil(
                         $earlier->isoYear,
                         $earlier->isoMonth,
                         $earlier->isoDay,
                         $adjY3,
                         $adjM3,
                         $adjD3,
+                        $normLargest,
                         $sign < 0,
                     );
-                    if ($normLargest === 'month') {
-                        $months = ($years * 12) + $months;
-                        $years = 0;
-                    }
                 }
             } else {
                 $days += $overflowDays;
@@ -617,72 +611,6 @@ final class DateTimeDifference
             microseconds: $outputSign * $us,
             nanoseconds: $outputSign * $ns,
         );
-    }
-
-    /**
-     * Calendar-aware year/month/day breakdown between two dates, as used by since()/until().
-     *
-     * @param int<1, 12> $m1
-     * @param int<1, 12> $m2
-     * @return array{0: int, 1: int, 2: int}
-     */
-    private static function calendarDiff(
-        int $y1,
-        int $m1,
-        int $d1,
-        int $y2,
-        int $m2,
-        int $d2,
-        bool $receiverIsY2 = true,
-    ): array {
-        // Both call sites pass (y1,m1,d1) = the earlier endpoint and (y2,m2,d2)
-        // derived from earlierJdn + a non-negative day count, so (y2,m2,d2) is always
-        // >= (y1,m1,d1) lexicographically. The diff is therefore always non-negative and
-        // the swap path a smaller second operand would need is unreachable here.
-        $years = $y2 - $y1;
-        $months = $m2 - $m1;
-
-        if ($months < 0) {
-            $years--;
-            $months += 12;
-        }
-
-        if ($d2 < $d1) {
-            if ($months > 0) {
-                $months--;
-            } else {
-                $years--;
-                $months = 11;
-            }
-        }
-
-        if ($receiverIsY2) {
-            $anchorMonth = $m2 - $months;
-            $anchorYear = $y2 - $years;
-            if ($anchorMonth <= 0) {
-                $anchorYear--;
-                $anchorMonth += 12;
-            }
-            $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
-            $anchorDay = min($d2, $anchorMaxDay);
-            $days =
-                CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay)
-                - CalendarMath::toJulianDay($y1, $m1, $d1);
-        } else {
-            $anchorMonth = $m1 + $months;
-            $anchorYear = $y1 + $years;
-            if ($anchorMonth > 12) {
-                $anchorYear++;
-                $anchorMonth -= 12;
-            }
-            $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
-            $anchorDay = min($d1, $anchorMaxDay);
-            $days =
-                CalendarMath::toJulianDay($y2, $m2, $d2)
-                - CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay);
-        }
-
-        return [$years, $months, $days];
     }
 
     /**

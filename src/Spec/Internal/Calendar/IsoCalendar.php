@@ -200,18 +200,35 @@ final class IsoCalendar implements CalendarProtocol
             $years = 0;
         }
 
-        // Compute remaining days: anchor forward from date1 by years+months.
-        $anchorMonth = $isoM1 + $months;
-        $anchorYear = $isoY1 + $years;
-        if ($anchorMonth > 12) {
-            $anchorYear += intdiv($anchorMonth - 1, num2: 12);
-            $anchorMonth = (($anchorMonth - 1) % 12) + 1;
+        // Compute the remaining days by anchoring the years+months span at the receiver
+        // and measuring what is left over to the other endpoint. Date1 is the earlier
+        // endpoint after the swap above, so the receiver is date2 exactly when it is the
+        // later of the two.
+        if ($receiverIsLater) {
+            $anchorMonth = $isoM2 - $months;
+            $anchorYear = $isoY2 - $years;
+            if ($anchorMonth < 1) {
+                $anchorYear += intdiv($anchorMonth - 12, num2: 12);
+                $anchorMonth = (((($anchorMonth - 1) % 12) + 12) % 12) + 1;
+            }
+            $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
+            $anchorDay = min($isoD2, $anchorMaxDay);
+            $days =
+                CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay)
+                - CalendarMath::toJulianDay($isoY1, $isoM1, $isoD1);
+        } else {
+            $anchorMonth = $isoM1 + $months;
+            $anchorYear = $isoY1 + $years;
+            if ($anchorMonth > 12) {
+                $anchorYear += intdiv($anchorMonth - 1, num2: 12);
+                $anchorMonth = (($anchorMonth - 1) % 12) + 1;
+            }
+            $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
+            $anchorDay = min($isoD1, $anchorMaxDay);
+            $days =
+                CalendarMath::toJulianDay($isoY2, $isoM2, $isoD2)
+                - CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay);
         }
-        $anchorMaxDay = CalendarMath::calcDaysInMonth($anchorYear, $anchorMonth);
-        $anchorDay = min($isoD1, $anchorMaxDay);
-        $days =
-            CalendarMath::toJulianDay($isoY2, $isoM2, $isoD2)
-            - CalendarMath::toJulianDay($anchorYear, $anchorMonth, $anchorDay);
 
         return [$sign * $years, $sign * $months, 0, $sign * $days];
     }
