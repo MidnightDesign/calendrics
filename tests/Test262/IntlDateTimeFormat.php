@@ -167,7 +167,6 @@ final class IntlDateTimeFormat
     {
         $locale = IntlFormatter::resolveLocale($this->locales);
         $opts = $this->options;
-        $opts['_locale'] = $locale;
 
         if (
             $value instanceof PlainDate

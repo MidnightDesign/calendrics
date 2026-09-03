@@ -937,7 +937,6 @@ final class ZonedDateTime implements Stringable
         IntlFormatter::validateCalendar($this->calendarId, $locale, $opts, defaultComponents: 'datetime');
 
         $timeZone = $this->timeZoneId;
-        $opts['_locale'] = $locale;
 
         // TC39: ZDT's default format includes the timezone name — but only when the
         // caller named no components at all. Asking for one component (`{year:'numeric'}`)
