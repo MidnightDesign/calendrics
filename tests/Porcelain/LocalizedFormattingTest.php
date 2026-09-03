@@ -452,6 +452,12 @@ final class LocalizedFormattingTest extends TestCase
         $afternoon = new PlainTime(15, 0);
         $zoned = self::zoned();
 
+        // `hour`, `minute` and `second` have no case here: ICU's pattern generator
+        // normalizes the hour field to the locale's own width, so 'numeric' and
+        // '2-digit' render the same string. ECMA-402 pads the '2-digit' hour ('09 AM'
+        // against '9 AM'), a deviation this suite cannot assert until the generated
+        // pattern is widened afterwards.
+
         yield 'PlainDate dateStyle' => [array_map(static fn(FormatStyle $style): string => $date->toLocaleString(
             self::LOCALE,
             dateStyle: $style,
