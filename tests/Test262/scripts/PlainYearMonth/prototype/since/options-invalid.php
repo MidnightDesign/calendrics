@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $feb20 = new \Calendrics\Spec\PlainYearMonth(2020, 2);
 $feb21 = new \Calendrics\Spec\PlainYearMonth(2021, 2);
 foreach ([null, 1, 'hello', true, \Calendrics\Tests\Test262\JsSymbol::singleton(), 1] as $badOption) {
-if ($badOption === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$feb21, &$feb20, &$badOption) { return $feb21->since($feb20, $badOption); }, "" . (\Calendrics\Tests\Test262\Js::toString($badOption)) . " throws TypeError");
 }
