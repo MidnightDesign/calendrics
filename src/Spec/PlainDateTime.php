@@ -6,6 +6,7 @@ namespace Calendrics\Spec;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\AnchorMath;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\DateTimeArithmetic;
@@ -1252,24 +1253,13 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
     }
 
     #[\Override]
-    protected function toLocaleTimestamp(): int|float
+    protected function toLocaleEpochParts(): array
     {
-        $dt = new \DateTime(
-            sprintf(
-                '%04d-%02d-%02dT%02d:%02d:%02d',
-                $this->isoYear,
-                $this->isoMonth,
-                $this->isoDay,
-                $this->hour,
-                $this->minute,
-                $this->second,
-            ),
-            new \DateTimeZone('UTC'),
-        );
-        $subNs = ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond;
-        if ($subNs === 0) {
-            return $dt->getTimestamp();
-        }
-        return (float) $dt->getTimestamp() + ((float) $subNs / 1e9);
+        $epochSec =
+            (AnchorMath::isoDateToEpochDays($this->isoYear, $this->isoMonth, $this->isoDay) * 86_400)
+            + ($this->hour * 3_600)
+            + ($this->minute * 60)
+            + $this->second;
+        return [$epochSec, ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond];
     }
 }

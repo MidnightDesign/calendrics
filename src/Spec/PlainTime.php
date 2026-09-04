@@ -1257,17 +1257,10 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
     }
 
     #[\Override]
-    protected function toLocaleTimestamp(): int|float
+    protected function toLocaleEpochParts(): array
     {
-        // Use Unix epoch date (1970-01-01) with the given time
-        $dt = new \DateTime(
-            sprintf('1970-01-01T%02d:%02d:%02d', $this->hour, $this->minute, $this->second),
-            new \DateTimeZone('UTC'),
-        );
-        $subNs = ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond;
-        if ($subNs === 0) {
-            return $dt->getTimestamp();
-        }
-        return (float) $dt->getTimestamp() + ((float) $subNs / 1e9);
+        // Anchored on the Unix epoch date (1970-01-01), which no time-only pattern renders.
+        $epochSec = ($this->hour * 3_600) + ($this->minute * 60) + $this->second;
+        return [$epochSec, ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond];
     }
 }
