@@ -7,6 +7,61 @@ All notable changes to this project are documented in this file. It is generated
 
 Until 1.0.0 the public API may change between minor versions.
 
+## [0.3.2](https://github.com/MidnightDesign/calendrics/compare/v0.3.1...v0.3.2) (2026-09-04)
+
+
+### Bug Fixes
+
+* negate directed rounding modes on Duration::round()'s pure-time path ([#124](https://github.com/MidnightDesign/calendrics/issues/124)) ([3b459dc](https://github.com/MidnightDesign/calendrics/commit/3b459dcdcae042321705dd02a1fb41ac8a82d121))
+* reject a Duration seconds field that overflows int64 ([#127](https://github.com/MidnightDesign/calendrics/issues/127)) ([965b42a](https://github.com/MidnightDesign/calendrics/commit/965b42ad95cd0f6eb8551c3f61260cc98bd11bdf))
+* reject a null options argument wherever TC39 does ([#153](https://github.com/MidnightDesign/calendrics/issues/153)) ([99453df](https://github.com/MidnightDesign/calendrics/commit/99453dff21f70743397cefef93528c8662767329))
+* reject conflicting month and monthCode in non-ISO PlainMonthDay::with() ([#113](https://github.com/MidnightDesign/calendrics/issues/113)) ([ac8f599](https://github.com/MidnightDesign/calendrics/commit/ac8f599ffe518afa70540e6cfc1d5da2fb521b5b))
+* reject unknown time zone identifiers in Instant::toString ([#97](https://github.com/MidnightDesign/calendrics/issues/97)) ([d6e3afc](https://github.com/MidnightDesign/calendrics/commit/d6e3afcbda84dee6c381424f07b43da581f822f7))
+* resolve PlainYearMonth's largestUnit 'auto' before ranking it ([#120](https://github.com/MidnightDesign/calendrics/issues/120)) ([42d7142](https://github.com/MidnightDesign/calendrics/commit/42d714279dbcabe46e75c6e1c0ab2b00e03b2e46))
+
+
+### Code Refactoring
+
+* catch up with the current Mago analyzer ([#101](https://github.com/MidnightDesign/calendrics/issues/101)) ([6c6a383](https://github.com/MidnightDesign/calendrics/commit/6c6a383ab1009a13657212820e37b2f797271018))
+* delete the write-only _locale option-bag key ([#112](https://github.com/MidnightDesign/calendrics/issues/112)) ([604ef15](https://github.com/MidnightDesign/calendrics/commit/604ef15440d66f2c14e2312f44cb279f26017f9b))
+* mark the Plain toLocaleString types with an interface ([#111](https://github.com/MidnightDesign/calendrics/issues/111)) ([0575131](https://github.com/MidnightDesign/calendrics/commit/057513137505397c73868aceae901446c8331e08)), closes [#105](https://github.com/MidnightDesign/calendrics/issues/105)
+* replace the locale component mode string with an internal enum ([#110](https://github.com/MidnightDesign/calendrics/issues/110)) ([fc32a4c](https://github.com/MidnightDesign/calendrics/commit/fc32a4cc6506be878de6dd581ad1b53bd4e066fd))
+* route the ISO calendar through the calendar protocol ([#108](https://github.com/MidnightDesign/calendrics/issues/108)) ([e4de2f5](https://github.com/MidnightDesign/calendrics/commit/e4de2f5b2ffdd8a9d7e9323c94670f3fdfc7e8fb))
+* split the Plain-type toLocaleString seam out of HasStringRepresentations ([#107](https://github.com/MidnightDesign/calendrics/issues/107)) ([3cfe9b7](https://github.com/MidnightDesign/calendrics/commit/3cfe9b7806173c98a62e56c05a750d822cacd29b)), closes [#68](https://github.com/MidnightDesign/calendrics/issues/68)
+* state the month-branch invariant without naming the rank check ([#128](https://github.com/MidnightDesign/calendrics/issues/128)) ([10946f3](https://github.com/MidnightDesign/calendrics/commit/10946f36a531d351edfb0153c4a1a4f6853640c6)), closes [#119](https://github.com/MidnightDesign/calendrics/issues/119)
+
+
+### Documentation
+
+* state which layer gets which tests ([#131](https://github.com/MidnightDesign/calendrics/issues/131)) ([44b7e08](https://github.com/MidnightDesign/calendrics/commit/44b7e083facf928a7b8ef283f956bd7559980904))
+* warn that tests/Test262/data is a subset of test262 ([#156](https://github.com/MidnightDesign/calendrics/issues/156)) ([669e996](https://github.com/MidnightDesign/calendrics/commit/669e996f0699976f45f953ef90942d75d5ca75ab))
+
+
+### Tests
+
+* delete the legacy hand-written spec-layer tests ([#141](https://github.com/MidnightDesign/calendrics/issues/141)) ([1ef3451](https://github.com/MidnightDesign/calendrics/commit/1ef3451f6d69fd91ae42b639d8b75af84e703fa6))
+* drop the empty catch-all PHPUnit suite ([#139](https://github.com/MidnightDesign/calendrics/issues/139)) ([273b557](https://github.com/MidnightDesign/calendrics/commit/273b557543b01065e1af4be4bbe50f8fcdbfbc90))
+
+
+### Build System
+
+* raise the container's memory_limit so `composer check` can run ([#109](https://github.com/MidnightDesign/calendrics/issues/109)) ([6ebb6ee](https://github.com/MidnightDesign/calendrics/commit/6ebb6ee0873f31c740b7396d2986affc3c6ba311))
+* raise the container's memory_limit to 512M ([6ebb6ee](https://github.com/MidnightDesign/calendrics/commit/6ebb6ee0873f31c740b7396d2986affc3c6ba311)), closes [#106](https://github.com/MidnightDesign/calendrics/issues/106)
+* run the php container as the developer's uid ([#100](https://github.com/MidnightDesign/calendrics/issues/100)) ([1ca223f](https://github.com/MidnightDesign/calendrics/commit/1ca223f8cf0facb996b1887cf1819c4595be2f47))
+* type DateTimeZone::listIdentifiers() as returning non-empty strings ([#99](https://github.com/MidnightDesign/calendrics/issues/99)) ([c77e057](https://github.com/MidnightDesign/calendrics/commit/c77e057c5d3b9ea7ceaccef16f18e92531a49573))
+
+
+### Continuous Integration
+
+* show refactor, docs, test, build, and ci commits in the changelog ([#116](https://github.com/MidnightDesign/calendrics/issues/116)) ([b773de3](https://github.com/MidnightDesign/calendrics/commit/b773de315af53b65bfba5b2c543d295c9cf63e5a))
+
+
+### Miscellaneous Chores
+
+* **deps-dev:** update infection/infection requirement || ^0.35 ([309ab76](https://github.com/MidnightDesign/calendrics/commit/309ab7640095ffba5baab01e5db59cf2a87d46b1))
+* **deps-dev:** update infection/infection requirement from ^0.32 to ^0.32 || ^0.35 ([#96](https://github.com/MidnightDesign/calendrics/issues/96)) ([309ab76](https://github.com/MidnightDesign/calendrics/commit/309ab7640095ffba5baab01e5db59cf2a87d46b1))
+* **deps:** bump actions/checkout from 6 to 7 ([#35](https://github.com/MidnightDesign/calendrics/issues/35)) ([a4573ae](https://github.com/MidnightDesign/calendrics/commit/a4573ae8e0b93b5fbb3aa221ac446126e0b3c596))
+
 ## [0.3.1](https://github.com/MidnightDesign/calendrics/compare/v0.3.0...v0.3.1) (2026-08-18)
 
 
