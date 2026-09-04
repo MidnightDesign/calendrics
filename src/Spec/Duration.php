@@ -154,12 +154,13 @@ final class Duration implements Stringable
         }
 
         // TC39 §7.5.11 IsValidDuration: the combined total of days + time fields must not
-        // exceed MaxTimeDuration = 2^53 × 10^9 - 1 nanoseconds.
-        /** @infection-ignore-all */
-        $secI = is_int($seconds) ? $seconds : (int) $seconds;
-        if ($secI > 9_007_199_254_740_991 || $secI < -9_007_199_254_740_991) {
+        // exceed MaxTimeDuration = 2^53 × 10^9 - 1 nanoseconds. The bound is checked on
+        // $seconds itself rather than on an int cast of it: a float beyond int64 range
+        // casts to 0, which would pass the check and then balance as zero seconds.
+        if (abs($seconds) > 9_007_199_254_740_991) {
             throw new RangeError('Duration time fields exceed the maximum representable range.');
         }
+        $secI = (int) $seconds;
 
         if (
             is_int($nanoseconds)
