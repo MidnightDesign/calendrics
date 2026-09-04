@@ -602,6 +602,14 @@ const OP_PREC = {
   '&': 9, '^': 8, '|': 7, '&&': 6, '||': 5, '??': 5,
 };
 
+// Precedence among the logical operators as PHP reads them, which is not how
+// JavaScript reads them: PHP puts `??` below both `&&` and `||`, while JavaScript
+// refuses to mix `??` with either unless the source parenthesises it. Parentheses the
+// JS source carried are not in the AST, so an operand binding more loosely than its
+// parent has to have them put back — otherwise `a && (b || c)` emits as
+// `a && b || c`, which PHP reads as `(a && b) || c`.
+const PHP_LOGICAL_PREC = { '&&': 3, '||': 2, '??': 1 };
+
 class Emitter {
   constructor(source, objectMode = false) {
     this.source = source;
@@ -959,6 +967,14 @@ class Emitter {
         // In object mode, objectVars are stdClass       → use ->key access.
         const rhsIsObjectVar = rhsVarName !== null && this.objectVars.has(rhsVarName);
         for (const prop of decl.id.properties) {
+          // Rest: const { a, ...others } = expr → everything the named properties left over.
+          if (prop.type === 'RestElement' && prop.argument?.type === 'Identifier') {
+            const taken = decl.id.properties
+              .filter(p => p.type === 'Property' && !p.computed && p.key?.type === 'Identifier')
+              .map(p => `'${p.key.name}'`);
+            this.emit(`$${prop.argument.name} = ${HARNESS_NS}Js::destructureRest(${objPhp}, [${taken.join(', ')}]);`);
+            continue;
+          }
           if (prop.type !== 'Property' || prop.computed || prop.key?.type !== 'Identifier') continue;
           const keyName = prop.key.name;
           // Determine access pattern: objectVars in array mode → ['key'], in object mode → ->key.
@@ -3246,9 +3262,13 @@ class Emitter {
     if (left === null || right === null) return null;
     // JS logical operators (||, &&, ??) map directly to PHP
     const op = node.operator === '??' ? '??' : node.operator;
-    // Wrap operands that have lower precedence (e.g. ternary inside logical)
+    // Wrap operands that bind more loosely than this operator (a ternary, or a
+    // logical operator PHP ranks below it — see PHP_LOGICAL_PREC).
     const wrapIf = (php, n) =>
-      n.type === 'ConditionalExpression' ? `(${php})` : php;
+      n.type === 'ConditionalExpression'
+      || (n.type === 'LogicalExpression' && PHP_LOGICAL_PREC[n.operator] < PHP_LOGICAL_PREC[op])
+        ? `(${php})`
+        : php;
     return `${wrapIf(left, node.left)} ${op} ${wrapIf(right, node.right)}`;
   }
 
