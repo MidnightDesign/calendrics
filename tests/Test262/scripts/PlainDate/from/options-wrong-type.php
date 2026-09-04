@@ -10,7 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $badOptions = [null, true, 'some string', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 2, INF, NAN, null];
 foreach ($badOptions as $value) {
-if ($value === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$value) { return \Calendrics\Spec\PlainDate::from(['year' => 1976, 'month' => 11, 'day' => 18], $value); }, "TypeError on wrong options type " . (gettype($value)) . "");
 Assert::throws(\TypeError::class, function () use (&$value) { return \Calendrics\Spec\PlainDate::from(new \Calendrics\Spec\PlainDate(1976, 11, 18), $value); }, 'TypeError thrown before cloning PlainDate instance');
 Assert::throws(\TypeError::class, function () use (&$value) { return \Calendrics\Spec\PlainDate::from(new \Calendrics\Spec\ZonedDateTime(0, 'UTC'), $value); }, 'TypeError thrown before converting ZonedDateTime instance');

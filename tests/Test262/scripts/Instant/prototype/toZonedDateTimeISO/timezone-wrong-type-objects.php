@@ -12,7 +12,6 @@ $instance = new \Calendrics\Spec\Instant(0);
 $primitiveTests = [[null, 'null'], [true, 'boolean'], ['', 'empty string'], [1, 'number that doesn\'t convert to a valid ISO string'], [19_761_118, 'number that would convert to a valid ISO string in other contexts'], [1, 'bigint']];
 foreach ($primitiveTests as $__entry__) {
 [$timeZone, $description] = array_pad($__entry__, 2, null);
-if ($timeZone === null) { continue; }
 Assert::throws((is_string($timeZone) ? \RangeException::class : \TypeError::class), function () use (&$instance, &$timeZone) { return $instance->toZonedDateTimeISO($timeZone); }, "{$description} does not convert to a valid ISO string");
 }
 $typeErrorTests = [[\Calendrics\Tests\Test262\JsSymbol::singleton(), 'symbol'], [(object) [], 'object'], [new \Calendrics\Spec\Duration(), 'duration instance']];

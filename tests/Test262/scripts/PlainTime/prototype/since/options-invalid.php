@@ -12,6 +12,5 @@ $values = [null, true, 'hello', \Calendrics\Tests\Test262\JsSymbol::singleton(),
 $time = new \Calendrics\Spec\PlainTime(15, 23, 30, 123, 456, 789);
 $one = new \Calendrics\Spec\PlainTime(16, 23, 30, 123, 456, 789);
 foreach ($values as $badOptions) {
-if ($badOptions === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$time, &$one, &$badOptions) { return $time->since($one, $badOptions); }, '');
 }
