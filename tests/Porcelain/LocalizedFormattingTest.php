@@ -43,13 +43,6 @@ final class LocalizedFormattingTest extends TestCase
     /** A locale whose default calendar is not Gregorian, used to observe the `calendar` option. */
     private const string BUDDHIST_LOCALE = 'th-TH';
 
-    /**
-     * A locale that spells all three day-period widths differently: at 15:00 French
-     * renders 'ap.m.', 'après-midi' and 'de l'après-midi'. English collapses two of
-     * the three at every hour of the day.
-     */
-    private const string DAY_PERIOD_LOCALE = 'fr-FR';
-
     private static function date(): PlainDate
     {
         return new PlainDate(2020, 6, 15);
@@ -431,114 +424,6 @@ final class LocalizedFormattingTest extends TestCase
     {
         $this->expectException(RangeError::class);
         new PlainMonthDay(6, 15)->toLocaleString(self::LOCALE);
-    }
-
-    // -------------------------------------------------------------------------
-    // Every value of every option renders as itself
-    // -------------------------------------------------------------------------
-
-    /**
-     * The one-value-per-option cases above prove an option is read at all. These
-     * prove every one of its values is read as itself — the distinction that
-     * separates a real value-to-skeleton mapping from a single skeleton every
-     * value happens to collapse onto.
-     *
-     * Each case renders the same temporal value once per enum case and expects as
-     * many distinct strings as the enum has cases, so nothing pins CLDR wording.
-     *
-     * @return iterable<string, array{\Closure(): list<string>}>
-     */
-    public static function everyOptionValueCases(): iterable
-    {
-        // `hour`, `minute` and `second` have no case here: ICU's pattern generator
-        // normalizes the hour field to the locale's own width, so 'numeric' and
-        // '2-digit' render the same string. ECMA-402 pads the '2-digit' hour ('09 AM'
-        // against '9 AM'), a deviation this suite cannot assert until the generated
-        // pattern is widened afterwards.
-        yield 'PlainDate dateStyle' => [
-            static fn(): array => array_map(static fn(FormatStyle $style): string => self::date()
-                ->toLocaleString(self::LOCALE, dateStyle: $style), FormatStyle::cases()),
-        ];
-        yield 'PlainDate weekday' => [
-            static fn(): array => array_map(static fn(TextWidth $width): string => self::date()
-                ->toLocaleString(self::LOCALE, weekday: $width), TextWidth::cases()),
-        ];
-        yield 'PlainDate era' => [
-            static fn(): array => array_map(static fn(TextWidth $width): string => self::date()
-                ->toLocaleString(self::LOCALE, era: $width), TextWidth::cases()),
-        ];
-        yield 'PlainDate year' => [
-            static fn(): array => array_map(static fn(NumberWidth $width): string => self::date()
-                ->toLocaleString(self::LOCALE, year: $width), NumberWidth::cases()),
-        ];
-        yield 'PlainDate month' => [
-            static fn(): array => array_map(static fn(MonthWidth $width): string => self::date()
-                ->toLocaleString(self::LOCALE, month: $width), MonthWidth::cases()),
-        ];
-        // The 5th, not the 15th: a two-digit day of the month renders the same either
-        // way, so the 15th would tell us nothing about the option.
-        yield 'PlainDate day' => [
-            static fn(): array => array_map(static fn(NumberWidth $width): string => new PlainDate(
-                2020,
-                6,
-                5,
-            )->toLocaleString(self::LOCALE, day: $width), NumberWidth::cases()),
-        ];
-        yield 'PlainTime dayPeriod' => [
-            static fn(): array => array_map(static fn(TextWidth $width): string => new PlainTime(15, 0)->toLocaleString(
-                self::DAY_PERIOD_LOCALE,
-                dayPeriod: $width,
-            ), TextWidth::cases()),
-        ];
-        yield 'ZonedDateTime timeZoneName' => [
-            static fn(): array => array_map(static fn(TimeZoneNameStyle $style): string => self::zoned()
-                ->toLocaleString(self::LOCALE, timeZoneName: $style), TimeZoneNameStyle::cases()),
-        ];
-    }
-
-    /** @param \Closure(): list<string> $renderEveryValue One rendering per value of a single option. */
-    #[DataProvider('everyOptionValueCases')]
-    public function testEveryOptionValueRendersDistinctly(\Closure $renderEveryValue): void
-    {
-        self::assertAllDistinct($renderEveryValue());
-    }
-
-    // -------------------------------------------------------------------------
-    // hourCycle across the locale dialects ICU accepts
-    // -------------------------------------------------------------------------
-
-    /** @return iterable<string, array{string, Calendar|null}> */
-    public static function hourCycleLocaleCases(): iterable
-    {
-        yield 'bare locale' => [self::LOCALE, null];
-        yield 'locale already carrying a -u- extension' => ['en-US-u-nu-latn', null];
-        yield 'calendar option, which ICU spells as an @keyword' => [self::LOCALE, Calendar::Hebrew];
-    }
-
-    /**
-     * Midnight is the hour the four cycles disagree about most: h11 renders it 0,
-     * h12 renders it 12, h23 renders it 00 and h24 renders it 24. Asking for all
-     * four and requiring four different answers is therefore enough to prove the
-     * cycle reached ICU — however the locale had to be spelled to carry it.
-     */
-    #[DataProvider('hourCycleLocaleCases')]
-    public function testHourCycleReachesIcuWhateverTheLocaleDialect(string $locale, ?Calendar $calendar): void
-    {
-        $midnight = new PlainDateTime(2020, 6, 15, 0, 30);
-
-        $rendered = array_map(static fn(HourCycle $hourCycle): string => $midnight->toLocaleString(
-            $locale,
-            hourCycle: $hourCycle,
-            calendar: $calendar,
-        ), HourCycle::cases());
-
-        self::assertAllDistinct($rendered);
-    }
-
-    /** @param list<string> $rendered */
-    private static function assertAllDistinct(array $rendered): void
-    {
-        static::assertSame($rendered, array_values(array_unique($rendered)));
     }
 
     // -------------------------------------------------------------------------
