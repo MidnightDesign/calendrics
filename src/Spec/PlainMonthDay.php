@@ -11,6 +11,7 @@ use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
@@ -477,14 +478,14 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
      *   always     → "YYYY-MM-DD[u-ca=<id>]"
      *   critical   → "YYYY-MM-DD[!u-ca=<id>]"
      *
-     * @param array<array-key, mixed>|object|null $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
+     * @param array<array-key, mixed>|object $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
      * @throws RangeError for invalid calendarName values.
      * @psalm-api
      */
     #[\Override]
-    public function toString(mixed $options = null): string
+    public function toString(mixed $options = []): string
     {
-        $opts = Options::normalizeOptions($options, ['calendarName']);
+        $opts = Options::requireObject($options, ['calendarName']);
 
         $calendarName = 'auto';
         if (array_key_exists('calendarName', $opts)) {
@@ -1333,21 +1334,9 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
     }
 
     #[\Override]
-    protected function localeDefaultComponents(): string
+    protected function localeDefaultComponents(): LocaleComponentMode
     {
-        return 'monthday';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return true;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
+        return LocaleComponentMode::MonthDay;
     }
 
     #[\Override]

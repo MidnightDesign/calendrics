@@ -542,29 +542,20 @@ function arrowBigIntArgIsAlwaysTypeError(fnNode) {
   return body.arguments.some(a => a.type === 'Literal' && a.bigint !== undefined && !overflowsInt64(BigInt(a.bigint)));
 }
 
-/** Returns true if the arrow body directly calls methodName with a plain number literal arg. */
-function arrowCallsWithNumber(fnNode, methodName) {
-  if (!fnNode || fnNode.type !== 'ArrowFunctionExpression') return false;
-  const body = fnNode.body;
-  if (body.type !== 'CallExpression') return false;
-  const callee = body.callee;
-  if (!callee || callee.type !== 'MemberExpression' || callee.property.name !== methodName) return false;
-  return body.arguments.some(a => a.type === 'Literal' && typeof a.value === 'number');
-}
+/** Temporal constructors whose first argument is an epochNanoseconds converted with ToBigInt. */
+const EPOCH_NANOSECONDS_CTORS = new Set(['Instant', 'ZonedDateTime']);
 
 /**
- * Returns true if the arrow body is `new Temporal.Instant(arg)` where arg is a
- * plain Number literal (not a BigInt). PHP int64 can't replicate JS BigInt-vs-Number
- * type distinction, so these TypeError assertions are untranslatable.
+ * Renders a JS Number literal sitting in a ToBigInt argument position as a PHP float
+ * literal, or null if the node is not one. The spec layer models a JS BigInt as a PHP
+ * int and a JS Number as a PHP float, so `new Temporal.Instant(42)` must reach it as
+ * `42.0` to be rejected the way ToBigInt(Number) rejects it; emitting int `42` would
+ * make it a BigInt and construct successfully.
  */
-function arrowInstantCtorWithNumberArg(fnNode) {
-  if (!fnNode || fnNode.type !== 'ArrowFunctionExpression') return false;
-  const body = fnNode.body;
-  if (body.type !== 'NewExpression') return false;
-  const callee = body.callee;
-  if (!callee || callee.type !== 'MemberExpression') return false;
-  if (callee.object?.name !== 'Temporal' || callee.property?.name !== 'Instant') return false;
-  return body.arguments.some(a => a.type === 'Literal' && typeof a.value === 'number');
+function toBigIntArgAsPhpFloat(argNode) {
+  if (argNode?.type !== 'Literal' || typeof argNode.value !== 'number') return null;
+  const digits = String(argNode.value);
+  return /[.eE]/.test(digits) ? digits : `${digits}.0`;
 }
 
 /** Operator precedence table (higher = binds tighter). */
@@ -981,6 +972,17 @@ class Emitter {
             continue;
           }
         }
+        continue;
+      }
+      // `const options = undefined;` binds the JsUndefined sentinel rather than PHP
+      // null. The sentinel reaches GetOptionsObject as an ordinary object and
+      // snapshots empty, which is what the spec's "OrdinaryObjectCreate for
+      // undefined" step does; PHP null is JS null and must stay a TypeError.
+      // transpileArgs trims a literal trailing `undefined`, but a binding survives
+      // to the call site, so the two rules have to agree.
+      if (decl.id.type === 'Identifier'
+          && decl.init?.type === 'Identifier' && decl.init.name === 'undefined') {
+        this.emit(`$${decl.id.name} = JsUndefined::singleton();`);
         continue;
       }
       // Track object literals: in array mode they become PHP arrays ['key' => val]
@@ -1563,7 +1565,7 @@ class Emitter {
   // and `N` both become PHP int — so a throw assertion that depends on it can't
   // be reproduced. Returns one of:
   //   'incomplete' — the loop can't be faithfully lowered; emit incomplete.
-  //   'skip-null'  — lowering is safe, but `null` elements must be skipped.
+  //   'lower'      — lowering is safe; transpile the whole table.
   //   null         — the BigInt-table rule does not apply; transpile normally.
   classifyBigIntTableForOf(node) {
     // Only applies to a for-of over a BigInt-containing data table (inline, or a
@@ -1604,7 +1606,7 @@ class Emitter {
       // The lookalike `with/options-wrong-type` field-validation ordering gap (RangeError
       // from a non-string property bag) is rejected by isStringParseFromOptionsWrongTypeBody.
       if (tableHasNumberLiteral && isStringParseFromOptionsWrongTypeBody(node.body)) {
-        return 'skip-null';
+        return 'lower';
       }
       // The `with/options-wrong-type` property-bag family: RangeError comes from the
       // partial-field coercion, which the PHP spec layer now performs BEFORE the
@@ -1617,12 +1619,11 @@ class Emitter {
       }
       return 'incomplete';
     }
-    // A `null` table element may be an OMITTED positional argument (e.g. a
-    // positional calendar → ISO, no throw) rather than a wrong-type value, which
-    // would fail an `assert.throws`. Skip the null iteration in the lowered loop;
-    // the remaining elements still cover the throw path. (A property-bag null
-    // that DOES throw is merely left untested here — never red.)
-    return 'skip-null';
+    // A `null` table element is JS null wherever it lands — a value the algorithms
+    // reject, positional slot or option key alike. Nothing to skip: PHP null now
+    // means JS null everywhere, and JS undefined arrives as the JsUndefined
+    // sentinel or as an omitted argument.
+    return 'lower';
   }
 
   transpileForOf(node) {
@@ -1669,12 +1670,6 @@ class Emitter {
       this.emitIncomplete('BigInt literal in wrong-type for-of data table; Number-vs-BigInt distinction not representable in PHP');
       return;
     }
-    // `null` data-table elements must be skipped when the BigInt table is lowered as
-    // 'skip-null' (a null may be an omitted-positional sentinel). The 'lower' signal
-    // (with/options-wrong-type property-bag family) keeps null — there it is a genuine
-    // wrong-type options value — so it falls through to the normal null-keeping foreach.
-    const nullSkipForOf = bigIntTable === 'skip-null';
-
     // Special case: for (const [k, v] of Object.entries(obj)) → foreach ($obj as $k => $v)
     // Also handles: for (const [k, {a, b, c}] of Object.entries(obj)) where the value slot
     // is an ObjectPattern — the properties are bound inside the loop body.
@@ -1773,9 +1768,6 @@ class Emitter {
       this.emit(`foreach (${iter2} as ${tmpVar2}) {`);
       const opened2 = this.lines.length > before2;
       this.emit(`${pat} = array_pad(${tmpVar2}, ${n}, null);`);
-      if (nullSkipForOf) {
-        this.emit(`if (${parts[0]} === null) { continue; }`);
-      }
       // Emit default assignments for elements with AssignmentPattern defaults.
       for (let i = 0; i < patNode2.elements.length; i++) {
         const el = patNode2.elements[i];
@@ -1866,9 +1858,6 @@ class Emitter {
     const before = this.lines.length;
     this.emit(`foreach (${iter} as ${pat}) {`);
     const opened = this.lines.length > before;
-    if (nullSkipForOf) {
-      this.emit(`if (${pat} === null) { continue; }`);
-    }
     // A `{ toString: () => <non-String> }` entry only belongs in a wrong-type table
     // under JS semantics; in PHP it is an ordinary stringifiable value, so skip it
     // rather than assert a rejection the language cannot produce.
@@ -2211,11 +2200,9 @@ class Emitter {
       if (node.object.type === 'Identifier' && node.object.name === 'Number') {
         switch (node.property.name) {
           case 'MAX_SAFE_INTEGER': return '9_007_199_254_740_991';
-          case 'MAX_VALUE':
-            // Number.MAX_VALUE ≈ 1.8e308 has no PHP int equivalent; PHP_INT_MAX µs/ns
-            // is within the valid Duration range, so this test cannot be faithfully translated.
-            this.emitIncomplete('Number.MAX_VALUE exceeds PHP_INT_MAX; no exact PHP int equivalent');
-            return null;
+          // PHP_FLOAT_MAX is bit-for-bit Number.MAX_VALUE; the fixtures that use it
+          // pass it where a JS Number is expected, which the spec layer takes as a float.
+          case 'MAX_VALUE':        return 'PHP_FLOAT_MAX';
           case 'MIN_SAFE_INTEGER': return '-9_007_199_254_740_991';
           case 'MIN_VALUE':        return '5.0E-324';
           case 'EPSILON':          return '2.220446049250313E-16';
@@ -2750,6 +2737,8 @@ class Emitter {
         if (epNsBig !== null && overflowsInt64(epNsBig)) {
           return emitOverInt64Ctor('Instant', epNsBig, '');
         }
+        const epNsFloat = toBigIntArgAsPhpFloat(node.arguments[0]);
+        if (epNsFloat !== null) return `${SPEC_NS}Instant::fromEpochNanoseconds(${epNsFloat})`;
       }
       // JS auto-coerces objects to strings; PHP does not. If an objectVars variable
       // is passed to a string-accepting method, the test relies on JS-specific behaviour.
@@ -2899,6 +2888,35 @@ class Emitter {
     return null;
   }
 
+  /**
+   * Emits `new Temporal.<cls>(…)`. The epochNanoseconds argument of the Instant and
+   * ZonedDateTime constructors is ToBigInt-converted, which gives it two lowerings of
+   * its own: an over-int64 BigInt carries its true epoch parts through
+   * {@link emitOverInt64Ctor}, and a Number literal becomes a PHP float.
+   */
+  transpileTemporalCtor(cls, argNodes) {
+    if (!IMPLEMENTED_CTORS.has(cls)) {
+      this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
+      return null;
+    }
+    if (EPOCH_NANOSECONDS_CTORS.has(cls) && argNodes.length > 0) {
+      const epNsBig = this.evalBigInt(argNodes[0]);
+      if (epNsBig !== null && overflowsInt64(epNsBig)) {
+        const rest = this.transpileArgs(argNodes.slice(1));
+        return rest === null ? null : emitOverInt64Ctor(cls, epNsBig, rest);
+      }
+      const epNsFloat = toBigIntArgAsPhpFloat(argNodes[0]);
+      if (epNsFloat !== null) {
+        const rest = this.transpileArgs(argNodes.slice(1));
+        if (rest === null) return null;
+        return `new ${SPEC_NS}${cls}(${rest === '' ? epNsFloat : `${epNsFloat}, ${rest}`})`;
+      }
+    }
+    const args = this.transpileArgs(argNodes, CONSTRUCTOR_PARAM_NAMES[cls] ?? null);
+    if (args === null) return null;
+    return `new ${SPEC_NS}${cls}(${args})`;
+  }
+
   transpileNew(node) {
     // new Temporal.X(…)
     const callee = node.callee;
@@ -2917,41 +2935,11 @@ class Emitter {
     }
     // new X(…) where X is a Temporal class alias (from const { X } = Temporal;)
     if (callee.type === 'Identifier' && this.temporalClassAliases.has(callee.name)) {
-      const cls = this.temporalClassAliases.get(callee.name);
-      if (!IMPLEMENTED_CTORS.has(cls)) {
-        this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
-        return null;
-      }
-      if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
-        const epNsBig = this.evalBigInt(node.arguments[0]);
-        if (epNsBig !== null && overflowsInt64(epNsBig)) {
-          const rest = node.arguments.length > 1 ? this.transpileArgs(node.arguments.slice(1)) : '';
-          if (rest === null) return null;
-          return emitOverInt64Ctor(cls, epNsBig, rest);
-        }
-      }
-      const args = this.transpileArgs(node.arguments);
-      if (args === null) return null;
-      return `new ${SPEC_NS}${cls}(${args})`;
+      return this.transpileTemporalCtor(this.temporalClassAliases.get(callee.name), node.arguments);
     }
     if (callee.type === 'MemberExpression' && !callee.computed
         && callee.object.type === 'Identifier' && callee.object.name === 'Temporal') {
-      const cls = callee.property.name;
-      if (!IMPLEMENTED_CTORS.has(cls)) {
-        this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
-        return null;
-      }
-      if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
-        const epNsBig = this.evalBigInt(node.arguments[0]);
-        if (epNsBig !== null && overflowsInt64(epNsBig)) {
-          const rest = node.arguments.length > 1 ? this.transpileArgs(node.arguments.slice(1)) : '';
-          if (rest === null) return null;
-          return emitOverInt64Ctor(cls, epNsBig, rest);
-        }
-      }
-      const args = this.transpileArgs(node.arguments);
-      if (args === null) return null;
-      return `new ${SPEC_NS}${cls}(${args})`;
+      return this.transpileTemporalCtor(callee.property.name, node.arguments);
     }
     // new Temporal.X.method() or new Temporal.X.prototype.method() → TypeError
     const deepTarget = parseVerifyPropertyTarget(callee);
@@ -3652,28 +3640,15 @@ class Emitter {
       return null;
     }
 
-    // TypeError tests relying on JS BigInt-vs-Number type distinction can't be replicated in PHP.
-    if (classExpr.includes('TypeError') && fnNode) {
-      // X.add/subtract/with(7n): a BigInt arg throws the SAME TypeError as a Number
-      // arg would (the param rejects all primitives), so lower 7n → 7 and emit the
-      // assertion faithfully — fall through to the generic path below. Must run
-      // before arrowHasBigIntArg, which would otherwise skip it.
-      if (!arrowBigIntArgIsAlwaysTypeError(fnNode)) {
-        if (arrowHasBigIntArg(fnNode)) {
-          // BigInt arg where a Number would NOT throw (e.g. fromEpochMilliseconds(42n)):
-          // drop just this assertion but keep the rest of the fixture running.
-          this.emitSkipAndDefer(node, 'BigInt literal in TypeError assertion; BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-        if (arrowCallsWithNumber(fnNode, 'fromEpochNanoseconds')) {
-          this.emitSkipAndDefer(node, 'Number passed to fromEpochNanoseconds; BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-        if (arrowInstantCtorWithNumberArg(fnNode)) {
-          this.emitSkipAndDefer(node, 'Number literal passed to new Temporal.Instant(); BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-      }
+    // A BigInt arg where a Number would NOT throw (e.g. fromEpochMilliseconds(42n)):
+    // the distinction is not replicable, so drop just this assertion and keep the rest
+    // of the fixture running. X.add/subtract/with(7n) is exempt — its param rejects
+    // every primitive, so a BigInt throws the SAME TypeError a Number would and the
+    // assertion lowers faithfully (7n → 7) through the generic path below.
+    if (classExpr.includes('TypeError') && fnNode
+        && !arrowBigIntArgIsAlwaysTypeError(fnNode) && arrowHasBigIntArg(fnNode)) {
+      this.emitSkipAndDefer(node, 'BigInt literal in TypeError assertion; BigInt vs Number distinction not replicable in PHP');
+      return null;
     }
 
     // PHP comparison operators (<, <=, >, >=) do not call valueOf() and thus cannot
@@ -3822,16 +3797,12 @@ class Emitter {
     const feHasNumber =
       (arrNode.type === 'ArrayExpression' && hasNumberLiteral(arrNode))
       || (arrNode.type === 'Identifier' && this.numberLiteralArrayVars.has(arrNode.name));
-    if (feHasBigInt && feHasNumber && subtreeHasAssertThrows(feCbBody)
-        && uniformAssertThrowsErrorClass(feCbBody) !== null) {
-      this.emit(`if (${param} === null) { continue; }`);
-    }
     this.transpileStatement(cbBody);
     if (opened) this.lines.push('}');
     return null; // already emitted
   }
 
-  transpileArgs(argNodes) {
+  transpileArgs(argNodes, paramNames = null) {
     // Trim trailing `undefined` identifier arguments: omitting them achieves the
     // same result in PHP as passing `undefined` in JS (the callee uses its default).
     // This allows PHP to distinguish "no argument" from explicit null.
@@ -3843,6 +3814,25 @@ class Emitter {
       } else {
         break;
       }
+    }
+    // A non-trailing `undefined` cannot be trimmed away positionally, but PHP names
+    // its parameters: `new PlainMonthDay(1, 1, undefined, 1972)` becomes
+    // `new PlainMonthDay(1, 1, referenceISOYear: 1972)`. Omission is the PHP spelling
+    // of JS undefined in either position; passing null instead would say JS null.
+    if (paramNames !== null
+        && effectiveArgs.some(a => a.type === 'Identifier' && a.name === 'undefined')) {
+      const parts = [];
+      for (let i = 0; i < effectiveArgs.length; i++) {
+        const a = effectiveArgs[i];
+        if (a.type === 'Identifier' && a.name === 'undefined') continue;
+        const php = this.transpileExpr(a);
+        if (php === null) return null;
+        const skipped = effectiveArgs
+          .slice(0, i)
+          .some(p => p.type === 'Identifier' && p.name === 'undefined');
+        parts.push(skipped && paramNames[i] ? `${paramNames[i]}: ${php}` : php);
+      }
+      return parts.join(', ');
     }
 
     const parts = [];
@@ -4509,6 +4499,13 @@ function uniformAssertThrowsErrorClass(node) {
  * RangeError) on `ZonedDateTime.from("…", value)` — a genuine ordering gap that the
  * PlainX classes do not have (they string-parse first). Verified live.
  */
+// Constructor parameter names of the spec classes, so a non-trailing `undefined`
+// argument can be dropped and the ones after it passed by name.
+const CONSTRUCTOR_PARAM_NAMES = {
+  PlainMonthDay: ['isoMonth', 'isoDay', 'calendar', 'referenceISOYear'],
+  PlainYearMonth: ['year', 'month', 'calendar', 'referenceISODay'],
+};
+
 const STRING_PARSE_FIRST_FROM_CLASSES = new Set([
   'PlainDate', 'PlainDateTime', 'PlainTime', 'PlainMonthDay', 'PlainYearMonth',
 ]);

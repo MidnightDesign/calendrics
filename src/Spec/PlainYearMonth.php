@@ -11,6 +11,7 @@ use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
@@ -569,14 +570,14 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
      * Format: YYYY-MM (with ±YYYYYY for years outside 0–9999).
      * With calendarName="always" or "critical": YYYY-MM-DD[...] using referenceISODay.
      *
-     * @param array<array-key, mixed>|object|null $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
+     * @param array<array-key, mixed>|object $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
      * @throws RangeError for invalid calendarName values.
      * @psalm-api
      */
     #[\Override]
-    public function toString(mixed $options = null): string
+    public function toString(mixed $options = []): string
     {
-        $opts = Options::normalizeOptions($options, ['calendarName']);
+        $opts = Options::requireObject($options, ['calendarName']);
 
         $yearStr = self::formatYear($this->isoYear);
         $base = sprintf('%s-%02d', $yearStr, $this->isoMonth);
@@ -1000,18 +1001,10 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             default => $smallestUnit,
         };
 
-        /** @var array<string, int> $unitRank */
-        static $unitRank = ['year' => 2, 'years' => 2, 'month' => 1, 'months' => 1, 'auto' => 1];
-
-        $suRank = $unitRank[$smallestUnit];
-        $luRank = $unitRank[$largestUnit];
-
-        // smallestUnit larger than largestUnit is only reachable with an explicit
-        // largestUnit: the default largestUnit is 'year' (the maximum rank), and the
-        // only way largestUnit drops to 'month' rank is an explicit option value. So
-        // $suRank > $luRank always implies the throw; there is no auto-widening case to
-        // handle here.
-        if ($suRank > $luRank) {
+        // Only an explicit 'month' largestUnit can be exceeded: the default and 'auto'
+        // both resolve to 'year', the larger of the two units this type has, so unlike
+        // the other difference helpers there is no auto-widening case to handle.
+        if ($normSmallest === 'year' && $normLargest === 'month') {
             throw new RangeError(
                 "smallestUnit \"{$smallestUnit}\" cannot be larger than largestUnit \"{$largestUnit}\".",
             );
@@ -1064,8 +1057,8 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         }
 
         if ($normLargest === 'month') {
-            // $normSmallest is 'month' too: the rank check above rejects a year-ranked
-            // smallestUnit against a month-ranked largestUnit.
+            // $normSmallest is 'month' too: a 'year' smallestUnit under a 'month'
+            // largestUnit is rejected above.
             if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
                 return new Duration(months: $sinceSign * $totalMonths);
             }
@@ -1441,21 +1434,9 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
     }
 
     #[\Override]
-    protected function localeDefaultComponents(): string
+    protected function localeDefaultComponents(): LocaleComponentMode
     {
-        return 'yearmonth';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return true;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
+        return LocaleComponentMode::YearMonth;
     }
 
     #[\Override]

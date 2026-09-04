@@ -13,6 +13,7 @@ use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\IsoFraction;
+use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
@@ -1233,21 +1234,9 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
     }
 
     #[\Override]
-    protected function localeDefaultComponents(): string
+    protected function localeDefaultComponents(): LocaleComponentMode
     {
-        return 'time';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return true;
+        return LocaleComponentMode::Time;
     }
 
     #[\Override]
