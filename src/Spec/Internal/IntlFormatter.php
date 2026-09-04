@@ -144,21 +144,20 @@ final class IntlFormatter
      * formatter can render.
      *
      * @param array<string, mixed> $opts
-     * @param string $defaultComponents The value's component mode, as passed to buildIntlFormatter().
+     * @param LocaleComponentMode $defaultComponents The value's component mode, as passed to buildIntlFormatter().
      * @throws RangeError if the value's calendar is incompatible with the formatter's.
      */
     public static function validateCalendar(
         ?string $calendarId,
         string $locale,
         array $opts,
-        string $defaultComponents,
+        LocaleComponentMode $defaultComponents,
     ): void {
         if ($calendarId === null) {
             return;
         }
 
-        $isoExempt = $defaultComponents !== 'yearmonth' && $defaultComponents !== 'monthday';
-        if ($isoExempt && $calendarId === 'iso8601') {
+        if (!$defaultComponents->isPartialDate() && $calendarId === 'iso8601') {
             return;
         }
 
@@ -257,13 +256,13 @@ final class IntlFormatter
      * Supports `hour12` and `hourCycle` options for hour format control.
      *
      * @param array<string, mixed> $opts
-     * @param string $defaultComponents Which components to include by default: 'datetime', 'date', or 'time'.
+     * @param LocaleComponentMode $defaultComponents Which components to include when the caller names none.
      */
     public static function buildIntlFormatter(
         string $locale,
         string $timeZone,
         array $opts,
-        string $defaultComponents = 'datetime',
+        LocaleComponentMode $defaultComponents = LocaleComponentMode::DateTime,
     ): \IntlDateFormatter {
         /** @var mixed $calendarOpt */
         $calendarOpt = $opts['calendar'] ?? null;
@@ -327,9 +326,10 @@ final class IntlFormatter
                 ? $styleMap[$timeStyle] ?? \IntlDateFormatter::SHORT
                 : \IntlDateFormatter::NONE;
 
-            // For PlainYearMonth/PlainMonthDay, get the style pattern then strip
-            // year or day components to avoid displaying them.
-            if ($dateStyle !== null && ($defaultComponents === 'yearmonth' || $defaultComponents === 'monthday')) {
+            // PlainYearMonth and PlainMonthDay have no locale style of their own, so they
+            // take the date style's pattern and strip the field they do not carry.
+            $absentComponent = $defaultComponents->absentDateField();
+            if ($dateStyle !== null && $absentComponent !== null) {
                 $tmpFormatter = new \IntlDateFormatter(
                     $locale,
                     $dateType,
@@ -344,13 +344,7 @@ final class IntlFormatter
                 if ($pattern === false) {
                     $pattern = '';
                 }
-                if ($defaultComponents === 'monthday') {
-                    // Strip year-related patterns (y, G, U, r) and surrounding punctuation
-                    $pattern = self::stripPatternComponents($pattern, 'year');
-                } else {
-                    // yearmonth: strip day-related patterns (d)
-                    $pattern = self::stripPatternComponents($pattern, 'day');
-                }
+                $pattern = self::stripPatternComponents($pattern, $absentComponent);
                 $formatter = new \IntlDateFormatter(
                     $locale,
                     \IntlDateFormatter::NONE,
@@ -401,17 +395,7 @@ final class IntlFormatter
 
         // Default: use skeleton-based patterns to match JS Intl.DateTimeFormat defaults
         $generator = new \IntlDatePatternGenerator($locale);
-        if ($defaultComponents === 'yearmonth') {
-            $pattern = $generator->getBestPattern('yM');
-        } elseif ($defaultComponents === 'monthday') {
-            $pattern = $generator->getBestPattern('Md');
-        } elseif ($defaultComponents === 'date') {
-            $pattern = $generator->getBestPattern('yMd');
-        } elseif ($defaultComponents === 'time') {
-            $pattern = $generator->getBestPattern('jms');
-        } else {
-            $pattern = $generator->getBestPattern('yMdjms');
-        }
+        $pattern = $generator->getBestPattern($defaultComponents->defaultSkeleton());
         if ($pattern === false) {
             $pattern = null;
         }
@@ -529,16 +513,15 @@ final class IntlFormatter
      */
     private static function buildPatternFromComponents(
         array $opts,
-        string $defaultComponents,
+        LocaleComponentMode $defaultComponents,
         string $locale = 'en',
     ): string {
         $parts = [];
 
         // ECMA-402 CreateDateTimeFormat with required = "time" (PlainTime) only honors
         // the time-related option set; the date-component options (weekday, era, year,
-        // month, day) are not applicable to a time-only type and are dropped. The sole
-        // time-only mode is $defaultComponents === 'time'.
-        $allowsDateComponents = $defaultComponents !== 'time';
+        // month, day) are not applicable to a time-only type and are dropped.
+        $allowsDateComponents = !$defaultComponents->isTimeOnly();
 
         // Date components
         if ($allowsDateComponents) {
@@ -633,24 +616,11 @@ final class IntlFormatter
             || ($opts['dayPeriod'] ?? null) !== null
             || ($opts['fractionalSecondDigits'] ?? null) !== null;
         if (!$hasDatePart && !$hasTimePart) {
-            // Add defaults based on mode
-            if (
-                $defaultComponents === 'date'
-                || $defaultComponents === 'datetime'
-                || $defaultComponents === 'yearmonth'
-                || $defaultComponents === 'monthday'
-            ) {
-                if ($defaultComponents === 'yearmonth') {
-                    $parts = array_merge(['y', 'M'], $parts);
-                } elseif ($defaultComponents === 'monthday') {
-                    $parts = array_merge(['M', 'd'], $parts);
-                } else {
-                    $parts = array_merge(['y', 'M', 'd'], $parts);
-                }
-            }
-            if ($defaultComponents === 'time' || $defaultComponents === 'datetime') {
-                $parts = array_merge($parts, ['j', 'm', 's']);
-            }
+            $parts = [
+                ...$defaultComponents->defaultDateFields(),
+                ...$parts,
+                ...$defaultComponents->defaultTimeFields(),
+            ];
         }
 
         $skeleton = implode('', $parts);

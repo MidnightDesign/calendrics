@@ -10,9 +10,10 @@ use Calendrics\Exception\TypeError;
  * The `toLocaleString()` implementation shared by the zoneless `Plain*` types.
  *
  * All five render a wall-clock value that carries no zone, so they format in UTC and
- * differ only in which components they default to, which style options they reject,
- * which calendar they must agree with, and how their fields collapse into a single
- * timestamp — the five hooks below.
+ * differ only in which components they default to, which calendar they must agree
+ * with, and how their fields collapse into a single timestamp — the three hooks below.
+ * Which style options a type may be given follows from its component mode — see
+ * {@see LocaleComponentMode::isDateOnly()}.
  *
  * {@see \Calendrics\Spec\ZonedDateTime} and {@see \Calendrics\Spec\Instant} are
  * deliberately not users: both format an exact instant in a real time zone through
@@ -28,22 +29,10 @@ trait HasPlainLocaleString
     abstract public function toString(): string;
 
     /**
-     * Returns the default component mode for IntlDateFormatter when formatting
-     * this type via toLocaleString: one of 'date', 'time', 'datetime', 'yearmonth', 'monthday'.
+     * Returns the component mode IntlDateFormatter defaults to when formatting this
+     * type via toLocaleString.
      */
-    abstract protected function localeDefaultComponents(): string;
-
-    /**
-     * Returns true if this type represents a date without a time-of-day component,
-     * in which case the toLocaleString timeStyle option must be rejected.
-     */
-    abstract protected function localeIsDateOnly(): bool;
-
-    /**
-     * Returns true if this type represents a time-of-day without a date component,
-     * in which case the toLocaleString dateStyle option must be rejected.
-     */
-    abstract protected function localeIsTimeOnly(): bool;
+    abstract protected function localeDefaultComponents(): LocaleComponentMode;
 
     /**
      * Returns this value's calendar identifier for the toLocaleString()
@@ -88,13 +77,12 @@ trait HasPlainLocaleString
         $hasTimeStyle = array_key_exists('timeStyle', $opts) && $opts['timeStyle'] !== null;
         $hasDateStyle = array_key_exists('dateStyle', $opts) && $opts['dateStyle'] !== null;
 
-        $isDateOnly = $this->localeIsDateOnly();
-        $isTimeOnly = $this->localeIsTimeOnly();
+        $defaultComponents = $this->localeDefaultComponents();
 
-        if ($hasTimeStyle && $isDateOnly) {
+        if ($hasTimeStyle && $defaultComponents->isDateOnly()) {
             throw new TypeError('toLocaleString(): timeStyle option is not allowed for this type.');
         }
-        if ($hasDateStyle && $isTimeOnly) {
+        if ($hasDateStyle && $defaultComponents->isTimeOnly()) {
             throw new TypeError('toLocaleString(): dateStyle option is not allowed for this type.');
         }
 
@@ -103,8 +91,6 @@ trait HasPlainLocaleString
         // Plain types always format in UTC to prevent date/time shifting.
         // The timeZone option is accepted but ignored for display purposes.
         $timeZone = 'UTC';
-
-        $defaultComponents = $this->localeDefaultComponents();
 
         IntlFormatter::validateCalendar($this->localeCalendarId(), $locale, $opts, $defaultComponents);
 
