@@ -4,10 +4,9 @@
          bootstrap="vendor/autoload.php"
          cacheDirectory=".phpunit.cache">
     <!--
-        These two suites are exhaustive: every test file belongs under
-        tests/Porcelain or tests/Test262. There is deliberately no catch-all
-        suite, so a test placed in a new top-level directory belongs to no
-        suite and never runs, which is how that mistake is meant to surface.
+        There is deliberately no catch-all suite: a test in a new top-level
+        directory runs under no suite at all, which is how that mistake is
+        meant to surface.
     -->
     <testsuites>
         <testsuite name="porcelain">
