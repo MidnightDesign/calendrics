@@ -15,29 +15,78 @@ namespace Calendrics\Spec\Internal;
  *
  * @internal
  */
-enum LocaleComponentMode: string
+enum LocaleComponentMode
 {
-    case Date = 'date';
-    case Time = 'time';
-    case DateTime = 'datetime';
-    case YearMonth = 'yearmonth';
-    case MonthDay = 'monthday';
+    case Date;
+    case Time;
+    case DateTime;
+    case YearMonth;
+    case MonthDay;
+
+    /**
+     * The date fields this mode renders when the caller names no component of its own.
+     *
+     * @return list<string> ICU skeleton symbols
+     */
+    public function defaultDateFields(): array
+    {
+        return match ($this) {
+            self::Date, self::DateTime => ['y', 'M', 'd'],
+            self::YearMonth => ['y', 'M'],
+            self::MonthDay => ['M', 'd'],
+            self::Time => [],
+        };
+    }
+
+    /**
+     * The time fields this mode renders when the caller names no component of its own.
+     *
+     * @return list<string> ICU skeleton symbols
+     */
+    public function defaultTimeFields(): array
+    {
+        return match ($this) {
+            self::Time, self::DateTime => ['j', 'm', 's'],
+            self::Date, self::YearMonth, self::MonthDay => [],
+        };
+    }
+
+    /** The whole skeleton this mode renders for a caller who named nothing at all. */
+    public function defaultSkeleton(): string
+    {
+        return implode('', [...$this->defaultDateFields(), ...$this->defaultTimeFields()]);
+    }
+
+    /**
+     * The date field a whole date carries but this mode does not, or null for a mode
+     * that carries either a whole date or no date at all.
+     *
+     * @return 'year'|'day'|null
+     */
+    public function absentDateField(): ?string
+    {
+        return match ($this) {
+            self::YearMonth => 'day',
+            self::MonthDay => 'year',
+            self::Date, self::Time, self::DateTime => null,
+        };
+    }
+
+    /** Whether the mode carries only part of a date, as `PlainYearMonth` and `PlainMonthDay` do. */
+    public function isPartialDate(): bool
+    {
+        return $this->absentDateField() !== null;
+    }
 
     /** Whether the mode carries no time of day, and so cannot honor a `timeStyle`. */
     public function isDateOnly(): bool
     {
-        return match ($this) {
-            self::Date, self::YearMonth, self::MonthDay => true,
-            self::Time, self::DateTime => false,
-        };
+        return $this->defaultTimeFields() === [];
     }
 
     /** Whether the mode carries no date, and so cannot honor a `dateStyle`. */
     public function isTimeOnly(): bool
     {
-        return match ($this) {
-            self::Time => true,
-            self::Date, self::DateTime, self::YearMonth, self::MonthDay => false,
-        };
+        return $this->defaultDateFields() === [];
     }
 }

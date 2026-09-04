@@ -157,11 +157,7 @@ final class IntlFormatter
             return;
         }
 
-        $isoExempt = match ($defaultComponents) {
-            LocaleComponentMode::YearMonth, LocaleComponentMode::MonthDay => false,
-            LocaleComponentMode::Date, LocaleComponentMode::Time, LocaleComponentMode::DateTime => true,
-        };
-        if ($isoExempt && $calendarId === 'iso8601') {
+        if (!$defaultComponents->isPartialDate() && $calendarId === 'iso8601') {
             return;
         }
 
@@ -331,12 +327,8 @@ final class IntlFormatter
                 : \IntlDateFormatter::NONE;
 
             // PlainYearMonth and PlainMonthDay have no locale style of their own, so they
-            // take the date style's pattern and strip the component they do not carry.
-            $absentComponent = match ($defaultComponents) {
-                LocaleComponentMode::YearMonth => 'day',
-                LocaleComponentMode::MonthDay => 'year',
-                LocaleComponentMode::Date, LocaleComponentMode::Time, LocaleComponentMode::DateTime => null,
-            };
+            // take the date style's pattern and strip the field they do not carry.
+            $absentComponent = $defaultComponents->absentDateField();
             if ($dateStyle !== null && $absentComponent !== null) {
                 $tmpFormatter = new \IntlDateFormatter(
                     $locale,
@@ -403,13 +395,7 @@ final class IntlFormatter
 
         // Default: use skeleton-based patterns to match JS Intl.DateTimeFormat defaults
         $generator = new \IntlDatePatternGenerator($locale);
-        $pattern = $generator->getBestPattern(match ($defaultComponents) {
-            LocaleComponentMode::YearMonth => 'yM',
-            LocaleComponentMode::MonthDay => 'Md',
-            LocaleComponentMode::Date => 'yMd',
-            LocaleComponentMode::Time => 'jms',
-            LocaleComponentMode::DateTime => 'yMdjms',
-        });
+        $pattern = $generator->getBestPattern($defaultComponents->defaultSkeleton());
         if ($pattern === false) {
             $pattern = null;
         }
@@ -630,17 +616,11 @@ final class IntlFormatter
             || ($opts['dayPeriod'] ?? null) !== null
             || ($opts['fractionalSecondDigits'] ?? null) !== null;
         if (!$hasDatePart && !$hasTimePart) {
-            $dateDefaults = match ($defaultComponents) {
-                LocaleComponentMode::YearMonth => ['y', 'M'],
-                LocaleComponentMode::MonthDay => ['M', 'd'],
-                LocaleComponentMode::Date, LocaleComponentMode::DateTime => ['y', 'M', 'd'],
-                LocaleComponentMode::Time => [],
-            };
-            $timeDefaults = match ($defaultComponents) {
-                LocaleComponentMode::Time, LocaleComponentMode::DateTime => ['j', 'm', 's'],
-                LocaleComponentMode::Date, LocaleComponentMode::YearMonth, LocaleComponentMode::MonthDay => [],
-            };
-            $parts = array_merge($dateDefaults, $parts, $timeDefaults);
+            $parts = [
+                ...$defaultComponents->defaultDateFields(),
+                ...$parts,
+                ...$defaultComponents->defaultTimeFields(),
+            ];
         }
 
         $skeleton = implode('', $parts);
