@@ -11,4 +11,4 @@ use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
 TemporalHelpers::assertDuration(new \Calendrics\Spec\Duration(5, 5, 5, 5, 5, 5, 5, 5, 5, 0), 5, 5, 5, 5, 5, 5, 5, 5, 5, 0, 'positive');
 TemporalHelpers::assertDuration(new \Calendrics\Spec\Duration(-5, -5, -5, -5, -5, -5, -5, -5, -5, 0), -5, -5, -5, -5, -5, -5, -5, -5, -5, 0, 'negative');
-TemporalHelpers::assertDuration(new \Calendrics\Spec\Duration(-0, -0, -0, -0, -0, -0, -0, -0, -0, -0), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'negative zero');
+TemporalHelpers::assertDuration(new \Calendrics\Spec\Duration(-0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'negative zero');
