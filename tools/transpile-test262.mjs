@@ -983,6 +983,17 @@ class Emitter {
         }
         continue;
       }
+      // `const options = undefined;` binds the JsUndefined sentinel rather than PHP
+      // null. The sentinel reaches GetOptionsObject as an ordinary object and
+      // snapshots empty, which is what the spec's "OrdinaryObjectCreate for
+      // undefined" step does; PHP null is JS null and must stay a TypeError.
+      // transpileArgs trims a literal trailing `undefined`, but a binding survives
+      // to the call site, so the two rules have to agree.
+      if (decl.id.type === 'Identifier'
+          && decl.init?.type === 'Identifier' && decl.init.name === 'undefined') {
+        this.emit(`$${decl.id.name} = JsUndefined::singleton();`);
+        continue;
+      }
       // Track object literals: in array mode they become PHP arrays ['key' => val]
       // and use ['key'] access; in objectMode they become (object) [...] (stdClass)
       // and use ->key access. The objectMode flag on the emitter governs which one
@@ -1563,7 +1574,7 @@ class Emitter {
   // and `N` both become PHP int — so a throw assertion that depends on it can't
   // be reproduced. Returns one of:
   //   'incomplete' — the loop can't be faithfully lowered; emit incomplete.
-  //   'skip-null'  — lowering is safe, but `null` elements must be skipped.
+  //   'lower'      — lowering is safe; transpile the whole table.
   //   null         — the BigInt-table rule does not apply; transpile normally.
   classifyBigIntTableForOf(node) {
     // Only applies to a for-of over a BigInt-containing data table (inline, or a
@@ -1604,7 +1615,7 @@ class Emitter {
       // The lookalike `with/options-wrong-type` field-validation ordering gap (RangeError
       // from a non-string property bag) is rejected by isStringParseFromOptionsWrongTypeBody.
       if (tableHasNumberLiteral && isStringParseFromOptionsWrongTypeBody(node.body)) {
-        return 'skip-null';
+        return 'lower';
       }
       // The `with/options-wrong-type` property-bag family: RangeError comes from the
       // partial-field coercion, which the PHP spec layer now performs BEFORE the
@@ -1617,12 +1628,11 @@ class Emitter {
       }
       return 'incomplete';
     }
-    // A `null` table element may be an OMITTED positional argument (e.g. a
-    // positional calendar → ISO, no throw) rather than a wrong-type value, which
-    // would fail an `assert.throws`. Skip the null iteration in the lowered loop;
-    // the remaining elements still cover the throw path. (A property-bag null
-    // that DOES throw is merely left untested here — never red.)
-    return 'skip-null';
+    // A `null` table element is JS null wherever it lands — a value the algorithms
+    // reject, positional slot or option key alike. Nothing to skip: PHP null now
+    // means JS null everywhere, and JS undefined arrives as the JsUndefined
+    // sentinel or as an omitted argument.
+    return 'lower';
   }
 
   transpileForOf(node) {
@@ -1669,12 +1679,6 @@ class Emitter {
       this.emitIncomplete('BigInt literal in wrong-type for-of data table; Number-vs-BigInt distinction not representable in PHP');
       return;
     }
-    // `null` data-table elements must be skipped when the BigInt table is lowered as
-    // 'skip-null' (a null may be an omitted-positional sentinel). The 'lower' signal
-    // (with/options-wrong-type property-bag family) keeps null — there it is a genuine
-    // wrong-type options value — so it falls through to the normal null-keeping foreach.
-    const nullSkipForOf = bigIntTable === 'skip-null';
-
     // Special case: for (const [k, v] of Object.entries(obj)) → foreach ($obj as $k => $v)
     // Also handles: for (const [k, {a, b, c}] of Object.entries(obj)) where the value slot
     // is an ObjectPattern — the properties are bound inside the loop body.
@@ -1773,9 +1777,6 @@ class Emitter {
       this.emit(`foreach (${iter2} as ${tmpVar2}) {`);
       const opened2 = this.lines.length > before2;
       this.emit(`${pat} = array_pad(${tmpVar2}, ${n}, null);`);
-      if (nullSkipForOf) {
-        this.emit(`if (${parts[0]} === null) { continue; }`);
-      }
       // Emit default assignments for elements with AssignmentPattern defaults.
       for (let i = 0; i < patNode2.elements.length; i++) {
         const el = patNode2.elements[i];
@@ -1866,9 +1867,6 @@ class Emitter {
     const before = this.lines.length;
     this.emit(`foreach (${iter} as ${pat}) {`);
     const opened = this.lines.length > before;
-    if (nullSkipForOf) {
-      this.emit(`if (${pat} === null) { continue; }`);
-    }
     // A `{ toString: () => <non-String> }` entry only belongs in a wrong-type table
     // under JS semantics; in PHP it is an ordinary stringifiable value, so skip it
     // rather than assert a rejection the language cannot produce.
@@ -2930,7 +2928,7 @@ class Emitter {
           return emitOverInt64Ctor(cls, epNsBig, rest);
         }
       }
-      const args = this.transpileArgs(node.arguments);
+      const args = this.transpileArgs(node.arguments, CONSTRUCTOR_PARAM_NAMES[cls] ?? null);
       if (args === null) return null;
       return `new ${SPEC_NS}${cls}(${args})`;
     }
@@ -2949,7 +2947,7 @@ class Emitter {
           return emitOverInt64Ctor(cls, epNsBig, rest);
         }
       }
-      const args = this.transpileArgs(node.arguments);
+      const args = this.transpileArgs(node.arguments, CONSTRUCTOR_PARAM_NAMES[cls] ?? null);
       if (args === null) return null;
       return `new ${SPEC_NS}${cls}(${args})`;
     }
@@ -3822,16 +3820,12 @@ class Emitter {
     const feHasNumber =
       (arrNode.type === 'ArrayExpression' && hasNumberLiteral(arrNode))
       || (arrNode.type === 'Identifier' && this.numberLiteralArrayVars.has(arrNode.name));
-    if (feHasBigInt && feHasNumber && subtreeHasAssertThrows(feCbBody)
-        && uniformAssertThrowsErrorClass(feCbBody) !== null) {
-      this.emit(`if (${param} === null) { continue; }`);
-    }
     this.transpileStatement(cbBody);
     if (opened) this.lines.push('}');
     return null; // already emitted
   }
 
-  transpileArgs(argNodes) {
+  transpileArgs(argNodes, paramNames = null) {
     // Trim trailing `undefined` identifier arguments: omitting them achieves the
     // same result in PHP as passing `undefined` in JS (the callee uses its default).
     // This allows PHP to distinguish "no argument" from explicit null.
@@ -3843,6 +3837,25 @@ class Emitter {
       } else {
         break;
       }
+    }
+    // A non-trailing `undefined` cannot be trimmed away positionally, but PHP names
+    // its parameters: `new PlainMonthDay(1, 1, undefined, 1972)` becomes
+    // `new PlainMonthDay(1, 1, referenceISOYear: 1972)`. Omission is the PHP spelling
+    // of JS undefined in either position; passing null instead would say JS null.
+    if (paramNames !== null
+        && effectiveArgs.some(a => a.type === 'Identifier' && a.name === 'undefined')) {
+      const parts = [];
+      for (let i = 0; i < effectiveArgs.length; i++) {
+        const a = effectiveArgs[i];
+        if (a.type === 'Identifier' && a.name === 'undefined') continue;
+        const php = this.transpileExpr(a);
+        if (php === null) return null;
+        const skipped = effectiveArgs
+          .slice(0, i)
+          .some(p => p.type === 'Identifier' && p.name === 'undefined');
+        parts.push(skipped && paramNames[i] ? `${paramNames[i]}: ${php}` : php);
+      }
+      return parts.join(', ');
     }
 
     const parts = [];
@@ -4509,6 +4522,13 @@ function uniformAssertThrowsErrorClass(node) {
  * RangeError) on `ZonedDateTime.from("…", value)` — a genuine ordering gap that the
  * PlainX classes do not have (they string-parse first). Verified live.
  */
+// Constructor parameter names of the spec classes, so a non-trailing `undefined`
+// argument can be dropped and the ones after it passed by name.
+const CONSTRUCTOR_PARAM_NAMES = {
+  PlainMonthDay: ['isoMonth', 'isoDay', 'calendar', 'referenceISOYear'],
+  PlainYearMonth: ['year', 'month', 'calendar', 'referenceISODay'],
+};
+
 const STRING_PARSE_FIRST_FROM_CLASSES = new Set([
   'PlainDate', 'PlainDateTime', 'PlainTime', 'PlainMonthDay', 'PlainYearMonth',
 ]);

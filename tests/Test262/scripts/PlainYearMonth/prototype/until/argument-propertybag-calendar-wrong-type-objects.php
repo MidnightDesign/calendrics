@@ -12,7 +12,6 @@ $instance = new \Calendrics\Spec\PlainYearMonth(2000, 5);
 $wrongTypeTests = [[null, 'null'], [true, 'boolean'], [1, 'number'], [1, 'bigint'], [19_970_327, 'large positive number'], [-19_970_327, 'large negative number'], [1_234_567_890, 'very large integer'], [\Calendrics\Tests\Test262\JsSymbol::singleton(), 'symbol'], [(object) [], 'object'], [new \Calendrics\Spec\Duration(), 'duration instance']];
 foreach ($wrongTypeTests as $__entry__) {
 [$calendar, $description] = array_pad($__entry__, 2, null);
-if ($calendar === null) { continue; }
 $arg = (object) JsUndefined::strip(['year' => 2019, 'monthCode' => 'M11', 'day' => 1, 'calendar' => $calendar]);
 Assert::throws(\TypeError::class, function () use (&$instance, &$arg) { return $instance->until($arg); }, "{$description} is not a valid calendar");
 }

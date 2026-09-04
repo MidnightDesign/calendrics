@@ -12,7 +12,6 @@ $timeZone = 'UTC';
 $instance = new \Calendrics\Spec\Duration(1, 0, 0, 0, 24);
 $badOffsets = ['00:00', '+0', '-000:00', 0, null, true, 1000, '+00:0000'];
 foreach ($badOffsets as $offset) {
-if ($offset === null) { continue; }
 $relativeTo = JsUndefined::strip(['year' => 2021, 'month' => 10, 'day' => 28, 'offset' => $offset, 'timeZone' => $timeZone]);
 Assert::throws((is_string($offset) ? \RangeException::class : \TypeError::class), function () use (&$instance, &$relativeTo) { return $instance->round(JsUndefined::strip(['largestUnit' => 'years', 'relativeTo' => $relativeTo])); }, "\"{$offset}\" is not a valid offset string");
 }
