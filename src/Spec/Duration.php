@@ -539,7 +539,7 @@ final class Duration implements Stringable
      *   - smallestUnit: 'second[s]'|'millisecond[s]'|'microsecond[s]'|'nanosecond[s]' (overrides fractionalSecondDigits)
      *   - roundingMode: 'trunc' (default) | 'floor' | 'ceil' | 'expand' | 'halfExpand' | 'halfTrunc' | 'halfFloor' | 'halfCeil' | 'halfEven'
      *
-     * @param array<array-key, mixed>|object|null $options an array of options, or any object (treated as empty options bag).
+     * @param array<array-key, mixed>|object $options an array of options, or any object (treated as empty options bag).
      * @throws RangeError if options are invalid or rounding causes overflow.
      * @throws \TypeError if $options is an explicit null or a non-array, non-object scalar.
      */
@@ -710,7 +710,7 @@ final class Duration implements Stringable
      * The TC39 spec permits implementations to choose locale behavior.
      *
      * @param string|array<array-key, mixed>|null $locales BCP 47 locale string or array (ignored in PHP).
-     * @param array<array-key, mixed>|object|null $options Intl.DateTimeFormat options bag (ignored in PHP).
+     * @param array<array-key, mixed>|object $options Intl.DateTimeFormat options bag (ignored in PHP).
      * @psalm-suppress UnusedParam
      * @psalm-api
      */
@@ -1249,17 +1249,14 @@ final class Duration implements Stringable
      *
      * @param self|string|array<array-key, mixed>|object $one     Duration, ISO 8601 string, or property-bag array.
      * @param self|string|array<array-key, mixed>|object $two     Duration, ISO 8601 string, or property-bag array.
-     * @param array<array-key, mixed>|object|null $options null or options array (may contain 'relativeTo').
+     * @param array<array-key, mixed>|object $options null or options array (may contain 'relativeTo').
      * @return int -1, 0, or 1.
      * @throws RangeError when calendar units are present without relativeTo.
      * @psalm-api
      */
-    public static function compare(
-        string|array|object $one,
-        string|array|object $two,
-        array|object|null $options = null,
-    ): int {
-        $opts = Options::normalizeOptions($options, ['relativeTo']);
+    public static function compare(string|array|object $one, string|array|object $two, mixed $options = []): int
+    {
+        $opts = Options::requireObject($options, ['relativeTo']);
 
         $d1 = self::from($one);
         $d2 = self::from($two);

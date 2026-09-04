@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $ym = \Calendrics\Spec\PlainYearMonth::from('2019-11');
 $values = [null, true, 'hello', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 1];
 foreach ($values as $badOptions) {
-if ($badOptions === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$ym, &$badOptions) { return $ym->subtract((object) ['years' => 1], $badOptions); }, '');
 }
