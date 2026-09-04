@@ -983,6 +983,17 @@ class Emitter {
         }
         continue;
       }
+      // `const options = undefined;` binds the JsUndefined sentinel rather than PHP
+      // null. The sentinel reaches GetOptionsObject as an ordinary object and
+      // snapshots empty, which is what the spec's "OrdinaryObjectCreate for
+      // undefined" step does; PHP null is JS null and must stay a TypeError.
+      // transpileArgs trims a literal trailing `undefined`, but a binding survives
+      // to the call site, so the two rules have to agree.
+      if (decl.id.type === 'Identifier'
+          && decl.init?.type === 'Identifier' && decl.init.name === 'undefined') {
+        this.emit(`$${decl.id.name} = JsUndefined::singleton();`);
+        continue;
+      }
       // Track object literals: in array mode they become PHP arrays ['key' => val]
       // and use ['key'] access; in objectMode they become (object) [...] (stdClass)
       // and use ->key access. The objectMode flag on the emitter governs which one
@@ -2930,7 +2941,7 @@ class Emitter {
           return emitOverInt64Ctor(cls, epNsBig, rest);
         }
       }
-      const args = this.transpileArgs(node.arguments);
+      const args = this.transpileArgs(node.arguments, CONSTRUCTOR_PARAM_NAMES[cls] ?? null);
       if (args === null) return null;
       return `new ${SPEC_NS}${cls}(${args})`;
     }
@@ -2949,7 +2960,7 @@ class Emitter {
           return emitOverInt64Ctor(cls, epNsBig, rest);
         }
       }
-      const args = this.transpileArgs(node.arguments);
+      const args = this.transpileArgs(node.arguments, CONSTRUCTOR_PARAM_NAMES[cls] ?? null);
       if (args === null) return null;
       return `new ${SPEC_NS}${cls}(${args})`;
     }
@@ -3831,7 +3842,7 @@ class Emitter {
     return null; // already emitted
   }
 
-  transpileArgs(argNodes) {
+  transpileArgs(argNodes, paramNames = null) {
     // Trim trailing `undefined` identifier arguments: omitting them achieves the
     // same result in PHP as passing `undefined` in JS (the callee uses its default).
     // This allows PHP to distinguish "no argument" from explicit null.
@@ -3843,6 +3854,25 @@ class Emitter {
       } else {
         break;
       }
+    }
+    // A non-trailing `undefined` cannot be trimmed away positionally, but PHP names
+    // its parameters: `new PlainMonthDay(1, 1, undefined, 1972)` becomes
+    // `new PlainMonthDay(1, 1, referenceISOYear: 1972)`. Omission is the PHP spelling
+    // of JS undefined in either position; passing null instead would say JS null.
+    if (paramNames !== null
+        && effectiveArgs.some(a => a.type === 'Identifier' && a.name === 'undefined')) {
+      const parts = [];
+      for (let i = 0; i < effectiveArgs.length; i++) {
+        const a = effectiveArgs[i];
+        if (a.type === 'Identifier' && a.name === 'undefined') continue;
+        const php = this.transpileExpr(a);
+        if (php === null) return null;
+        const skipped = effectiveArgs
+          .slice(0, i)
+          .some(p => p.type === 'Identifier' && p.name === 'undefined');
+        parts.push(skipped && paramNames[i] ? `${paramNames[i]}: ${php}` : php);
+      }
+      return parts.join(', ');
     }
 
     const parts = [];
@@ -4509,6 +4539,13 @@ function uniformAssertThrowsErrorClass(node) {
  * RangeError) on `ZonedDateTime.from("…", value)` — a genuine ordering gap that the
  * PlainX classes do not have (they string-parse first). Verified live.
  */
+// Constructor parameter names of the spec classes, so a non-trailing `undefined`
+// argument can be dropped and the ones after it passed by name.
+const CONSTRUCTOR_PARAM_NAMES = {
+  PlainMonthDay: ['isoMonth', 'isoDay', 'calendar', 'referenceISOYear'],
+  PlainYearMonth: ['year', 'month', 'calendar', 'referenceISODay'],
+};
+
 const STRING_PARSE_FIRST_FROM_CLASSES = new Set([
   'PlainDate', 'PlainDateTime', 'PlainTime', 'PlainMonthDay', 'PlainYearMonth',
 ]);
