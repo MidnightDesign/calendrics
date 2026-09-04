@@ -12,7 +12,6 @@ $instance = new \Calendrics\Spec\PlainDate(2000, 5, 2);
 $primitiveTests = [[null, 'null'], [true, 'boolean'], ['', 'empty string'], [1, 'number that doesn\'t convert to a valid ISO string'], [1, 'bigint']];
 foreach ($primitiveTests as $__entry__) {
 [$arg, $description] = array_pad($__entry__, 2, null);
-if ($arg === null) { continue; }
 Assert::throws((is_string($arg) ? \RangeException::class : \TypeError::class), function () use (&$instance, &$arg) { return $instance->toPlainDateTime($arg); }, "{$description} does not convert to a valid ISO string");
 }
 $typeErrorTests = [[\Calendrics\Tests\Test262\JsSymbol::singleton(), 'symbol'], [(object) [], 'plain object'], [new \stdClass(), 'Temporal.PlainTime, object'], [new \stdClass(), 'Temporal.PlainTime.prototype, object']];

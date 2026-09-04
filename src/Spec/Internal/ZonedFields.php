@@ -303,7 +303,7 @@ final class ZonedFields
      */
     public static function fromOptions(mixed $options): array
     {
-        $opts = Options::normalizeOptions($options, ['disambiguation', 'offset', 'overflow']);
+        $opts = Options::requireObject($options, ['disambiguation', 'offset', 'overflow']);
 
         if (array_key_exists('disambiguation', $opts)) {
             $dv = Options::coerceEnumOption($opts['disambiguation'], 'disambiguation');

@@ -503,13 +503,13 @@ final class Instant implements Stringable
      * Uses RoundNumberToIncrementAsIfPositive (spec §8.3.13): rounding is always applied
      * using the unsigned mode for a positive sign, regardless of the actual sign of the epoch.
      *
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @throws RangeError if options are invalid.
      * @throws TypeError if the timeZone option is a non-string.
      */
-    public function toString(mixed $options = null): string
+    public function toString(mixed $options = []): string
     {
-        $options = Options::normalizeOptions($options, [
+        $options = Options::requireObject($options, [
             'fractionalSecondDigits',
             'roundingMode',
             'smallestUnit',
@@ -820,7 +820,7 @@ final class Instant implements Stringable
      *   - calendar: calendar identifier appended as u-ca locale extension
      *
      * @param string|array<array-key, mixed>|null $locales  BCP 47 locale string or array of strings.
-     * @param array<array-key, mixed>|object|null $options  Intl.DateTimeFormat options array.
+     * @param array<array-key, mixed>|object $options  Intl.DateTimeFormat options array.
      * @psalm-api
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
@@ -1100,10 +1100,10 @@ final class Instant implements Stringable
      * The result is positive when $this is after $other.
      *
      * @param string|object $other The starting instant (Instant or ISO string).
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @psalm-api used by test262 scripts
      */
-    public function since(string|object $other, mixed $options = null): Duration
+    public function since(string|object $other, mixed $options = []): Duration
     {
         $otherInst = $other instanceof self ? $other : self::coerceToInstant($other);
         [$aSec, $aSubNs] = $this->epochParts();
@@ -1117,10 +1117,10 @@ final class Instant implements Stringable
      * The result is positive when $other is after $this.
      *
      * @param string|object $other The ending instant (Instant or ISO string).
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @psalm-api used by test262 scripts
      */
-    public function until(string|object $other, mixed $options = null): Duration
+    public function until(string|object $other, mixed $options = []): Duration
     {
         $otherInst = $other instanceof self ? $other : self::coerceToInstant($other);
         [$aSec, $aSubNs] = $otherInst->epochParts();
@@ -1253,7 +1253,7 @@ final class Instant implements Stringable
      *
      * @param int $diffSec   Signed whole-second difference (this − other for since, other − this for until).
      * @param int $diffSubNs Signed sub-second nanosecond difference paired with $diffSec.
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @throws RangeError for invalid unit/mode strings or invalid roundingIncrement.
      * @throws TypeError for wrong-typed option values.
      */
@@ -1322,7 +1322,7 @@ final class Instant implements Stringable
         ];
 
         // ---- Parse options ----
-        $options = Options::normalizeOptions($options, [
+        $options = Options::requireObject($options, [
             'largestUnit',
             'roundingIncrement',
             'roundingMode',
