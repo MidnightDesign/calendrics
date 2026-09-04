@@ -28,7 +28,7 @@ Composer scripts (defined in `composer.json`):
 | `infection` | Mutation testing (target: 100% MSI) |
 | `check` | Full gate: phpstan + psalm + mago + mago-format-check + test-coverage + infection |
 
-PHPUnit suites (`phpunit.xml`): `default` (everything except Porcelain/Test262), `porcelain`, `test262`.
+PHPUnit suites (`phpunit.xml`): `porcelain` and `test262`. They are exhaustive — there is no catch-all suite, so a test placed in a new top-level directory under `tests/` runs under no suite at all.
 
 ## Architecture
 
