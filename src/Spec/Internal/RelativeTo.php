@@ -53,8 +53,49 @@ final class RelativeTo
     ];
 
     /**
-     * Reports whether a valid, non-null `relativeTo` is present in the options,
-     * throwing if one is present but malformed.
+     * TC39 GetTemporalRelativeToOption. Every entry point that reads `relativeTo` calls
+     * this before it knows whether it will need the anchor, so an unusable one is
+     * rejected here rather than at the point of use.
+     *
+     * Only an absent key gets through untouched — the PHP spelling of JS `undefined`,
+     * the sole value the operation treats as "no anchor".
+     *
+     * @param array<array-key, mixed> $options An options bag already normalized by {@see Options}.
+     * @throws RangeError for invalid relativeTo strings or property bags.
+     * @throws TypeError for invalid relativeTo types.
+     */
+    public static function readOption(array $options): void
+    {
+        if (!array_key_exists('relativeTo', $options)) {
+            return;
+        }
+        /** @var mixed $rt */
+        $rt = $options['relativeTo'];
+        // Step 5.a: a value that is neither an Object nor a String is a TypeError, and
+        // PHP null is JS null, not JS undefined.
+        if ($rt === null) {
+            throw new TypeError('relativeTo must be a string, property bag, or Temporal date/datetime.');
+        }
+        if ($rt instanceof PlainDate || $rt instanceof ZonedDateTime) {
+            return; // PlainDate and ZonedDateTime objects are valid relativeTo values
+        }
+        if (is_string($rt)) {
+            self::parseString($rt); // throws on invalid
+            return;
+        }
+        if (is_object($rt)) {
+            $rt = self::normalizeBag($rt);
+        }
+        if (is_array($rt)) {
+            self::validatePropertyBag($rt);
+            return;
+        }
+        throw new TypeError('relativeTo must be a string or property bag array.');
+    }
+
+    /**
+     * Reads the option as {@see self::readOption()} does, and reports whether it named
+     * an anchor — for the callers that go on to ask whether they needed one.
      *
      * @param array<array-key, mixed> $options An options bag already normalized by {@see Options}.
      * @throws RangeError for invalid relativeTo strings or property bags.
@@ -62,36 +103,8 @@ final class RelativeTo
      */
     public static function isPresent(array $options): bool
     {
-        if (!array_key_exists('relativeTo', $options)) {
-            return false;
-        }
-        /** @var mixed $rt */
-        $rt = $options['relativeTo'];
-        // PHP null is treated as the option being absent. test262 fixtures pass `null`
-        // in `[null, plainRelativeTo, zonedRelativeTo]` parametric tables (for
-        // non-calendar Durations) and expect the round to succeed — collapsing
-        // PHP null to "absent" matches that. Genuinely-typed wrong-type fixtures
-        // (relativeto-wrong-type) cover the same path: when the calling context
-        // does require an anchor, the absent-relativeTo branch raises
-        // RangeError ≡ JS RangeError.
-        if ($rt === null) {
-            return false;
-        }
-        if ($rt instanceof PlainDate || $rt instanceof ZonedDateTime) {
-            return true; // PlainDate and ZonedDateTime objects are valid relativeTo values
-        }
-        if (is_string($rt)) {
-            self::parseString($rt); // throws on invalid
-            return true;
-        }
-        if (is_object($rt)) {
-            $rt = self::normalizeBag($rt);
-        }
-        if (is_array($rt)) {
-            self::validatePropertyBag($rt);
-            return true;
-        }
-        throw new TypeError('relativeTo must be a string or property bag array.');
+        self::readOption($options);
+        return array_key_exists('relativeTo', $options);
     }
 
     /**

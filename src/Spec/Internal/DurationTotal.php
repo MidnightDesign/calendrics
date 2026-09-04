@@ -39,7 +39,9 @@ final class DurationTotal
      * options bag, still needed here because the `relativeTo` anchor is read from it.
      *
      * @param 'years'|'months'|'weeks'|'days'|'hours'|'minutes'|'seconds'|'milliseconds'|'microseconds'|'nanoseconds' $unit
-     * @param string|array<array-key, mixed>|object $totalOf
+     * @param string|array<array-key, mixed>|object $totalOf The caller has already put
+     *     any `relativeTo` through {@see RelativeTo::readOption()}, so what is checked
+     *     here are only the range rules that depend on $d and $unit.
      * @throws RangeError if the unit is unavailable without relativeTo.
      * @throws TypeError if relativeTo is present but not a valid anchor.
      */
@@ -61,7 +63,7 @@ final class DurationTotal
             return self::calendar($d, $unit, $rt, $zdtInfoCal);
         }
 
-        // Validate relativeTo if provided (even for pure-time unit computations).
+        // Only the string and ZonedDateTime spellings can break a range rule.
         if (is_array($totalOf) && array_key_exists('relativeTo', $totalOf)) {
             /** @var mixed $rtRaw */
             $rtRaw = $totalOf['relativeTo'];
@@ -119,8 +121,6 @@ final class DurationTotal
                         }
                     }
                 }
-            } elseif ($rtRaw instanceof PlainDate) {
-                // PlainDate objects are always valid for pure-time computations; no extra validation needed.
             } elseif ($rtRaw instanceof ZonedDateTime) {
                 // ZonedDateTime objects are valid relativeTo values for pure-time computations.
                 // For a non-blank duration, the target instant (anchor epoch + duration) must
@@ -135,15 +135,6 @@ final class DurationTotal
                         );
                     }
                 }
-            } elseif ($rtRaw !== null) {
-                if (is_object($rtRaw)) {
-                    $rtForVal = RelativeTo::normalizeBag($rtRaw);
-                } elseif (is_array($rtRaw)) {
-                    $rtForVal = $rtRaw;
-                } else {
-                    throw new TypeError('relativeTo must be a string or property bag array.');
-                }
-                RelativeTo::validatePropertyBag($rtForVal);
             }
         }
 
@@ -261,28 +252,16 @@ final class DurationTotal
      * @param mixed  $totalOf  the options bag passed to `total()` (string-form
      *     totalOf is invalid here — calendar units require an options object,
      *     never a bare smallestUnit string).
-     * @param string $missingMsg  message for RangeError when the
-     *     `relativeTo` key is absent. The TypeError thrown for an explicit null
-     *     and the field-shape errors are spec-mandated and identical across
-     *     calling sites.
+     * @param string $missingMsg  message for RangeError when the `relativeTo` key is
+     *     absent — the one error this raises that is specific to the calling site.
      * @return array{0: array<array-key, mixed>, 1: array{epochSec: int, subNs: int, tzId: string, year: int, month: int, day: int, hour: int, minute: int, second: int}|null}
      *     [resolvedBag, zdtInfo].
      * @throws RangeError if relativeTo is absent.
-     * @throws \TypeError if relativeTo is null, not String/Object, or the
-     *     resolved bag names no year, month/monthCode, or day.
      */
     private static function resolveRelativeTo(mixed $totalOf, string $missingMsg): array
     {
         if (!is_array($totalOf) || !array_key_exists('relativeTo', $totalOf)) {
             throw new RangeError($missingMsg);
-        }
-        // Per TC39 GetTemporalRelativeToOption: present-but-null relativeTo is
-        // not a String or Object → TypeError. (Distinct from the absent case,
-        // which is RangeError above.) test262
-        // Duration/prototype/total/does-not-accept-non-string-primitives-for-relativeTo
-        // pins this distinction.
-        if ($totalOf['relativeTo'] === null) {
-            throw new TypeError('relativeTo must be a string, property bag, or Temporal date/datetime.');
         }
         /** @var mixed $rt */
         $rt = $totalOf['relativeTo'];
@@ -297,11 +276,7 @@ final class DurationTotal
             if (is_object($rt)) {
                 $rt = RelativeTo::normalizeBag($rt);
             }
-            if (is_array($rt)) {
-                RelativeTo::validatePropertyBag($rt);
-            } else {
-                throw new TypeError('relativeTo must be a string or property bag.');
-            }
+            assert(is_array($rt), description: 'readOption() rejected every other spelling before this');
         }
         return [$rt, RelativeTo::resolveZdt($totalOf['relativeTo'])];
     }

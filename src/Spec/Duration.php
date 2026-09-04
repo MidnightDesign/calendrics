@@ -746,6 +746,10 @@ final class Duration implements Stringable
                 }
             }
             $totalOf = Options::requireObject($totalOf, ['relativeTo', 'unit']);
+            // GetTemporalRelativeToOption runs before the unit is read (steps 6 and 9),
+            // and unconditionally: a malformed anchor is rejected even when the unit
+            // that follows would never have needed one.
+            RelativeTo::readOption($totalOf);
         }
 
         if (is_array($totalOf)) {
@@ -1271,12 +1275,12 @@ final class Duration implements Stringable
             || $d2->months !== 0
             || $d2->weeks !== 0;
 
-        // Always validate relativeTo before any early return (invalid values must throw).
+        // GetTemporalRelativeToOption is step 4, ahead of the identical-slots early return
+        // in step 5, so a malformed anchor is rejected even when the two durations would
+        // have compared equal without one (Duration/compare/relativeto-string-invalid.js).
         $relativeToProvided = RelativeTo::isPresent($opts);
 
-        // TC39 §7.3.22: if both Duration records have identical internal slots, return 0.
-        // This applies even for calendar durations (relativeTo is not required for identical inputs).
-        // However, relativeTo is validated first so that invalid values still throw.
+        // Step 5, which needs no anchor even for a calendar duration.
         if ($d1->equals($d2)) {
             return 0;
         }
