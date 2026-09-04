@@ -32,13 +32,13 @@ final class ZonedArithmetic
      * Adds ($sign × $dur) to $zdt.
      *
      * @param int $sign 1 for `add()`, -1 for `subtract()`.
-     * @param array<array-key, mixed>|object|null $options Options bag; `overflow` is read.
+     * @param array<array-key, mixed>|object $options Options bag; `overflow` is read.
      * @throws RangeError if the result leaves the representable range, or if `overflow` is
      *                    `'reject'` and the calendar part lands on a day the month lacks.
      */
-    public static function add(ZonedDateTime $zdt, int $sign, Duration $dur, array|object|null $options): ZonedDateTime
+    public static function add(ZonedDateTime $zdt, int $sign, Duration $dur, mixed $options): ZonedDateTime
     {
-        $overflow = Options::overflowFromBag($options);
+        $overflow = Options::overflowFromValue($options);
 
         $years = $sign * (int) $dur->years;
         $months = $sign * (int) $dur->months;

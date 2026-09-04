@@ -140,30 +140,21 @@ final class Options
     }
 
     /**
-     * Resolves an already-validated options BAG (post-GetOptionsObject) to a validated
-     * "constrain" / "reject" keyword, defaulting to "constrain" when the bag is null
-     * (an omitted options argument) or has no `overflow` key.
+     * Resolves an already-snapshotted options BAG (post-GetOptionsObject) to a validated
+     * "constrain" / "reject" keyword, defaulting to "constrain" when the bag has no
+     * `overflow` key.
      *
      * Delegates the keyword coercion/validation to {@see self::overflowOption()}, where
      * an explicit `overflow => null` value coerces to neither keyword and is a RangeError.
-     * Callers that need the GetOptionsObject (null-argument → TypeError) step should use
-     * {@see self::overflowFromValue()} instead; this helper always defaults a null bag.
+     * Callers holding a raw options ARGUMENT want {@see self::overflowFromValue()}, which
+     * runs GetOptionsObject first; the bag this one takes has already been through it,
+     * so there is no null to default — an omitted argument arrives as an empty array.
      *
-     * After the Plain... convergence on {@see self::overflowFromValue()}, the only
-     * external caller is {@see Calendrics\Spec\ZonedDateTime}, which performs its own
-     * GetOptionsObject (null handling) upstream and so wants the bag-only resolver here;
-     * internally, {@see self::overflowFromValue()} also delegates to this method after
-     * its own GetOptionsObject step.
-     *
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed> $options
      * @throws RangeError per {@see self::overflowOption()}.
      */
-    public static function overflowFromBag(array|object|null $options): string
+    public static function overflowFromBag(array $options): string
     {
-        if ($options === null) {
-            return 'constrain';
-        }
-        $options = self::normalizeOptions($options, ['overflow']);
         if (!array_key_exists('overflow', $options)) {
             return 'constrain';
         }
@@ -310,50 +301,6 @@ final class Options
     }
 
     /**
-     * TC39 GetOptionsObject applied to an OPTIONAL options argument: null / omitted
-     * means "use defaults" (returns an empty array), but a Stringable sentinel that
-     * behaves like a Symbol (its __toString throws) is still a TypeError.  Ordinary
-     * objects (including JsUndefined, whose __toString returns 'undefined') are
-     * normalised to an array via get_object_vars(); that matches the spec's
-     * GetOptionsObject(options) step which returns an ordinary empty object for
-     * `undefined`.
-     *
-     * Use this helper wherever the TC39 spec step is:
-     *   "If options is undefined, set options to OrdinaryObjectCreate(null)"
-     * i.e. null/undefined is valid (use defaults) but non-object non-undefined is TypeError.
-     *
-     * $props carries the same contract as in {@see self::requireObject()}: the exhaustive
-     * list of option names the calling operation reads, so an object bag exposing its
-     * options through `__get` is seen instead of snapshotting empty.
-     *
-     * `mixed` for the same reason as {@see self::requireObject()}: a primitive must be
-     * rejected at the GetOptionsObject step inside the body, not by a parameter-type
-     * guard that fires before the primary argument is converted.
-     *
-     * @param mixed $options Raw options argument (null → defaults; primitive → TypeError).
-     * @param list<string> $props Option names this operation recognizes.
-     * @return array<array-key, mixed>
-     */
-    public static function normalizeOptions(mixed $options, array $props): array
-    {
-        if ($options === null) {
-            return [];
-        }
-        if (!is_array($options) && !is_object($options)) {
-            throw new TypeError('options must be an object.');
-        }
-        if (is_object($options)) {
-            if ($options instanceof Stringable) {
-                // JsSymbol sentinel: __toString throws Calendrics\Exception\TypeError.
-                // This must propagate — do not catch it.
-                (string) $options;
-            }
-            return self::bagSnapshot($options, $props);
-        }
-        return $options;
-    }
-
-    /**
      * Sentinel returned by {@see self::bagGet()} when a property is ABSENT from the
      * bag (the JS equivalent of `Get(O, P)` yielding `undefined` for a missing own
      * property). Distinct from a declared property whose value is `null`, which
@@ -390,7 +337,7 @@ final class Options
     /**
      * Faithful TC39 `Get(O, P)` for a property bag.
      *
-     * Unlike {@see self::normalizeOptions()} (which snapshots an object's declared
+     * Unlike {@see self::requireObject()} (which snapshots an object's declared
      * public properties via get_object_vars() and therefore never triggers PHP's
      * `__get` magic), this reads a single named property in a way that fires an
      * accessor getter when one is defined — matching JS's `[[Get]]`, where reading
@@ -441,7 +388,7 @@ final class Options
      * Normalizes a property bag to an array by reading $props through the faithful
      * {@see self::bagGet()}, in the order given.
      *
-     * This is the object-bag counterpart to {@see self::normalizeOptions()}. The
+     * This is the object-bag counterpart to {@see self::requireObject()}. The
      * difference is what an OBJECT bag is allowed to be: `get_object_vars()` sees
      * only declared public properties, so an object that exposes its fields through
      * `__get` — an ordinary PHP DTO, a lazily-hydrated entity, a config wrapper —

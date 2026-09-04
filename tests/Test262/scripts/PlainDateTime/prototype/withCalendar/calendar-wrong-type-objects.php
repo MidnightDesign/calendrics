@@ -12,6 +12,5 @@ $instance = new \Calendrics\Spec\PlainDateTime(1976, 11, 18, 15, 23, 30, 123, 45
 $wrongTypeTests = [[null, 'null'], [true, 'boolean'], [1, 'number'], [1, 'bigint'], [19_970_327, 'large number'], [-19_970_327, 'negative number'], [1_234_567_890, 'very large integer'], [\Calendrics\Tests\Test262\JsSymbol::singleton(), 'symbol'], [(object) [], 'object'], [new \Calendrics\Spec\Duration(), 'duration instance']];
 foreach ($wrongTypeTests as $__entry__) {
 [$arg, $description] = array_pad($__entry__, 2, null);
-if ($arg === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$instance, &$arg) { return $instance->withCalendar($arg); }, "{$description} is not a valid calendar");
 }

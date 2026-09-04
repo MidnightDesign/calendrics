@@ -11,7 +11,6 @@ use Calendrics\Tests\Test262\JsUndefined;
 $monthCodeValues = [5, 5, false, \Calendrics\Tests\Test262\JsSymbol::singleton(), null, new \Calendrics\Tests\Test262\JsNonStringPrimitive(5)];
 $year = 2026;
 foreach ($monthCodeValues as $monthCode) {
-if ($monthCode === null) { continue; }
 if ($monthCode instanceof \Calendrics\Tests\Test262\JsNonStringPrimitive) { continue; }
 Assert::throws(\TypeError::class, function () use (&$year, &$monthCode) { return \Calendrics\Spec\PlainYearMonth::from(JsUndefined::strip(['year' => $year, 'monthCode' => $monthCode])); }, ($monthCode instanceof \Calendrics\Tests\Test262\JsSymbol ? 'Symbol should be rejected as month code' : "month code {$monthCode} should be rejected"));
 }

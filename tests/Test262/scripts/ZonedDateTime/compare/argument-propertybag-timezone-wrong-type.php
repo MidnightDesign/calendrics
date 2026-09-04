@@ -12,7 +12,6 @@ $datetime = new \Calendrics\Spec\ZonedDateTime(0, 'UTC');
 $primitiveTests = [[null, 'null'], [true, 'boolean'], ['', 'empty string'], [1, 'number that doesn\'t convert to a valid ISO string'], [19_761_118, 'number that would convert to a valid ISO string in other contexts'], [1, 'bigint']];
 foreach ($primitiveTests as $__entry__) {
 [$timeZone, $description] = array_pad($__entry__, 2, null);
-if ($timeZone === null) { continue; }
 Assert::throws((is_string($timeZone) ? \RangeException::class : \TypeError::class), function () use (&$timeZone, &$datetime) { return \Calendrics\Spec\ZonedDateTime::compare(JsUndefined::strip(['year' => 2020, 'month' => 5, 'day' => 2, 'timeZone' => $timeZone]), $datetime); }, "{$description} does not convert to a valid ISO string (first argument)");
 Assert::throws((is_string($timeZone) ? \RangeException::class : \TypeError::class), function () use (&$datetime, &$timeZone) { return \Calendrics\Spec\ZonedDateTime::compare($datetime, JsUndefined::strip(['year' => 2020, 'month' => 5, 'day' => 2, 'timeZone' => $timeZone])); }, "{$description} does not convert to a valid ISO string (second argument)");
 }
