@@ -1574,7 +1574,7 @@ class Emitter {
   // and `N` both become PHP int — so a throw assertion that depends on it can't
   // be reproduced. Returns one of:
   //   'incomplete' — the loop can't be faithfully lowered; emit incomplete.
-  //   'skip-null'  — lowering is safe, but `null` elements must be skipped.
+  //   'lower'      — lowering is safe; transpile the whole table.
   //   null         — the BigInt-table rule does not apply; transpile normally.
   classifyBigIntTableForOf(node) {
     // Only applies to a for-of over a BigInt-containing data table (inline, or a
@@ -1615,7 +1615,7 @@ class Emitter {
       // The lookalike `with/options-wrong-type` field-validation ordering gap (RangeError
       // from a non-string property bag) is rejected by isStringParseFromOptionsWrongTypeBody.
       if (tableHasNumberLiteral && isStringParseFromOptionsWrongTypeBody(node.body)) {
-        return 'skip-null';
+        return 'lower';
       }
       // The `with/options-wrong-type` property-bag family: RangeError comes from the
       // partial-field coercion, which the PHP spec layer now performs BEFORE the
@@ -1628,12 +1628,11 @@ class Emitter {
       }
       return 'incomplete';
     }
-    // A `null` table element may be an OMITTED positional argument (e.g. a
-    // positional calendar → ISO, no throw) rather than a wrong-type value, which
-    // would fail an `assert.throws`. Skip the null iteration in the lowered loop;
-    // the remaining elements still cover the throw path. (A property-bag null
-    // that DOES throw is merely left untested here — never red.)
-    return 'skip-null';
+    // A `null` table element is JS null wherever it lands — a value the algorithms
+    // reject, positional slot or option key alike. Nothing to skip: PHP null now
+    // means JS null everywhere, and JS undefined arrives as the JsUndefined
+    // sentinel or as an omitted argument.
+    return 'lower';
   }
 
   transpileForOf(node) {
@@ -1680,12 +1679,6 @@ class Emitter {
       this.emitIncomplete('BigInt literal in wrong-type for-of data table; Number-vs-BigInt distinction not representable in PHP');
       return;
     }
-    // `null` data-table elements must be skipped when the BigInt table is lowered as
-    // 'skip-null' (a null may be an omitted-positional sentinel). The 'lower' signal
-    // (with/options-wrong-type property-bag family) keeps null — there it is a genuine
-    // wrong-type options value — so it falls through to the normal null-keeping foreach.
-    const nullSkipForOf = bigIntTable === 'skip-null';
-
     // Special case: for (const [k, v] of Object.entries(obj)) → foreach ($obj as $k => $v)
     // Also handles: for (const [k, {a, b, c}] of Object.entries(obj)) where the value slot
     // is an ObjectPattern — the properties are bound inside the loop body.
@@ -1784,9 +1777,6 @@ class Emitter {
       this.emit(`foreach (${iter2} as ${tmpVar2}) {`);
       const opened2 = this.lines.length > before2;
       this.emit(`${pat} = array_pad(${tmpVar2}, ${n}, null);`);
-      if (nullSkipForOf) {
-        this.emit(`if (${parts[0]} === null) { continue; }`);
-      }
       // Emit default assignments for elements with AssignmentPattern defaults.
       for (let i = 0; i < patNode2.elements.length; i++) {
         const el = patNode2.elements[i];
@@ -1877,9 +1867,6 @@ class Emitter {
     const before = this.lines.length;
     this.emit(`foreach (${iter} as ${pat}) {`);
     const opened = this.lines.length > before;
-    if (nullSkipForOf) {
-      this.emit(`if (${pat} === null) { continue; }`);
-    }
     // A `{ toString: () => <non-String> }` entry only belongs in a wrong-type table
     // under JS semantics; in PHP it is an ordinary stringifiable value, so skip it
     // rather than assert a rejection the language cannot produce.
@@ -3833,10 +3820,6 @@ class Emitter {
     const feHasNumber =
       (arrNode.type === 'ArrayExpression' && hasNumberLiteral(arrNode))
       || (arrNode.type === 'Identifier' && this.numberLiteralArrayVars.has(arrNode.name));
-    if (feHasBigInt && feHasNumber && subtreeHasAssertThrows(feCbBody)
-        && uniformAssertThrowsErrorClass(feCbBody) !== null) {
-      this.emit(`if (${param} === null) { continue; }`);
-    }
     this.transpileStatement(cbBody);
     if (opened) this.lines.push('}');
     return null; // already emitted

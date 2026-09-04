@@ -10,7 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\PlainDate(1970, 1, 1);
 foreach ([null, false, 0, 0, \Calendrics\Tests\Test262\JsSymbol::singleton(), [], [], function () {  }] as $timeZone) {
-if ($timeZone === null) { continue; }
 $item = JsUndefined::strip(['timeZone' => $timeZone]);
 Assert::throws(\TypeError::class, function () use (&$instance, &$item) { return $instance->toZonedDateTime($item); }, '');
 }
