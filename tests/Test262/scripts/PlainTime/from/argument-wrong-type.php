@@ -12,7 +12,6 @@ Assert::throws(\TypeError::class, fn() => \Calendrics\Spec\PlainTime::from(), 'n
 $primitiveTests = [[JsUndefined::singleton(), 'undefined'], [null, 'null'], [true, 'boolean'], ['', 'empty string'], [1, 'number that doesn\'t convert to a valid ISO string'], [1, 'bigint']];
 foreach ($primitiveTests as $__entry__) {
 [$arg, $description] = array_pad($__entry__, 2, null);
-if ($arg === null) { continue; }
 Assert::throws((is_string($arg) ? \RangeException::class : \TypeError::class), function () use (&$arg) { return \Calendrics\Spec\PlainTime::from($arg); }, "{$description} does not convert to a valid ISO string");
 foreach ([JsUndefined::singleton(), ['overflow' => 'constrain'], ['overflow' => 'reject']] as $options) {
 Assert::throws((is_string($arg) ? \RangeException::class : \TypeError::class), function () use (&$arg, &$options) { return \Calendrics\Spec\PlainTime::from($arg, $options); }, "{$description} does not convert to a valid ISO string with options " . json_encode($options) . "");
