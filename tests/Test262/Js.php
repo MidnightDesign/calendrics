@@ -208,6 +208,25 @@ final class Js
         throw new \TypeError('Js::destructure(): cannot destructure a non-object value.');
     }
 
+    /**
+     * The rest of a destructuring pattern: `const { a, ...others } = value` binds
+     * `others` to a new object carrying every own property except the named ones.
+     *
+     * @param list<string> $taken The property names the pattern bound individually.
+     */
+    public static function destructureRest(mixed $value, array $taken): object
+    {
+        $props = match (true) {
+            is_array($value) => $value,
+            is_object($value) => get_object_vars($value),
+            default => throw new \TypeError('Js::destructureRest(): cannot destructure a non-object value.'),
+        };
+        foreach ($taken as $name) {
+            unset($props[$name]);
+        }
+        return (object) $props;
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
