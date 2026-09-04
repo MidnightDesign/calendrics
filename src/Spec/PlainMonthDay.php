@@ -6,6 +6,7 @@ namespace Calendrics\Spec;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\AnchorMath;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
@@ -1357,12 +1358,9 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
     }
 
     #[\Override]
-    protected function toLocaleTimestamp(): int
+    protected function toLocaleEpochParts(): array
     {
-        $dt = new \DateTime(
-            sprintf('%04d-%02d-%02d 00:00:00', $this->referenceISOYear, $this->isoMonth, $this->isoDay),
-            new \DateTimeZone('UTC'),
-        );
-        return $dt->getTimestamp();
+        $epochDays = AnchorMath::isoDateToEpochDays($this->referenceISOYear, $this->isoMonth, $this->isoDay);
+        return [$epochDays * 86_400, 0];
     }
 }
