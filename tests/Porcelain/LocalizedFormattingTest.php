@@ -30,6 +30,11 @@ use PHPUnit\Framework\TestCase;
  * literal locale string. Instead each option is asserted to *change* the output
  * relative to the same value formatted with no options at all — which is what
  * the option is for, and which holds regardless of the CLDR data behind it.
+ *
+ * Every provider below yields closures rather than rendered strings. PHPUnit runs a
+ * data provider during collection, before coverage recording starts, so a provider
+ * that formatted eagerly would still assert correctly while recording no coverage at
+ * all for the formatter it exercises.
  */
 final class LocalizedFormattingTest extends TestCase
 {

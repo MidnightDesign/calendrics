@@ -939,6 +939,8 @@ final class ZonedDateTime implements Stringable
             throw new TypeError('toLocaleString(): timeZone option is not allowed for ZonedDateTime.');
         }
 
+        IntlFormatter::validateOptionValues($opts);
+
         $locale = IntlFormatter::resolveLocale($locales);
         IntlFormatter::validateCalendar(
             $this->calendarId,
