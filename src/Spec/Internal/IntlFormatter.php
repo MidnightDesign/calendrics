@@ -14,8 +14,9 @@ use Calendrics\Spec\Internal\Calendar\CalendarFactory;
  *
  * The public surface is: buildIntlFormatter() (central entry point), resolveLocale(),
  * resolveCalendar(), validateCalendar(), validateStyleConflicts(), and
- * stripPatternComponents(). The private helpers applyHourCycle() and
- * buildPatternFromComponents() support buildIntlFormatter() internally.
+ * stripPatternComponents(). The private helpers applyHourCycle(),
+ * buildPatternFromComponents() and widenHourField() support buildIntlFormatter()
+ * internally.
  *
  * @internal
  */
@@ -628,7 +629,35 @@ final class IntlFormatter
         // Use ICU's DateTimePatternGenerator to get a best-fit pattern
         $generator = new \IntlDatePatternGenerator($locale);
         $result = $generator->getBestPattern($skeleton);
+        $pattern = $result !== false ? $result : $skeleton;
 
-        return $result !== false ? $result : $skeleton;
+        return ($opts['hour'] ?? null) === '2-digit' ? self::widenHourField($pattern) : $pattern;
+    }
+
+    /**
+     * Widens the hour field of an ICU pattern to two characters.
+     *
+     * ECMA-402 has `hour: '2-digit'` pad a single-digit hour, but
+     * {@see \IntlDatePatternGenerator::getBestPattern()} is free to answer with the locale's
+     * own preferred hour width instead of the requested one: en-US returns `h a` for the
+     * skeletons `j`, `jj` and even the explicit `hh`. ICU honors the requested count when
+     * passed `UDATPG_MATCH_HOUR_FIELD_LENGTH`, for which PHP's binding takes no argument, so
+     * the width is reapplied to the returned pattern instead.
+     *
+     * The alternation matches a quoted literal first so its contents are copied through
+     * untouched: de-DE's `HH 'Uhr'` must not have the `h` of `Uhr` read as an hour field.
+     */
+    private static function widenHourField(string $pattern): string
+    {
+        $widened = preg_replace_callback(
+            "/'[^']*'|([hHKk])\\1*/",
+            /** @param array<array-key, string> $match */
+            static fn(array $match): string => array_key_exists(1, $match)
+                ? str_repeat($match[1], times: 2)
+                : $match[0],
+            subject: $pattern,
+        );
+
+        return $widened ?? $pattern;
     }
 }
