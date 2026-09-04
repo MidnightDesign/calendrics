@@ -11,7 +11,7 @@ use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
-use Calendrics\Spec\Internal\LocaleComponents;
+use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
@@ -1442,9 +1442,9 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
     }
 
     #[\Override]
-    protected function localeDefaultComponents(): LocaleComponents
+    protected function localeDefaultComponents(): LocaleComponentMode
     {
-        return LocaleComponents::YearMonth;
+        return LocaleComponentMode::YearMonth;
     }
 
     #[\Override]

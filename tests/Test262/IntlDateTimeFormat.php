@@ -7,7 +7,7 @@ namespace Calendrics\Tests\Test262;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Instant;
 use Calendrics\Spec\Internal\IntlFormatter;
-use Calendrics\Spec\Internal\LocaleComponents;
+use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Calendrics\Spec\ZonedDateTime;
 
@@ -160,7 +160,7 @@ final class IntlDateTimeFormat
 
         if ($value instanceof PlainLocaleFormattable) {
             $components = self::readLocaleHook($value, 'localeDefaultComponents');
-            \assert($components instanceof LocaleComponents);
+            \assert($components instanceof LocaleComponentMode);
             $timestamp = self::readLocaleHook($value, 'toLocaleTimestamp');
             \assert(is_int($timestamp) || is_float($timestamp));
             // Plain types always format in UTC (see HasPlainLocaleString::toLocaleString).

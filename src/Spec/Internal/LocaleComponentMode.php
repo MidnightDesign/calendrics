@@ -15,7 +15,7 @@ namespace Calendrics\Spec\Internal;
  *
  * @internal
  */
-enum LocaleComponents: string
+enum LocaleComponentMode: string
 {
     case Date = 'date';
     case Time = 'time';

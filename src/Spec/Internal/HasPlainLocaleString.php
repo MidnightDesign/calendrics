@@ -13,7 +13,7 @@ use Calendrics\Exception\TypeError;
  * differ only in which components they default to, which calendar they must agree
  * with, and how their fields collapse into a single timestamp — the three hooks below.
  * Which style options a type may be given follows from its component mode — see
- * {@see LocaleComponents::isDateOnly()}.
+ * {@see LocaleComponentMode::isDateOnly()}.
  *
  * {@see \Calendrics\Spec\ZonedDateTime} and {@see \Calendrics\Spec\Instant} are
  * deliberately not users: both format an exact instant in a real time zone through
@@ -32,7 +32,7 @@ trait HasPlainLocaleString
      * Returns the component mode IntlDateFormatter defaults to when formatting this
      * type via toLocaleString.
      */
-    abstract protected function localeDefaultComponents(): LocaleComponents;
+    abstract protected function localeDefaultComponents(): LocaleComponentMode;
 
     /**
      * Returns this value's calendar identifier for the toLocaleString()

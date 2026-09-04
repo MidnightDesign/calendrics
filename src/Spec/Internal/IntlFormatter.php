@@ -144,22 +144,22 @@ final class IntlFormatter
      * formatter can render.
      *
      * @param array<string, mixed> $opts
-     * @param LocaleComponents $defaultComponents The value's component mode, as passed to buildIntlFormatter().
+     * @param LocaleComponentMode $defaultComponents The value's component mode, as passed to buildIntlFormatter().
      * @throws RangeError if the value's calendar is incompatible with the formatter's.
      */
     public static function validateCalendar(
         ?string $calendarId,
         string $locale,
         array $opts,
-        LocaleComponents $defaultComponents,
+        LocaleComponentMode $defaultComponents,
     ): void {
         if ($calendarId === null) {
             return;
         }
 
         $isoExempt = match ($defaultComponents) {
-            LocaleComponents::YearMonth, LocaleComponents::MonthDay => false,
-            LocaleComponents::Date, LocaleComponents::Time, LocaleComponents::DateTime => true,
+            LocaleComponentMode::YearMonth, LocaleComponentMode::MonthDay => false,
+            LocaleComponentMode::Date, LocaleComponentMode::Time, LocaleComponentMode::DateTime => true,
         };
         if ($isoExempt && $calendarId === 'iso8601') {
             return;
@@ -260,13 +260,13 @@ final class IntlFormatter
      * Supports `hour12` and `hourCycle` options for hour format control.
      *
      * @param array<string, mixed> $opts
-     * @param LocaleComponents $defaultComponents Which components to include when the caller names none.
+     * @param LocaleComponentMode $defaultComponents Which components to include when the caller names none.
      */
     public static function buildIntlFormatter(
         string $locale,
         string $timeZone,
         array $opts,
-        LocaleComponents $defaultComponents = LocaleComponents::DateTime,
+        LocaleComponentMode $defaultComponents = LocaleComponentMode::DateTime,
     ): \IntlDateFormatter {
         /** @var mixed $calendarOpt */
         $calendarOpt = $opts['calendar'] ?? null;
@@ -333,9 +333,9 @@ final class IntlFormatter
             // PlainYearMonth and PlainMonthDay have no locale style of their own, so they
             // take the date style's pattern and strip the component they do not carry.
             $absentComponent = match ($defaultComponents) {
-                LocaleComponents::YearMonth => 'day',
-                LocaleComponents::MonthDay => 'year',
-                LocaleComponents::Date, LocaleComponents::Time, LocaleComponents::DateTime => null,
+                LocaleComponentMode::YearMonth => 'day',
+                LocaleComponentMode::MonthDay => 'year',
+                LocaleComponentMode::Date, LocaleComponentMode::Time, LocaleComponentMode::DateTime => null,
             };
             if ($dateStyle !== null && $absentComponent !== null) {
                 $tmpFormatter = new \IntlDateFormatter(
@@ -404,11 +404,11 @@ final class IntlFormatter
         // Default: use skeleton-based patterns to match JS Intl.DateTimeFormat defaults
         $generator = new \IntlDatePatternGenerator($locale);
         $pattern = $generator->getBestPattern(match ($defaultComponents) {
-            LocaleComponents::YearMonth => 'yM',
-            LocaleComponents::MonthDay => 'Md',
-            LocaleComponents::Date => 'yMd',
-            LocaleComponents::Time => 'jms',
-            LocaleComponents::DateTime => 'yMdjms',
+            LocaleComponentMode::YearMonth => 'yM',
+            LocaleComponentMode::MonthDay => 'Md',
+            LocaleComponentMode::Date => 'yMd',
+            LocaleComponentMode::Time => 'jms',
+            LocaleComponentMode::DateTime => 'yMdjms',
         });
         if ($pattern === false) {
             $pattern = null;
@@ -527,7 +527,7 @@ final class IntlFormatter
      */
     private static function buildPatternFromComponents(
         array $opts,
-        LocaleComponents $defaultComponents,
+        LocaleComponentMode $defaultComponents,
         string $locale = 'en',
     ): string {
         $parts = [];
@@ -631,14 +631,14 @@ final class IntlFormatter
             || ($opts['fractionalSecondDigits'] ?? null) !== null;
         if (!$hasDatePart && !$hasTimePart) {
             $dateDefaults = match ($defaultComponents) {
-                LocaleComponents::YearMonth => ['y', 'M'],
-                LocaleComponents::MonthDay => ['M', 'd'],
-                LocaleComponents::Date, LocaleComponents::DateTime => ['y', 'M', 'd'],
-                LocaleComponents::Time => [],
+                LocaleComponentMode::YearMonth => ['y', 'M'],
+                LocaleComponentMode::MonthDay => ['M', 'd'],
+                LocaleComponentMode::Date, LocaleComponentMode::DateTime => ['y', 'M', 'd'],
+                LocaleComponentMode::Time => [],
             };
             $timeDefaults = match ($defaultComponents) {
-                LocaleComponents::Time, LocaleComponents::DateTime => ['j', 'm', 's'],
-                LocaleComponents::Date, LocaleComponents::YearMonth, LocaleComponents::MonthDay => [],
+                LocaleComponentMode::Time, LocaleComponentMode::DateTime => ['j', 'm', 's'],
+                LocaleComponentMode::Date, LocaleComponentMode::YearMonth, LocaleComponentMode::MonthDay => [],
             };
             $parts = array_merge($dateDefaults, $parts, $timeDefaults);
         }

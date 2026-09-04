@@ -15,7 +15,7 @@ use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasEpochParts;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\IntlFormatter;
-use Calendrics\Spec\Internal\LocaleComponents;
+use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\TimeZoneHelper;
 use Calendrics\Spec\Internal\ZonedArithmetic;
@@ -944,7 +944,7 @@ final class ZonedDateTime implements Stringable
             $this->calendarId,
             $locale,
             $opts,
-            defaultComponents: LocaleComponents::DateTime,
+            defaultComponents: LocaleComponentMode::DateTime,
         );
 
         // TC39: ZDT's default format includes the timezone name — but only when the
@@ -958,7 +958,7 @@ final class ZonedDateTime implements Stringable
         IntlFormatter::validateStyleConflicts($opts);
 
         $timeZone = $this->timeZoneId;
-        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, LocaleComponents::DateTime);
+        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, LocaleComponentMode::DateTime);
         [$epochSec, $subNs] = $this->epochParts();
         $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs, $timeZone, $locale);
 
