@@ -542,29 +542,20 @@ function arrowBigIntArgIsAlwaysTypeError(fnNode) {
   return body.arguments.some(a => a.type === 'Literal' && a.bigint !== undefined && !overflowsInt64(BigInt(a.bigint)));
 }
 
-/** Returns true if the arrow body directly calls methodName with a plain number literal arg. */
-function arrowCallsWithNumber(fnNode, methodName) {
-  if (!fnNode || fnNode.type !== 'ArrowFunctionExpression') return false;
-  const body = fnNode.body;
-  if (body.type !== 'CallExpression') return false;
-  const callee = body.callee;
-  if (!callee || callee.type !== 'MemberExpression' || callee.property.name !== methodName) return false;
-  return body.arguments.some(a => a.type === 'Literal' && typeof a.value === 'number');
-}
+/** Temporal constructors whose first argument is an epochNanoseconds converted with ToBigInt. */
+const EPOCH_NANOSECONDS_CTORS = new Set(['Instant', 'ZonedDateTime']);
 
 /**
- * Returns true if the arrow body is `new Temporal.Instant(arg)` where arg is a
- * plain Number literal (not a BigInt). PHP int64 can't replicate JS BigInt-vs-Number
- * type distinction, so these TypeError assertions are untranslatable.
+ * Renders a JS Number literal sitting in a ToBigInt argument position as a PHP float
+ * literal, or null if the node is not one. The spec layer models a JS BigInt as a PHP
+ * int and a JS Number as a PHP float, so `new Temporal.Instant(42)` must reach it as
+ * `42.0` to be rejected the way ToBigInt(Number) rejects it; emitting int `42` would
+ * make it a BigInt and construct successfully.
  */
-function arrowInstantCtorWithNumberArg(fnNode) {
-  if (!fnNode || fnNode.type !== 'ArrowFunctionExpression') return false;
-  const body = fnNode.body;
-  if (body.type !== 'NewExpression') return false;
-  const callee = body.callee;
-  if (!callee || callee.type !== 'MemberExpression') return false;
-  if (callee.object?.name !== 'Temporal' || callee.property?.name !== 'Instant') return false;
-  return body.arguments.some(a => a.type === 'Literal' && typeof a.value === 'number');
+function toBigIntArgAsPhpFloat(argNode) {
+  if (argNode?.type !== 'Literal' || typeof argNode.value !== 'number') return null;
+  const digits = String(argNode.value);
+  return /[.eE]/.test(digits) ? digits : `${digits}.0`;
 }
 
 /** Operator precedence table (higher = binds tighter). */
@@ -2209,11 +2200,9 @@ class Emitter {
       if (node.object.type === 'Identifier' && node.object.name === 'Number') {
         switch (node.property.name) {
           case 'MAX_SAFE_INTEGER': return '9_007_199_254_740_991';
-          case 'MAX_VALUE':
-            // Number.MAX_VALUE ≈ 1.8e308 has no PHP int equivalent; PHP_INT_MAX µs/ns
-            // is within the valid Duration range, so this test cannot be faithfully translated.
-            this.emitIncomplete('Number.MAX_VALUE exceeds PHP_INT_MAX; no exact PHP int equivalent');
-            return null;
+          // PHP_FLOAT_MAX is bit-for-bit Number.MAX_VALUE; the fixtures that use it
+          // pass it where a JS Number is expected, which the spec layer takes as a float.
+          case 'MAX_VALUE':        return 'PHP_FLOAT_MAX';
           case 'MIN_SAFE_INTEGER': return '-9_007_199_254_740_991';
           case 'MIN_VALUE':        return '5.0E-324';
           case 'EPSILON':          return '2.220446049250313E-16';
@@ -2748,6 +2737,8 @@ class Emitter {
         if (epNsBig !== null && overflowsInt64(epNsBig)) {
           return emitOverInt64Ctor('Instant', epNsBig, '');
         }
+        const epNsFloat = toBigIntArgAsPhpFloat(node.arguments[0]);
+        if (epNsFloat !== null) return `${SPEC_NS}Instant::fromEpochNanoseconds(${epNsFloat})`;
       }
       // JS auto-coerces objects to strings; PHP does not. If an objectVars variable
       // is passed to a string-accepting method, the test relies on JS-specific behaviour.
@@ -2897,6 +2888,35 @@ class Emitter {
     return null;
   }
 
+  /**
+   * Emits `new Temporal.<cls>(…)`. The epochNanoseconds argument of the Instant and
+   * ZonedDateTime constructors is ToBigInt-converted, which gives it two lowerings of
+   * its own: an over-int64 BigInt carries its true epoch parts through
+   * {@link emitOverInt64Ctor}, and a Number literal becomes a PHP float.
+   */
+  transpileTemporalCtor(cls, argNodes) {
+    if (!IMPLEMENTED_CTORS.has(cls)) {
+      this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
+      return null;
+    }
+    if (EPOCH_NANOSECONDS_CTORS.has(cls) && argNodes.length > 0) {
+      const epNsBig = this.evalBigInt(argNodes[0]);
+      if (epNsBig !== null && overflowsInt64(epNsBig)) {
+        const rest = this.transpileArgs(argNodes.slice(1));
+        return rest === null ? null : emitOverInt64Ctor(cls, epNsBig, rest);
+      }
+      const epNsFloat = toBigIntArgAsPhpFloat(argNodes[0]);
+      if (epNsFloat !== null) {
+        const rest = this.transpileArgs(argNodes.slice(1));
+        if (rest === null) return null;
+        return `new ${SPEC_NS}${cls}(${rest === '' ? epNsFloat : `${epNsFloat}, ${rest}`})`;
+      }
+    }
+    const args = this.transpileArgs(argNodes, CONSTRUCTOR_PARAM_NAMES[cls] ?? null);
+    if (args === null) return null;
+    return `new ${SPEC_NS}${cls}(${args})`;
+  }
+
   transpileNew(node) {
     // new Temporal.X(…)
     const callee = node.callee;
@@ -2915,41 +2935,11 @@ class Emitter {
     }
     // new X(…) where X is a Temporal class alias (from const { X } = Temporal;)
     if (callee.type === 'Identifier' && this.temporalClassAliases.has(callee.name)) {
-      const cls = this.temporalClassAliases.get(callee.name);
-      if (!IMPLEMENTED_CTORS.has(cls)) {
-        this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
-        return null;
-      }
-      if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
-        const epNsBig = this.evalBigInt(node.arguments[0]);
-        if (epNsBig !== null && overflowsInt64(epNsBig)) {
-          const rest = node.arguments.length > 1 ? this.transpileArgs(node.arguments.slice(1)) : '';
-          if (rest === null) return null;
-          return emitOverInt64Ctor(cls, epNsBig, rest);
-        }
-      }
-      const args = this.transpileArgs(node.arguments, CONSTRUCTOR_PARAM_NAMES[cls] ?? null);
-      if (args === null) return null;
-      return `new ${SPEC_NS}${cls}(${args})`;
+      return this.transpileTemporalCtor(this.temporalClassAliases.get(callee.name), node.arguments);
     }
     if (callee.type === 'MemberExpression' && !callee.computed
         && callee.object.type === 'Identifier' && callee.object.name === 'Temporal') {
-      const cls = callee.property.name;
-      if (!IMPLEMENTED_CTORS.has(cls)) {
-        this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
-        return null;
-      }
-      if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
-        const epNsBig = this.evalBigInt(node.arguments[0]);
-        if (epNsBig !== null && overflowsInt64(epNsBig)) {
-          const rest = node.arguments.length > 1 ? this.transpileArgs(node.arguments.slice(1)) : '';
-          if (rest === null) return null;
-          return emitOverInt64Ctor(cls, epNsBig, rest);
-        }
-      }
-      const args = this.transpileArgs(node.arguments, CONSTRUCTOR_PARAM_NAMES[cls] ?? null);
-      if (args === null) return null;
-      return `new ${SPEC_NS}${cls}(${args})`;
+      return this.transpileTemporalCtor(callee.property.name, node.arguments);
     }
     // new Temporal.X.method() or new Temporal.X.prototype.method() → TypeError
     const deepTarget = parseVerifyPropertyTarget(callee);
@@ -3650,28 +3640,15 @@ class Emitter {
       return null;
     }
 
-    // TypeError tests relying on JS BigInt-vs-Number type distinction can't be replicated in PHP.
-    if (classExpr.includes('TypeError') && fnNode) {
-      // X.add/subtract/with(7n): a BigInt arg throws the SAME TypeError as a Number
-      // arg would (the param rejects all primitives), so lower 7n → 7 and emit the
-      // assertion faithfully — fall through to the generic path below. Must run
-      // before arrowHasBigIntArg, which would otherwise skip it.
-      if (!arrowBigIntArgIsAlwaysTypeError(fnNode)) {
-        if (arrowHasBigIntArg(fnNode)) {
-          // BigInt arg where a Number would NOT throw (e.g. fromEpochMilliseconds(42n)):
-          // drop just this assertion but keep the rest of the fixture running.
-          this.emitSkipAndDefer(node, 'BigInt literal in TypeError assertion; BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-        if (arrowCallsWithNumber(fnNode, 'fromEpochNanoseconds')) {
-          this.emitSkipAndDefer(node, 'Number passed to fromEpochNanoseconds; BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-        if (arrowInstantCtorWithNumberArg(fnNode)) {
-          this.emitSkipAndDefer(node, 'Number literal passed to new Temporal.Instant(); BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-      }
+    // A BigInt arg where a Number would NOT throw (e.g. fromEpochMilliseconds(42n)):
+    // the distinction is not replicable, so drop just this assertion and keep the rest
+    // of the fixture running. X.add/subtract/with(7n) is exempt — its param rejects
+    // every primitive, so a BigInt throws the SAME TypeError a Number would and the
+    // assertion lowers faithfully (7n → 7) through the generic path below.
+    if (classExpr.includes('TypeError') && fnNode
+        && !arrowBigIntArgIsAlwaysTypeError(fnNode) && arrowHasBigIntArg(fnNode)) {
+      this.emitSkipAndDefer(node, 'BigInt literal in TypeError assertion; BigInt vs Number distinction not replicable in PHP');
+      return null;
     }
 
     // PHP comparison operators (<, <=, >, >=) do not call valueOf() and thus cannot
