@@ -133,14 +133,6 @@ final class DurationRounding
         $anchor = $relativeToProvided ? RelativeTo::resolveAnchor($rtRawForZdt) : null;
 
         if ($needsRelativeTo && !$relativeToProvided) {
-            // Distinguish "key absent" (= JS undefined → RangeError) from "key
-            // present with PHP null" (= JS null → TypeError per
-            // GetTemporalRelativeToOption "If value is not a String or an Object,
-            // throw a TypeError"). extractRelativeTo collapses both to false
-            // for the unneeded path; only re-inspect here when the option matters.
-            if (array_key_exists('relativeTo', $roundTo) && $roundTo['relativeTo'] === null) {
-                throw new TypeError('relativeTo must be a string, property bag, or Temporal date/datetime.');
-            }
             throw new RangeError(
                 'Duration::round() with calendar units (years, months, weeks) requires a relativeTo option.',
             );
