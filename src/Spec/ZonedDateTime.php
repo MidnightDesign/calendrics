@@ -42,6 +42,11 @@ final class ZonedDateTime implements Stringable
 
     private const int MS_PER_SECOND = 1_000;
 
+    // Stands in for JS `undefined` on an optional argument whose omitted behavior
+    // differs from its behavior for JS null. A null default would collapse the two,
+    // which is what GetOptionsObject and ToTemporalTime distinguish.
+    private const string OMITTED = "\0omitted";
+
     // -------------------------------------------------------------------------
     // Actual stored property
     // -------------------------------------------------------------------------
@@ -467,12 +472,12 @@ final class ZonedDateTime implements Stringable
      * e.g. '2020-01-01T12:00:00+05:30[Asia/Kolkata]'.
      *
      * @param self|string|array<array-key, mixed>|object $item    ZonedDateTime, ISO string, or property-bag array/object.
-     * @param array<array-key, mixed>|object|null $options Options array; supports 'disambiguation' (string).
+     * @param array<array-key, mixed>|object $options Options array; supports 'disambiguation' (string).
      * @throws TypeError              for unsupported types.
      * @throws RangeError for invalid strings or property bags.
      * @psalm-api
      */
-    public static function from(string|array|object $item, mixed $options = null): self
+    public static function from(string|array|object $item, mixed $options = []): self
     {
         // Each branch of ToTemporalZonedDateTime reaches GetOptionsObject at a different
         // point, and the difference is observable on an options bag with accessors:
@@ -623,17 +628,17 @@ final class ZonedDateTime implements Stringable
     /**
      * Returns a new ZonedDateTime with the time portion replaced.
      *
-     * If $time is null the time is set to midnight (00:00:00).
-     * Accepts PlainTime, null, a time string, or a property-bag array.
+     * Called with no argument the time is set to midnight (00:00:00); an explicit
+     * null is a TypeError, as it is for JS `null` in ToTemporalTime.
      *
-     * @param PlainTime|string|array<array-key, mixed>|object|null $time PlainTime, null, string, or array.
+     * @param PlainTime|string|array<array-key, mixed>|object $time PlainTime, string, or array.
      * @psalm-api
      */
-    public function withPlainTime(string|array|object|null $time = null): self
+    public function withPlainTime(mixed $time = self::OMITTED): self
     {
         // When called with no arguments, use startOfDay semantics (TC39 spec).
         // This handles cross-midnight DST gaps correctly.
-        if ($time === null) {
+        if ($time === self::OMITTED) {
             return $this->startOfDay();
         }
         if ($time instanceof PlainTime) {
@@ -725,15 +730,15 @@ final class ZonedDateTime implements Stringable
      *   - timeZoneName: 'auto' (default, include name) | 'never' | 'critical'
      *   - calendarName: 'auto' (default, omit for iso8601) | 'always' | 'never' | 'critical'
      *
-     * @param array<array-key, mixed>|object|null $options null, array, or object (treated as empty bag).
+     * @param array<array-key, mixed>|object $options null, array, or object (treated as empty bag).
      * @throws TypeError              if option values have wrong types.
      * @throws RangeError if option values are invalid strings.
      * @psalm-api
      */
     #[\Override]
-    public function toString(mixed $options = null): string
+    public function toString(mixed $options = []): string
     {
-        $options = Options::normalizeOptions($options, [
+        $options = Options::requireObject($options, [
             'calendarName',
             'fractionalSecondDigits',
             'offset',
@@ -916,7 +921,7 @@ final class ZonedDateTime implements Stringable
      *   - calendar: calendar identifier appended as u-ca locale extension
      *
      * @param string|array<array-key, mixed>|null $locales BCP 47 locale string or array of strings.
-     * @param array<array-key, mixed>|object|null $options Intl.DateTimeFormat options array.
+     * @param array<array-key, mixed>|object $options Intl.DateTimeFormat options array.
      * @psalm-api
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
@@ -965,10 +970,10 @@ final class ZonedDateTime implements Stringable
      * Time units add nanoseconds directly to the epoch.
      *
      * @param Duration|string|array<array-key, mixed>|object $duration Duration, ISO 8601 duration string, or property-bag array.
-     * @param array<array-key, mixed>|object|null $options Options array; supports 'overflow' ('constrain'|'reject').
+     * @param array<array-key, mixed>|object $options Options array; supports 'overflow' ('constrain'|'reject').
      * @psalm-api
      */
-    public function add(string|array|object $duration, mixed $options = null): self
+    public function add(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return ZonedArithmetic::add($this, 1, $dur, $options);
@@ -978,10 +983,10 @@ final class ZonedDateTime implements Stringable
      * Returns a new ZonedDateTime with the given duration subtracted.
      *
      * @param Duration|string|array<array-key,mixed>|object $duration Duration, ISO 8601 duration string, or property-bag array.
-     * @param array<array-key, mixed>|object|null $options Options array; supports 'overflow' ('constrain'|'reject').
+     * @param array<array-key, mixed>|object $options Options array; supports 'overflow' ('constrain'|'reject').
      * @psalm-api
      */
-    public function subtract(string|array|object $duration, mixed $options = null): self
+    public function subtract(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return ZonedArithmetic::add($this, -1, $dur, $options);
@@ -993,10 +998,10 @@ final class ZonedDateTime implements Stringable
      * Default largestUnit is 'hour' (per TC39 ZonedDateTime spec).
      *
      * @param self|string|array<array-key, mixed>|object $other   ZonedDateTime or ZDT string.
-     * @param array<array-key, mixed>|object|null $options Options array with largestUnit, smallestUnit, roundingMode, roundingIncrement.
+     * @param array<array-key, mixed>|object $options Options array with largestUnit, smallestUnit, roundingMode, roundingIncrement.
      * @psalm-api
      */
-    public function since(string|array|object $other, mixed $options = null): Duration
+    public function since(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -1013,10 +1018,10 @@ final class ZonedDateTime implements Stringable
      * Default largestUnit is 'hour' (per TC39 ZonedDateTime spec).
      *
      * @param self|string|array<array-key, mixed>|object $other   ZonedDateTime or ZDT string.
-     * @param array<array-key, mixed>|object|null $options Options array with largestUnit, smallestUnit, roundingMode, roundingIncrement.
+     * @param array<array-key, mixed>|object $options Options array with largestUnit, smallestUnit, roundingMode, roundingIncrement.
      * @psalm-api
      */
-    public function until(string|array|object $other, mixed $options = null): Duration
+    public function until(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -1165,7 +1170,7 @@ final class ZonedDateTime implements Stringable
      * @param array<array-key, mixed>|object|null       $options Options bag: ['overflow' => ..., 'disambiguation' => ...]
      * @psalm-api
      */
-    public function with(array|object $fields, mixed $options = null): self
+    public function with(array|object $fields, mixed $options = []): self
     {
         // Reject Temporal objects (IsPartialTemporalObject step 2).
         if (
@@ -1218,7 +1223,7 @@ final class ZonedDateTime implements Stringable
         // GetOptionsObject reads every recognized option once, in the spec's
         // alphabetical order. The resolvers below take that snapshot rather than the
         // raw bag, so an accessor fires exactly once and in that order.
-        $opts = Options::normalizeOptions($options, ['disambiguation', 'offset', 'overflow']);
+        $opts = Options::requireObject($options, ['disambiguation', 'offset', 'overflow']);
         $overflow = Options::overflowFromBag($opts);
         $disambiguation = ZonedFields::disambiguationFromBag($opts);
 
