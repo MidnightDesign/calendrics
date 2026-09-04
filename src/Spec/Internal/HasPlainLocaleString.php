@@ -11,8 +11,8 @@ use Calendrics\Exception\TypeError;
  *
  * All five render a wall-clock value that carries no zone, so they format in UTC and
  * differ only in which components they default to, which style options they reject,
- * which calendar they must agree with, and how their fields collapse into a single
- * timestamp — the five hooks below.
+ * which calendar they must agree with, and how their fields collapse into an epoch
+ * instant — the five hooks below.
  *
  * {@see \Calendrics\Spec\ZonedDateTime} and {@see \Calendrics\Spec\Instant} are
  * deliberately not users: both format an exact instant in a real time zone through
@@ -53,14 +53,18 @@ trait HasPlainLocaleString
     abstract protected function localeCalendarId(): ?string;
 
     /**
-     * Converts this temporal value to a Unix timestamp (seconds) suitable for
-     * IntlDateFormatter::format().
+     * Converts this temporal value to the epoch seconds and sub-second nanoseconds
+     * {@see IntlFormatter::formatEpoch()} formats from, reading the wall-clock fields
+     * as UTC.
      *
-     * Types with sub-second fields (PlainTime, PlainDateTime) return a float whose
-     * fractional part carries them, so fractionalSecondDigits formatting works;
-     * date-only types return whole seconds.
+     * The two parts stay separate because a single number cannot carry both across the
+     * whole ±271821-year range: at the extremes a double's ulp is wider than the
+     * sub-second remainder, which would round 275760-09-13T23:59:59.999999999 up into
+     * the following day.
+     *
+     * @return array{int, int} Epoch seconds, then nanoseconds within that second.
      */
-    abstract protected function toLocaleTimestamp(): int|float;
+    abstract protected function toLocaleEpochParts(): array;
 
     /**
      * Returns a locale-sensitive string representation using IntlDateFormatter.
@@ -110,8 +114,8 @@ trait HasPlainLocaleString
 
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, $defaultComponents);
 
-        $timestamp = $this->toLocaleTimestamp();
-        $result = $formatter->format($timestamp);
+        [$epochSec, $subNs] = $this->toLocaleEpochParts();
+        $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs, $timeZone, $locale);
 
         return $result !== false ? $result : $this->toString();
     }

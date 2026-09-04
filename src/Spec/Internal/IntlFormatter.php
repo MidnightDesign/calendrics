@@ -219,7 +219,7 @@ final class IntlFormatter
         string $timeZone,
         string $locale,
     ): string|false {
-        $calendar = self::intlCalendarFor(self::icuTimeZoneId($timeZone), $locale);
+        $calendar = self::formattingCalendarFor(self::icuTimeZoneId($timeZone), $locale);
         if ($calendar === null) {
             return $formatter->format($epochSec);
         }
@@ -292,16 +292,12 @@ final class IntlFormatter
             $locale = self::applyHourCycle($locale, $hc);
         }
 
-        // IntlDateFormatter only respects a non-gregorian calendar when an explicit
-        // IntlCalendar instance is passed, so resolve the locale's calendar first and
-        // pass one whenever it is not gregorian. The calendar may come from a keyword
-        // (en-u-ca-islamic-tbla, en@calendar=islamic-tbla — including the one appended
-        // above for the `calendar` option) or from the locale's own default, as with
-        // th-TH → buddhist, which carries no keyword at all.
-        $calendarObj = self::intlCalendarFor($timeZone, $locale);
-        if ($calendarObj?->getType() === 'gregorian') {
-            $calendarObj = null;
-        }
+        // IntlDateFormatter only respects the calendar an explicit IntlCalendar instance
+        // carries, so resolve the locale's calendar and always pass it. The calendar may
+        // come from a keyword (en-u-ca-islamic-tbla, en@calendar=islamic-tbla — including
+        // the one appended above for the `calendar` option) or from the locale's own
+        // default, as with th-TH → buddhist, which carries no keyword at all.
+        $calendarObj = self::formattingCalendarFor($timeZone, $locale);
 
         $styleMap = [
             'full' => \IntlDateFormatter::FULL,
@@ -475,6 +471,42 @@ final class IntlFormatter
     private static function intlCalendarFor(?string $timeZone, string $locale): ?\IntlCalendar
     {
         return \IntlCalendar::createInstance($timeZone, $locale);
+    }
+
+    /**
+     * Returns the calendar a locale formats through, reckoned as proleptic Gregorian.
+     *
+     * ICU's Gregorian calendar switches to Julian reckoning before the 1582 cutover, so
+     * 1500-01-01 would render as 1499-12-23 and the earliest representable Temporal date
+     * as 271817-11-19 BC. Temporal counts proleptic Gregorian days across its whole
+     * ±271821-year range, so the cutover moves below ICU's minimum date, which is where
+     * ICU clamps -INF.
+     *
+     * ICU models the ISO 8601 calendar as a Gregorian one with ISO week rules but returns
+     * it as the base class, out of reach of setGregorianChange(). The plain Gregorian
+     * calendar stands in for it: the two differ only in the week numbering, which no
+     * date or time pattern reads, and the formatter keeps its own locale for the
+     * pattern and the names.
+     */
+    private static function formattingCalendarFor(?string $timeZone, string $locale): ?\IntlCalendar
+    {
+        $calendar = self::intlCalendarFor($timeZone, $locale);
+        if ($calendar === null) {
+            return null;
+        }
+
+        if (!$calendar instanceof \IntlGregorianCalendar) {
+            if ($calendar->getType() !== 'iso8601') {
+                return $calendar;
+            }
+            $calendar = self::intlCalendarFor($timeZone, '@calendar=gregorian');
+            if (!$calendar instanceof \IntlGregorianCalendar) {
+                return $calendar;
+            }
+        }
+
+        $calendar->setGregorianChange(-INF);
+        return $calendar;
     }
 
     /**

@@ -6,14 +6,24 @@
 #   ./tools/sync-test262.sh            # sync all implemented classes
 #   ./tools/sync-test262.sh Duration   # sync only Duration
 #
-# This does a sparse checkout of just the Temporal directories we need,
-# then rsyncs them into tests/Test262/data/.
+# This does a sparse checkout of just the Temporal directories we need, plus the
+# Temporal-tagged fixtures under the ECMA-402 formatters, then rsyncs them into
+# tests/Test262/data/.
 
 set -euo pipefail
 
 REPO_URL="https://github.com/tc39/test262.git"
 CLONE_DIR="$(mktemp -d)"
 DATA_DIR="$(cd "$(dirname "$0")/../tests/Test262/data" && pwd)"
+
+# ECMA-402 formatter entry points that accept Temporal values directly. Their
+# Temporal-tagged fixtures live outside test/intl402/Temporal/ but exercise the
+# same toLocaleString code path, so they are always synced regardless of the
+# class filter.
+INTL_FORMATTERS=(
+    DateTimeFormat
+    DurationFormat
+)
 
 # All Temporal classes we track
 ALL_CLASSES=(
@@ -50,6 +60,10 @@ SPARSE_PATHS=()
 for class in "${CLASSES[@]}"; do
     SPARSE_PATHS+=("test/built-ins/Temporal/$class")
     SPARSE_PATHS+=("test/intl402/Temporal/$class")
+done
+
+for formatter in "${INTL_FORMATTERS[@]}"; do
+    SPARSE_PATHS+=("test/intl402/$formatter")
 done
 
 git sparse-checkout set "${SPARSE_PATHS[@]}" 2>/dev/null
@@ -142,6 +156,51 @@ done
 
 total_added=$((total_added + intl402_added))
 total_removed=$((total_removed + intl402_removed))
+
+# Sync the Temporal-tagged subset of the ECMA-402 formatter tests. The rest of
+# those directories tests Intl surface this project does not implement, so the
+# corpus takes only the files upstream tags with the Temporal feature.
+echo ""
+echo "==> Syncing Temporal-tagged Intl formatter test files..."
+
+for formatter in "${INTL_FORMATTERS[@]}"; do
+    src="$CLONE_DIR/test/intl402/$formatter"
+    dst="$INTL402_DIR/$formatter"
+
+    if [[ ! -d "$src" ]]; then
+        echo "    WARN: $formatter not found in upstream repo, skipping"
+        continue
+    fi
+
+    if [[ -d "$dst" ]]; then
+        before=$(find "$dst" -name '*.js' | wc -l)
+    else
+        before=0
+    fi
+
+    # Upstream tags these with `features: [Temporal]` in the YAML frontmatter.
+    tagged=$(mktemp)
+    (cd "$src" && grep -rl --include='*.js' -E '^features:.*\bTemporal\b' . | sed 's|^\./||' | sort) > "$tagged"
+
+    rm -rf "$dst"
+    mkdir -p "$dst"
+    rsync -rl --no-group --no-owner --files-from="$tagged" "$src/" "$dst/"
+    rm -f "$tagged"
+
+    after=$(find "$dst" -name '*.js' | wc -l)
+
+    added=$((after - before))
+    if [[ $added -gt 0 ]]; then
+        echo "    intl402/$formatter: $before -> $after (+$added)"
+        total_added=$((total_added + added))
+    elif [[ $added -lt 0 ]]; then
+        removed=$((-added))
+        echo "    intl402/$formatter: $before -> $after (-$removed removed)"
+        total_removed=$((total_removed + removed))
+    else
+        echo "    intl402/$formatter: $after (up to date)"
+    fi
+done
 
 echo ""
 echo "==> Done. Added: $total_added, Removed: $total_removed"

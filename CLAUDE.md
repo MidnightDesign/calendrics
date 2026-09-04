@@ -59,13 +59,20 @@ The reliable tell is the diff: if the source change is under `src/Spec/`, no tes
 
 **A spec-layer fix with no test is better than a spec-layer fix with a hand-written test.** Landing the fix untested is the accepted outcome. Take these two routes first, in order:
 
-1. **Find the upstream fixture.** Look under `tests/Test262/data/<Type>/…` for a fixture that reaches the code you changed. If one exists but does not exercise your case, the corpus may be stale — run `composer test262:sync`. If it exists and *should* cover your case but the PHP side never runs it, that is the real bug: the fixture may be missing from `tests/Test262/scripts/` (regenerate with `composer test262:build`), skipped by `RunnerTest`, or reported incomplete by a transpiler gap. Fix that instead of writing your own test.
+1. **Find the upstream fixture.** Start under `tests/Test262/data/<Type>/…`, but read that directory as a *subset* of test262, not as test262 — `tools/sync-test262.sh` decides what lands there. A miss means "not synced" at least as often as "not written".
 
-2. **File for an upstream test.** Only after you have *actually checked* — read the candidate fixtures, confirmed the case is absent, and confirmed the pre-fix code passes the whole suite — open an issue labeled `missing-upstream-test`. That issue tracks getting a new test contributed to tc39/test262, so it needs the input shape, the expected result, the TC39 algorithm step that mandates it, and a JS reproduction against the `Temporal` namespace. "I could not find one" is not a check; a search you can show is.
+   Before concluding upstream has no test, gut-check the behavior: *obvious* or esoteric? A documented option any user would reach for — hour padding, a rounding mode, an overflow rejection — is almost certainly pinned somewhere in test262. "There is no way TC39 has no test for this" is usually right, so keep digging.
+
+   Work through all three before giving up:
+   - **Stale corpus** — run `composer test262:sync`.
+   - **Synced but never run** — the fixture is absent from `tests/Test262/scripts/` (regenerate with `composer test262:build`), skipped by `RunnerTest`, or reported incomplete by a transpiler gap. Fix that instead of writing your own test.
+   - **Outside the sync scope** — sparse-clone upstream and grep `test/`. ECMA-402 pins `toLocaleString` behavior under `test/intl402/DateTimeFormat/` and `test/intl402/DurationFormat/`; only the `features: [Temporal]` files there are synced, and the untagged ones still exercise `IntlFormatter`, because `toLocaleString` is specified as `new Intl.DateTimeFormat(…).format(this)`.
+
+2. **File for an upstream test.** Only after you have *actually checked* — read the candidate fixtures, confirmed the case is absent from a fresh upstream clone rather than from `tests/Test262/data/`, and confirmed the pre-fix code passes the whole suite — open an issue labeled `missing-upstream-test`. That issue tracks getting a new test contributed to tc39/test262, so it needs the input shape, the expected result, the TC39 algorithm step that mandates it, and a JS reproduction against the `Temporal` namespace. "I could not find one" is not a check; a search you can show is.
 
 ## test262 conformance suite
 
-`tests/Test262/data/` — verbatim mirror of upstream tc39/test262 JS files. **Do not edit these.** If a test fails, fix the implementation. `tests/Test262/data/CLAUDE.md` has the rules.
+`tests/Test262/data/` — verbatim copies of a subset of the upstream tc39/test262 JS files; `tools/sync-test262.sh` defines the subset. **Do not edit these.** If a test fails, fix the implementation. `tests/Test262/data/CLAUDE.md` has the rules.
 
 `tests/Test262/scripts/` — generated PHP transpiled from the JS. **Do not hand-edit.** Regenerate via `composer test262:build`. The scripts are loaded by `tests/Test262/RunnerTest.php` against the `Calendrics\Spec\` layer.
 
