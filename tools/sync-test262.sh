@@ -28,11 +28,16 @@ ALL_CLASSES=(
     ZonedDateTime
 )
 
+# Upstream areas that are not organized per class. They are synced only on a
+# full sync, so `sync-test262.sh PlainDate` keeps meaning "just that class".
+SYNC_NON_CLASS_AREAS=false
+
 # If args given, sync only those classes; otherwise sync all
 if [[ $# -gt 0 ]]; then
     CLASSES=("$@")
 else
     CLASSES=("${ALL_CLASSES[@]}")
+    SYNC_NON_CLASS_AREAS=true
 fi
 
 cleanup() {
@@ -51,6 +56,10 @@ for class in "${CLASSES[@]}"; do
     SPARSE_PATHS+=("test/built-ins/Temporal/$class")
     SPARSE_PATHS+=("test/intl402/Temporal/$class")
 done
+
+if [[ $SYNC_NON_CLASS_AREAS == true ]]; then
+    SPARSE_PATHS+=("test/staging/Temporal")
+fi
 
 git sparse-checkout set "${SPARSE_PATHS[@]}" 2>/dev/null
 
@@ -142,6 +151,73 @@ done
 
 total_added=$((total_added + intl402_added))
 total_removed=$((total_removed + intl402_removed))
+
+# ---------------------------------------------------------------------------
+# Upstream areas that are not organized per class
+# ---------------------------------------------------------------------------
+#
+# Synced:
+#
+#   test/staging/Temporal/ -> data/staging/
+#     A June-2024 API-removals guard plus V8's ported calendar-day-of-week
+#     suite. The redundant "Temporal" path segment is dropped, the same way the
+#     intl402 tree above drops it.
+#
+# Deliberately NOT synced:
+#
+#   test/built-ins/Temporal/*.js (top level: getOwnPropertyNames.js, keys.js,
+#     prop-desc.js)
+#     All three assert JS object-model facts about the `Temporal` namespace
+#     object: which own property names it has, that it exposes no enumerable
+#     properties, and the writable/enumerable/configurable attributes of the
+#     global `Temporal` property. A PHP namespace has no property table, so
+#     none of the three can ever run — they transpile to Assert::incomplete().
+#
+#   test/intl402/DurationFormat/
+#     Intl.DurationFormat is a separate API this library does not implement:
+#     ext-intl exposes no equivalent, and Duration::toLocaleString() is a
+#     documented toString() passthrough. All 110 fixtures build a
+#     `new Intl.DurationFormat(...)`, which the transpiler cannot lower, so they
+#     would land as 110 permanent incompletes.
+#
+#   test/intl402/DateTimeFormat/
+#     Not yet enabled here. To turn it on, add "test/intl402/DateTimeFormat" to
+#     SPARSE_PATHS above and rsync it to "$DATA_DIR/intl402/DateTimeFormat".
+
+if [[ $SYNC_NON_CLASS_AREAS == true ]]; then
+    echo ""
+    echo "==> Syncing staging test files..."
+
+    src="$CLONE_DIR/test/staging/Temporal"
+    dst="$DATA_DIR/staging"
+
+    if [[ ! -d "$src" ]]; then
+        echo "    WARN: test/staging/Temporal not found in upstream repo, skipping"
+    else
+        if [[ -d "$dst" ]]; then
+            before=$(find "$dst" -name '*.js' | wc -l)
+        else
+            before=0
+        fi
+
+        mkdir -p "$dst"
+        rsync -rl --no-group --no-owner --delete --include='*/' --include='*.js' --exclude='*' "$src/" "$dst/"
+
+        after=$(find "$dst" -name '*.js' | wc -l)
+
+        added=$((after - before))
+        if [[ $added -gt 0 ]]; then
+            echo "    staging: $before -> $after (+$added)"
+            total_added=$((total_added + added))
+        elif [[ $added -lt 0 ]]; then
+            removed=$((-added))
+            echo "    staging: $before -> $after (-$removed removed)"
+            total_removed=$((total_removed + removed))
+        else
+            echo "    staging: $after (up to date)"
+        fi
+    fi
+fi
 
 echo ""
 echo "==> Done. Added: $total_added, Removed: $total_removed"
