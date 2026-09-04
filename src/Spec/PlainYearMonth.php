@@ -1056,8 +1056,8 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         }
 
         if ($normLargest === 'month') {
-            // $normSmallest is 'month' too: the rank check above rejects a year-ranked
-            // smallestUnit against a month-ranked largestUnit.
+            // $normSmallest is 'month' too: a 'year' smallestUnit under a 'month'
+            // largestUnit is rejected above.
             if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
                 return new Duration(months: $sinceSign * $totalMonths);
             }
