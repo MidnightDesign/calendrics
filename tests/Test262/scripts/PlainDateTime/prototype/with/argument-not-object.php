@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\PlainDateTime(2000, 5, 2, 12, 34, 56, 987, 654, 321);
 $args = [JsUndefined::singleton(), null, true, '2020-01-12T10:20:30', \Calendrics\Tests\Test262\JsSymbol::singleton(), 2020, 2020, NAN];
 foreach ($args as $argument) {
-if ($argument === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$instance, &$argument) { return $instance->with($argument); }, "Does not support " . (gettype($argument)) . "");
 }

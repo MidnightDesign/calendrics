@@ -10,7 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $badOptions = [null, true, 'some string', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 2];
 foreach ($badOptions as $value) {
-if ($value === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$value) { return \Calendrics\Spec\PlainMonthDay::from(['monthCode' => 'M12', 'day' => 15], $value); }, "TypeError on wrong options type " . (gettype($value)) . "");
 Assert::throws(\TypeError::class, function () use (&$value) { return \Calendrics\Spec\PlainMonthDay::from(new \Calendrics\Spec\PlainMonthDay(12, 15), $value); }, 'TypeError thrown before cloning PlainMonthDay instance');
 Assert::throws(\RangeException::class, function () use (&$value) { return \Calendrics\Spec\PlainMonthDay::from('1976-11-18Z', $value); }, 'Invalid string string processed before throwing TypeError');
