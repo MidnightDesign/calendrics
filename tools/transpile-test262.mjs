@@ -558,7 +558,6 @@ function toBigIntArgAsPhpFloat(argNode) {
   return /[.eE]/.test(digits) ? digits : `${digits}.0`;
 }
 
-/** Operator precedence table (higher = binds tighter). */
 /**
  * Translate `typeof $arg === 'jsType'` to a PHP boolean expression.
  * Returns null if the jsType has no meaningful PHP equivalent.
@@ -584,22 +583,72 @@ function typeofToPhp(phpArg, jsType) {
   }
 }
 
-const OP_PREC = {
-  '**': 15, '*': 14, '/': 14, '%': 14,
-  '+': 13, '-': 13,
-  '<<': 12, '>>': 12, '>>>': 12,
+/** PHP operator precedence (higher binds tighter). */
+const PHP_OP_PREC = {
+  '**': 16,
+  '*': 15, '/': 15, '%': 15,
+  '+': 14, '-': 14,
+  '<<': 13, '>>': 13, '>>>': 13,
+  '.': 12,
   '<': 11, '<=': 11, '>': 11, '>=': 11,
   '==': 10, '!=': 10, '===': 10, '!==': 10,
-  '&': 9, '^': 8, '|': 7, '&&': 6, '||': 5, '??': 5,
+  '&': 9, '^': 8, '|': 7,
+  '&&': 6, '||': 5, '??': 4,
 };
 
-// Precedence among the logical operators as PHP reads them, which is not how
-// JavaScript reads them: PHP puts `??` below both `&&` and `||`, while JavaScript
-// refuses to mix `??` with either unless the source parenthesises it. Parentheses the
-// JS source carried are not in the AST, so an operand binding more loosely than its
-// parent has to have them put back — otherwise `a && (b || c)` emits as
-// `a && b || c`, which PHP reads as `(a && b) || c`.
-const PHP_LOGICAL_PREC = { '&&': 3, '||': 2, '??': 1 };
+const PHP_RIGHT_ASSOCIATIVE_OPS = new Set(['**', '??']);
+const PHP_NON_ASSOCIATIVE_OPS = new Set(['<', '<=', '>', '>=', '==', '!=', '===', '!==']);
+const PHP_LOGICAL_OPS = new Set(['&&', '||', '??']);
+
+function phpOperator(node) {
+  if (node.type === 'LogicalExpression') return node.operator;
+  if (node.type !== 'BinaryExpression') return null;
+  return node.operator === '+' && hasStringInPlusChain(node) ? '.' : node.operator;
+}
+
+function parenthesizeOperand(php, node, parentOp, side) {
+  if (node.type === 'ConditionalExpression') return `(${php})`;
+  if (parentOp === 'unary') {
+    return ['BinaryExpression', 'LogicalExpression', 'UnaryExpression'].includes(node.type)
+      ? `(${php})`
+      : php;
+  }
+
+  const childOp = phpOperator(node);
+  if (childOp === null) return php;
+
+  const childPrec = PHP_OP_PREC[childOp];
+  const parentPrec = PHP_OP_PREC[parentOp];
+  if (childPrec === undefined || parentPrec === undefined) return php;
+  if (childPrec < parentPrec) return `(${php})`;
+  if (childPrec > parentPrec) {
+    return side === 'right' && node.type === 'BinaryExpression' && !PHP_LOGICAL_OPS.has(parentOp)
+      ? `(${php})`
+      : php;
+  }
+
+  if (childOp === parentOp && PHP_LOGICAL_OPS.has(parentOp)) return php;
+  if (PHP_NON_ASSOCIATIVE_OPS.has(parentOp)) return `(${php})`;
+  if (PHP_RIGHT_ASSOCIATIVE_OPS.has(parentOp)) return side === 'left' ? `(${php})` : php;
+  return side === 'right' ? `(${php})` : php;
+}
+
+function objectPatternKey(prop) {
+  if (prop.type !== 'Property') return null;
+  if (!prop.computed && prop.key?.type === 'Identifier') return prop.key.name;
+  if (prop.key?.type === 'Literal'
+      && (typeof prop.key.value === 'string' || typeof prop.key.value === 'number')) {
+    return String(prop.key.value);
+  }
+  return null;
+}
+
+function isSupportedObjectPatternProperty(prop) {
+  if (prop.type === 'RestElement') return prop.argument?.type === 'Identifier';
+  if (objectPatternKey(prop) === null) return false;
+  return prop.value?.type === 'Identifier'
+    || (prop.value?.type === 'AssignmentPattern' && prop.value.left?.type === 'Identifier');
+}
 
 class Emitter {
   constructor(source, objectMode = false) {
@@ -913,8 +962,17 @@ class Emitter {
         continue;
       }
       if (decl.id.type === 'ObjectPattern') {
+        if (!decl.id.properties.every(isSupportedObjectPatternProperty)) {
+          this.emitIncomplete('untranslatable: destructuring assignment (unsupported property pattern)');
+          return;
+        }
+        const hasRest = decl.id.properties.some(prop => prop.type === 'RestElement');
         // const { X } = Temporal; → track alias, emit nothing
         if (decl.init?.type === 'Identifier' && decl.init.name === 'Temporal') {
+          if (hasRest) {
+            this.emitIncomplete('untranslatable: rest destructuring of the Temporal namespace');
+            return;
+          }
           for (const prop of decl.id.properties) {
             if (prop.type === 'Property' && !prop.computed
                 && prop.key?.type === 'Identifier' && prop.value?.type === 'Identifier') {
@@ -927,6 +985,10 @@ class Emitter {
         if (decl.init?.type === 'MemberExpression' && !decl.init.computed
             && decl.init.object?.type === 'Identifier' && decl.init.object.name === 'Temporal'
             && decl.init.property?.type === 'Identifier') {
+          if (hasRest) {
+            this.emitIncomplete('untranslatable: rest destructuring of a Temporal class');
+            return;
+          }
           const className = decl.init.property.name;
           for (const prop of decl.id.properties) {
             if (prop.type === 'Property' && !prop.computed && prop.key?.type === 'Identifier') {
@@ -956,23 +1018,26 @@ class Emitter {
         const rhsVarName = rhsIsSimpleVar ? rhsPhp.slice(1) : null;
         // In array mode,  objectVars are PHP arrays    → use ['key'] access.
         // In object mode, objectVars are stdClass       → use ->key access.
-        const rhsIsObjectVar = rhsVarName !== null && this.objectVars.has(rhsVarName);
+        const rhsIsObjectValue = decl.init.type === 'ObjectExpression'
+          || (rhsVarName !== null && this.objectVars.has(rhsVarName));
+        const taken = decl.id.properties
+          .filter(prop => prop.type === 'Property')
+          .map(prop => phpStr(objectPatternKey(prop)));
         for (const prop of decl.id.properties) {
           // Rest: const { a, ...others } = expr → everything the named properties left over.
           if (prop.type === 'RestElement' && prop.argument?.type === 'Identifier') {
-            const taken = decl.id.properties
-              .filter(p => p.type === 'Property' && !p.computed && p.key?.type === 'Identifier')
-              .map(p => `'${p.key.name}'`);
             this.emit(`$${prop.argument.name} = ${HARNESS_NS}Js::destructureRest(${objPhp}, [${taken.join(', ')}]);`);
             continue;
           }
-          if (prop.type !== 'Property' || prop.computed || prop.key?.type !== 'Identifier') continue;
-          const keyName = prop.key.name;
+          if (prop.type !== 'Property') continue;
+          const keyName = objectPatternKey(prop);
           // Determine access pattern: objectVars in array mode → ['key'], in object mode → ->key.
           // Variables NOT in objectVars are Temporal instances / primitives → ->key.
-          const access_plain = rhsIsObjectVar
-            ? (this.objectMode ? `${objPhp}->${keyName}` : `${objPhp}['${keyName}']`)
-            : `${objPhp}->${keyName}`;
+          const access_plain = prop.key.type === 'Identifier'
+            ? (rhsIsObjectValue
+              ? (this.objectMode ? `${objPhp}->${keyName}` : `${objPhp}['${keyName}']`)
+              : `${objPhp}->${keyName}`)
+            : `${HARNESS_NS}Js::destructure(${objPhp}, ${phpStr(keyName)})`;
           // Simple: { foo } or { foo: foo }
           if (prop.value?.type === 'Identifier') {
             const varName = prop.value.name;
@@ -3145,11 +3210,7 @@ class Emitter {
     if (arg === null) return null;
     // Word operators (void) need a space; symbol operators (!, -, +, ~) do not.
     const space = /^[a-z]/.test(node.operator) ? ' ' : '';
-    // Parenthesise complex arguments so that e.g. -(a - b) is not mis-parsed
-    // as (-a) - b by PHP's operator-precedence rules.
-    const complex = node.argument.type === 'BinaryExpression'
-      || node.argument.type === 'UnaryExpression';
-    const wrapped = complex ? `(${arg})` : arg;
+    const wrapped = parenthesizeOperand(arg, node.argument, 'unary', 'right');
     return `${node.operator}${space}${wrapped}`;
   }
 
@@ -3214,34 +3275,17 @@ class Emitter {
     if (combinedBig !== null && overflowsInt64(combinedBig)) {
       return null; // caller handles: variable decl → emitIncomplete, array → sentinel
     }
-    let left  = this.transpileExpr(node.left);
-    let right = this.transpileExpr(node.right);
+    const left = this.transpileExpr(node.left);
+    const right = this.transpileExpr(node.right);
     if (left === null || right === null) return null;
-    let op = node.operator === '===' ? '===' : node.operator;
-    if (op === '+') {
-      if (hasStringInPlusChain(node)) op = '.';
-    }
+    const op = phpOperator(node);
     // JS `%` is a floating-point remainder; when the left operand involves
     // division (producing a float), use fmod() to match JS semantics
     // (PHP `%` coerces operands to int, losing the fractional part).
     if (op === '%' && containsDivision(node.left)) {
       return `fmod(num1: ${left}, num2: ${right})`;
     }
-    // Wrap right if it's a binary expression (preserves explicit parenthesisation
-    // from the JS AST, e.g. a / (b * c) → a / (b * c) in PHP).
-    if (node.right.type === 'BinaryExpression') {
-      right = `(${right})`;
-    }
-    // Wrap left if it has lower precedence than the outer operator
-    // e.g. (a + b) * c → left is BinaryExpr with prec 13, outer '*' has prec 14 → wrap
-    if (node.left.type === 'BinaryExpression') {
-      const leftPrec  = OP_PREC[node.left.operator]  ?? 0;
-      const outerPrec = OP_PREC[op] ?? 0;
-      if (leftPrec < outerPrec) {
-        left = `(${left})`;
-      }
-    }
-    return `${left} ${op} ${right}`;
+    return `${parenthesizeOperand(left, node.left, op, 'left')} ${op} ${parenthesizeOperand(right, node.right, op, 'right')}`;
   }
 
   transpileAssignment(node) {
@@ -3255,16 +3299,8 @@ class Emitter {
     const left  = this.transpileExpr(node.left);
     const right = this.transpileExpr(node.right);
     if (left === null || right === null) return null;
-    // JS logical operators (||, &&, ??) map directly to PHP
-    const op = node.operator === '??' ? '??' : node.operator;
-    // Wrap operands that bind more loosely than this operator (a ternary, or a
-    // logical operator PHP ranks below it — see PHP_LOGICAL_PREC).
-    const wrapIf = (php, n) =>
-      n.type === 'ConditionalExpression'
-      || (n.type === 'LogicalExpression' && PHP_LOGICAL_PREC[n.operator] < PHP_LOGICAL_PREC[op])
-        ? `(${php})`
-        : php;
-    return `${wrapIf(left, node.left)} ${op} ${wrapIf(right, node.right)}`;
+    const op = node.operator;
+    return `${parenthesizeOperand(left, node.left, op, 'left')} ${op} ${parenthesizeOperand(right, node.right, op, 'right')}`;
   }
 
   transpileConditional(node) {
