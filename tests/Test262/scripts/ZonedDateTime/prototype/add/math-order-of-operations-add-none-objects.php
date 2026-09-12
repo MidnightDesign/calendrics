@@ -13,7 +13,7 @@ $breakoutUnits = fn($op, $zdt, $d, $options) => $zdt->{$op}((object) JsUndefined
 $zdt = new \Calendrics\Spec\ZonedDateTime(1_580_457_600_000_000_000, '-08:00');
 $d = new \Calendrics\Spec\Duration(0, 1, 0, 1, 0, 0, 0, 0, 0, 0);
 $expected = new \Calendrics\Spec\ZonedDateTime(1_583_049_600_000_000_000, '-08:00');
-$options = null;
+$options = JsUndefined::singleton();
 $result = $zdt->add($d, $options);
 TemporalHelpers::assertZonedDateTimesEqual($result, $expected);
 TemporalHelpers::assertZonedDateTimesEqual($breakoutUnits('add', $zdt, $d, $options), $result);
