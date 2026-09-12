@@ -17,7 +17,6 @@ use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
-use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
@@ -1226,39 +1225,5 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
             $this->nanosecond,
             $calId,
         );
-    }
-
-    #[\Override]
-    protected function localeDefaultComponents(): LocaleComponentMode
-    {
-        return LocaleComponentMode::DateTime;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    #[\Override]
-    protected function toLocaleTimestamp(): int|float
-    {
-        $dt = new \DateTime(
-            sprintf(
-                '%04d-%02d-%02dT%02d:%02d:%02d',
-                $this->isoYear,
-                $this->isoMonth,
-                $this->isoDay,
-                $this->hour,
-                $this->minute,
-                $this->second,
-            ),
-            new \DateTimeZone('UTC'),
-        );
-        $subNs = ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond;
-        if ($subNs === 0) {
-            return $dt->getTimestamp();
-        }
-        return (float) $dt->getTimestamp() + ((float) $subNs / 1e9);
     }
 }

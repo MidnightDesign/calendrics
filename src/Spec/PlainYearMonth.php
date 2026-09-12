@@ -11,7 +11,6 @@ use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
-use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
@@ -1431,29 +1430,5 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             return false;
         }
         return true;
-    }
-
-    #[\Override]
-    protected function localeDefaultComponents(): LocaleComponentMode
-    {
-        return LocaleComponentMode::YearMonth;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    #[\Override]
-    protected function toLocaleTimestamp(): int
-    {
-        // Use referenceISODay to ensure the timestamp falls within the correct
-        // calendar month for non-ISO calendars.
-        $dt = new \DateTime(
-            sprintf('%04d-%02d-%02d 00:00:00', $this->isoYear, $this->isoMonth, $this->referenceISODay),
-            new \DateTimeZone('UTC'),
-        );
-        return $dt->getTimestamp();
     }
 }

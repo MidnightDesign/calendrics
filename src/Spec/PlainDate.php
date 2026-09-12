@@ -16,7 +16,6 @@ use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
-use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
@@ -867,27 +866,5 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
         $subNs = ($ms * EpochLimits::NS_PER_MILLISECOND) + ($us * EpochLimits::NS_PER_MICROSECOND) + $ns;
 
         return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId, $this->calendarId);
-    }
-
-    #[\Override]
-    protected function localeDefaultComponents(): LocaleComponentMode
-    {
-        return LocaleComponentMode::Date;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    #[\Override]
-    protected function toLocaleTimestamp(): int
-    {
-        $dt = new \DateTime(
-            sprintf('%04d-%02d-%02d 00:00:00', $this->isoYear, $this->isoMonth, $this->isoDay),
-            new \DateTimeZone('UTC'),
-        );
-        return $dt->getTimestamp();
     }
 }

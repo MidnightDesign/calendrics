@@ -10,10 +10,8 @@ use Calendrics\Exception\TypeError;
  * The `toLocaleString()` implementation shared by the zoneless `Plain*` types.
  *
  * All five render a wall-clock value that carries no zone, so they format in UTC and
- * differ only in which components they default to, which calendar they must agree
- * with, and how their fields collapse into a single timestamp — the three hooks below.
- * Which style options a type may be given follows from its component mode — see
- * {@see LocaleComponentMode::isDateOnly()}.
+ * share one {@see PlainLocaleFormat} projection for their component mode, supported
+ * styles, calendar, and exact epoch representation.
  *
  * {@see \Calendrics\Spec\ZonedDateTime} and {@see \Calendrics\Spec\Instant} are
  * deliberately not users: both format an exact instant in a real time zone through
@@ -27,29 +25,6 @@ use Calendrics\Exception\TypeError;
 trait HasPlainLocaleString
 {
     abstract public function toString(): string;
-
-    /**
-     * Returns the component mode IntlDateFormatter defaults to when formatting this
-     * type via toLocaleString.
-     */
-    abstract protected function localeDefaultComponents(): LocaleComponentMode;
-
-    /**
-     * Returns this value's calendar identifier for the toLocaleString()
-     * calendar-compatibility check, or null for types that carry no calendar
-     * (PlainTime), which are formattable by any formatter.
-     */
-    abstract protected function localeCalendarId(): ?string;
-
-    /**
-     * Converts this temporal value to a Unix timestamp (seconds) suitable for
-     * IntlDateFormatter::format().
-     *
-     * Types with sub-second fields (PlainTime, PlainDateTime) return a float whose
-     * fractional part carries them, so fractionalSecondDigits formatting works;
-     * date-only types return whole seconds.
-     */
-    abstract protected function toLocaleTimestamp(): int|float;
 
     /**
      * Returns a locale-sensitive string representation using IntlDateFormatter.
@@ -69,6 +44,9 @@ trait HasPlainLocaleString
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
     {
+        if (!$this instanceof PlainLocaleFormattable) {
+            throw new \LogicException('HasPlainLocaleString requires PlainLocaleFormattable.');
+        }
         if ($options === null) {
             $opts = [];
         } else {
@@ -79,28 +57,21 @@ trait HasPlainLocaleString
 
         $hasTimeStyle = array_key_exists('timeStyle', $opts) && $opts['timeStyle'] !== null;
         $hasDateStyle = array_key_exists('dateStyle', $opts) && $opts['dateStyle'] !== null;
+        $format = PlainLocaleFormat::from($this);
 
-        $defaultComponents = $this->localeDefaultComponents();
-
-        if ($hasTimeStyle && $defaultComponents->isDateOnly()) {
+        if ($hasTimeStyle && $format->isDateOnly()) {
             throw new TypeError('toLocaleString(): timeStyle option is not allowed for this type.');
         }
-        if ($hasDateStyle && $defaultComponents->isTimeOnly()) {
+        if ($hasDateStyle && $format->isTimeOnly()) {
             throw new TypeError('toLocaleString(): dateStyle option is not allowed for this type.');
         }
 
         $locale = IntlFormatter::resolveLocale($locales);
-
-        // Plain types always format in UTC to prevent date/time shifting.
-        // The timeZone option is accepted but ignored for display purposes.
         $timeZone = 'UTC';
 
-        IntlFormatter::validateCalendar($this->localeCalendarId(), $locale, $opts, $defaultComponents);
-
-        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, $defaultComponents);
-
-        $timestamp = $this->toLocaleTimestamp();
-        $result = $formatter->format($timestamp);
+        IntlFormatter::validateCalendar($format->calendarId, $locale, $opts, $format->components);
+        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, $format->components);
+        $result = IntlFormatter::formatEpoch($formatter, $format->epochSec, $format->subNs, $timeZone, $locale);
 
         return $result !== false ? $result : $this->toString();
     }
