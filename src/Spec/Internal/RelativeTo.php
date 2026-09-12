@@ -312,6 +312,12 @@ final class RelativeTo
      */
     public static function anchorYmd(array $bag): array
     {
+        $calendarId = self::bagCalendarId($bag);
+        if ($calendarId !== null && $calendarId !== 'iso8601') {
+            $date = DateFields::fromBag($bag);
+            return [$date->isoYear, $date->isoMonth, $date->isoDay];
+        }
+
         $year = self::anchorYear($bag);
         if (array_key_exists('month', $bag)) {
             $month = self::truncateToInteger($bag['month']);
