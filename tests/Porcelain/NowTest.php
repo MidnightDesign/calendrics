@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
+use Calendrics\Calendar;
+use Calendrics\Exception\RangeError;
+use Calendrics\Instant;
+use Calendrics\Now;
+use Calendrics\PlainDate;
+use Calendrics\PlainDateTime;
+use Calendrics\PlainTime;
 use PHPUnit\Framework\TestCase;
-use Temporal\Calendar;
-use Temporal\Exception\RangeError;
-use Temporal\Instant;
-use Temporal\Now;
-use Temporal\PlainDate;
-use Temporal\PlainDateTime;
-use Temporal\PlainTime;
 
 final class NowTest extends TestCase
 {

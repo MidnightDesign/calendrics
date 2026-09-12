@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
 /**
  * Controls whether the UTC offset is included in ZonedDateTime string output.

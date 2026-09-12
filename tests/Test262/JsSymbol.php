@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262;
+namespace Calendrics\Tests\Test262;
 
+use Calendrics\Exception\TypeError;
 use Stringable;
-use Temporal\Exception\TypeError;
 
 /**
  * Singleton sentinel for a JS `Symbol()` value.

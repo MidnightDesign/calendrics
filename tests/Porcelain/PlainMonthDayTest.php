@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
-use Temporal\Calendar;
-use Temporal\CalendarDisplay;
-use Temporal\Exception\RangeError;
-use Temporal\Overflow;
-use Temporal\PlainMonthDay;
+use Calendrics\Calendar;
+use Calendrics\CalendarDisplay;
+use Calendrics\Exception\RangeError;
+use Calendrics\Overflow;
+use Calendrics\PlainMonthDay;
 
-final class PlainMonthDayTest extends TemporalTestCase
+final class PlainMonthDayTest extends CalendricsTestCase
 {
     // -------------------------------------------------------------------------
     // Constructor & readonly properties
@@ -285,7 +285,7 @@ final class PlainMonthDayTest extends TemporalTestCase
 
     public function testFromSpecCreatesInstance(): void
     {
-        $spec = new \Temporal\Spec\PlainMonthDay(12, 25);
+        $spec = new \Calendrics\Spec\PlainMonthDay(12, 25);
         $md = PlainMonthDay::fromSpec($spec);
 
         static::assertSame(12, $md->month);
@@ -449,7 +449,7 @@ final class PlainMonthDayTest extends TemporalTestCase
 
     public function testFromSpecPreservesCalendar(): void
     {
-        $spec = new \Temporal\Spec\PlainMonthDay(12, 25);
+        $spec = new \Calendrics\Spec\PlainMonthDay(12, 25);
         $md = PlainMonthDay::fromSpec($spec);
 
         static::assertSame(Calendar::Iso8601, $md->calendar);

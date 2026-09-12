@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
 
 /**
  * Faithful coercion of a TC39 string-typed option value.
  *
  * GetOption(options, prop, "string", ...) applies ToString: a string passes
  * through; a Stringable coerces via (string) (a Symbol-like sentinel's
- * __toString throws Temporal\Exception\TypeError); any other type (number,
+ * __toString throws Calendrics\Exception\TypeError); any other type (number,
  * bool, plain object, null) would ToString to a value that is never a valid
  * option keyword, so it is rejected with a RangeError. The returned string must
  * still be validated against the option's allowed set by the caller.
@@ -53,7 +53,7 @@ final class Options
     /**
      * Faithful TC39 GetOption(..., "string", ...) ToString coercion of an option
      * value: a string passes through; a Stringable coerces via __toString (a JsSymbol
-     * sentinel's throwing __toString surfaces as Temporal\Exception\TypeError); any
+     * sentinel's throwing __toString surfaces as Calendrics\Exception\TypeError); any
      * other type is rejected with a RangeError. The returned string must still be
      * validated against the option's allowed keyword set by the caller.
      *
@@ -82,7 +82,7 @@ final class Options
      *
      * Combines the canonical {@see self::coerceEnumOption()} ToString coercion (a
      * string passes through; a Stringable coerces via __toString — a JsSymbol
-     * sentinel's throwing __toString surfaces as Temporal\Exception\TypeError; any
+     * sentinel's throwing __toString surfaces as Calendrics\Exception\TypeError; any
      * other type is a RangeError) with the keyword check that the ~9 inline copies
      * across the Plain... and ZonedDateTime classes perform.
      *
@@ -136,34 +136,25 @@ final class Options
         }
         // requireObject turns an explicit null / Symbol sentinel into a TypeError and
         // normalizes an object to an array; the empty-array default passes through.
-        return self::overflowFromBag(self::requireObject($options));
+        return self::overflowFromBag(self::requireObject($options, ['overflow']));
     }
 
     /**
-     * Resolves an already-validated options BAG (post-GetOptionsObject) to a validated
-     * "constrain" / "reject" keyword, defaulting to "constrain" when the bag is null
-     * (an omitted options argument) or has no `overflow` key.
+     * Resolves an already-snapshotted options BAG (post-GetOptionsObject) to a validated
+     * "constrain" / "reject" keyword, defaulting to "constrain" when the bag has no
+     * `overflow` key.
      *
      * Delegates the keyword coercion/validation to {@see self::overflowOption()}, where
      * an explicit `overflow => null` value coerces to neither keyword and is a RangeError.
-     * Callers that need the GetOptionsObject (null-argument → TypeError) step should use
-     * {@see self::overflowFromValue()} instead; this helper always defaults a null bag.
+     * Callers holding a raw options ARGUMENT want {@see self::overflowFromValue()}, which
+     * runs GetOptionsObject first; the bag this one takes has already been through it,
+     * so there is no null to default — an omitted argument arrives as an empty array.
      *
-     * After the Plain... convergence on {@see self::overflowFromValue()}, the only
-     * external caller is {@see Temporal\Spec\ZonedDateTime}, which performs its own
-     * GetOptionsObject (null handling) upstream and so wants the bag-only resolver here;
-     * internally, {@see self::overflowFromValue()} also delegates to this method after
-     * its own GetOptionsObject step.
-     *
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed> $options
      * @throws RangeError per {@see self::overflowOption()}.
      */
-    public static function overflowFromBag(array|object|null $options): string
+    public static function overflowFromBag(array $options): string
     {
-        if ($options === null) {
-            return 'constrain';
-        }
-        $options = self::normalizeOptions($options);
         if (!array_key_exists('overflow', $options)) {
             return 'constrain';
         }
@@ -192,6 +183,32 @@ final class Options
     }
 
     /**
+     * Normalises a singular or plural Temporal unit name to its canonical plural form.
+     *
+     * RangeError message is owned here and embeds the offending value. See the
+     * class-level note on message text.
+     *
+     * @return 'years'|'months'|'weeks'|'days'|'hours'|'minutes'|'seconds'|'milliseconds'|'microseconds'|'nanoseconds'
+     * @throws RangeError for unknown unit names.
+     */
+    public static function normalizeUnit(string $unit): string
+    {
+        return match ($unit) {
+            'year', 'years' => 'years',
+            'month', 'months' => 'months',
+            'week', 'weeks' => 'weeks',
+            'day', 'days' => 'days',
+            'hour', 'hours' => 'hours',
+            'minute', 'minutes' => 'minutes',
+            'second', 'seconds' => 'seconds',
+            'millisecond', 'milliseconds' => 'milliseconds',
+            'microsecond', 'microseconds' => 'microseconds',
+            'nanosecond', 'nanoseconds' => 'nanoseconds',
+            default => throw new RangeError("Unknown duration unit: \"{$unit}\"."),
+        };
+    }
+
+    /**
      * Performs the universal part of TC39 ToTemporalRoundingIncrement on an already-
      * read `roundingIncrement` value: ToIntegerWithTruncation followed by the
      * "finite and ≥ 1" validation, returning the truncated integer.
@@ -208,7 +225,7 @@ final class Options
      * ZonedDateTime use {@see CalendarMath::validateRoundingIncrement()}, which adds the
      * universal 1e9 upper bound for time-domain increments.
      *
-     * The two RangeError messages match the {@see Temporal\Spec\Duration::round()}
+     * The two RangeError messages match the {@see Calendrics\Spec\Duration::round()}
      * original byte-for-byte (the test262 suite asserts on them).
      *
      * @throws RangeError if the value is a non-finite number or rounds to < 1.
@@ -249,54 +266,36 @@ final class Options
      * Omitted options arrive as the empty-array default, which passes through as "no
      * options". A genuine options object/array is returned normalized to an array.
      *
-     * @param array<array-key, mixed>|object|null $options
+     * $props is the exhaustive list of option names the calling operation reads; an
+     * object bag is snapshotted through {@see self::bagSnapshot()} so that one exposing
+     * its options via `__get` is seen rather than silently read as empty. It is a
+     * required argument precisely so that a new call site cannot quietly reintroduce
+     * that blind spot.
+     *
+     * The parameter is `mixed` rather than `array|object|null` on purpose: a
+     * primitive options argument must be rejected HERE, at the point GetOptionsObject
+     * runs, not by a parameter-type guard on the public method. PHP checks a typed
+     * parameter before the body executes, which would raise the TypeError before the
+     * operation's primary argument had been converted — and TC39 requires that
+     * conversion, with the property reads it performs, to happen first.
+     *
+     * @param mixed $options Raw options argument (null/primitive → TypeError).
+     * @param list<string> $props Option names this operation recognizes.
      * @return array<array-key, mixed>
      */
-    public static function requireObject(array|object|null $options): array
+    public static function requireObject(mixed $options, array $props): array
     {
-        if ($options === null) {
+        if ($options === null || !is_array($options) && !is_object($options)) {
             throw new TypeError('options must be an object.');
         }
         if (is_object($options)) {
             if ($options instanceof Stringable) {
-                // JsSymbol sentinel: __toString throws Temporal\Exception\TypeError.
+                // JsSymbol sentinel: __toString throws Calendrics\Exception\TypeError.
                 // For any other Stringable (e.g. JsUndefined which returns 'undefined'),
-                // the cast succeeds and we fall through to get_object_vars.
+                // the cast succeeds and we fall through to the snapshot.
                 (string) $options;
             }
-            return get_object_vars($options);
-        }
-        return $options;
-    }
-
-    /**
-     * TC39 GetOptionsObject applied to an OPTIONAL options argument: null / omitted
-     * means "use defaults" (returns an empty array), but a Stringable sentinel that
-     * behaves like a Symbol (its __toString throws) is still a TypeError.  Ordinary
-     * objects (including JsUndefined, whose __toString returns 'undefined') are
-     * normalised to an array via get_object_vars(); that matches the spec's
-     * GetOptionsObject(options) step which returns an ordinary empty object for
-     * `undefined`.
-     *
-     * Use this helper wherever the TC39 spec step is:
-     *   "If options is undefined, set options to OrdinaryObjectCreate(null)"
-     * i.e. null/undefined is valid (use defaults) but non-object non-undefined is TypeError.
-     *
-     * @param array<array-key, mixed>|object|null $options
-     * @return array<array-key, mixed>
-     */
-    public static function normalizeOptions(array|object|null $options): array
-    {
-        if ($options === null) {
-            return [];
-        }
-        if (is_object($options)) {
-            if ($options instanceof Stringable) {
-                // JsSymbol sentinel: __toString throws Temporal\Exception\TypeError.
-                // This must propagate — do not catch it.
-                (string) $options;
-            }
-            return get_object_vars($options);
+            return self::bagSnapshot($options, $props);
         }
         return $options;
     }
@@ -307,12 +306,38 @@ final class Options
      * property). Distinct from a declared property whose value is `null`, which
      * {@see self::bagGet()} returns as `null`.
      */
-    public const string ABSENT = "\0Temporal\\Spec\\Internal\\Options::ABSENT\0";
+    public const string ABSENT = "\0Calendrics\\Spec\\Internal\\Options::ABSENT\0";
+
+    /**
+     * Bag entries TC39 reads with ToString, and which {@see self::bagSnapshot()}
+     * therefore stringifies at read time.
+     *
+     * Covers both option keywords (GetOption with type string) and the string-valued
+     * date fields (PrepareCalendarFields' ToPrimitiveAndRequireString entries). The
+     * numeric fields are absent because PHP reaches ToNumber only for real int/float
+     * values, and so is `calendar`: ToTemporalCalendarIdentifier REQUIRES a String
+     * rather than coercing to one, so a non-string there stays a TypeError.
+     */
+    private const array STRING_VALUED = [
+        'calendarName',
+        'direction',
+        'disambiguation',
+        'era',
+        'fractionalSecondDigits',
+        'largestUnit',
+        'monthCode',
+        'offset',
+        'overflow',
+        'roundingMode',
+        'smallestUnit',
+        'timeZoneName',
+        'unit',
+    ];
 
     /**
      * Faithful TC39 `Get(O, P)` for a property bag.
      *
-     * Unlike {@see self::normalizeOptions()} (which snapshots an object's declared
+     * Unlike {@see self::requireObject()} (which snapshots an object's declared
      * public properties via get_object_vars() and therefore never triggers PHP's
      * `__get` magic), this reads a single named property in a way that fires an
      * accessor getter when one is defined — matching JS's `[[Get]]`, where reading
@@ -322,7 +347,12 @@ final class Options
      *   - object with a DECLARED property `$p` (including a declared `null` value):
      *     direct read, never dispatching through `__get`.
      *   - object exposing `__get`: read `$o->$p`, firing the accessor getter (whose
-     *     body may legitimately throw — that throw must propagate).
+     *     body may legitimately throw — that throw must propagate). A getter that
+     *     yields `null` reports {@see self::ABSENT}: `null` is the PHP rendering of
+     *     the `undefined` a JS `[[Get]]` returns for a property the object does not
+     *     carry, and every algorithm here treats `undefined` as "field not supplied".
+     *     A DECLARED `null` keeps meaning "present, and its value is null", which is
+     *     what makes `{month: null}` a rejected field rather than an omitted one.
      *   - otherwise: {@see self::ABSENT}.
      *
      * @param array<array-key, mixed>|object $bag
@@ -344,10 +374,71 @@ final class Options
         if (method_exists($bag, '__get')) {
             // Accessor getter: a runtime property name is intrinsic to Get(O, P);
             // the getter body may legitimately throw, which must propagate.
-            /** @phpstan-ignore property.dynamicName */
-            return $bag->{$prop};
+            /**
+             * @var mixed $value
+             * @phpstan-ignore property.dynamicName
+             */
+            $value = $bag->{$prop};
+            return $value ?? self::ABSENT;
         }
         return self::ABSENT;
+    }
+
+    /**
+     * Normalizes a property bag to an array by reading $props through the faithful
+     * {@see self::bagGet()}, in the order given.
+     *
+     * This is the object-bag counterpart to {@see self::requireObject()}. The
+     * difference is what an OBJECT bag is allowed to be: `get_object_vars()` sees
+     * only declared public properties, so an object that exposes its fields through
+     * `__get` — an ordinary PHP DTO, a lazily-hydrated entity, a config wrapper —
+     * snapshots as an empty bag and every field silently goes missing. Reading the
+     * recognized names one at a time instead fires those accessors, which is what
+     * TC39 prescribes: each field is an individual `Get(O, P)`.
+     *
+     * $props is therefore the exhaustive list of names the calling algorithm
+     * recognizes, in the order TC39 reads them (alphabetical, for the calendar field
+     * lists that PrepareCalendarFields walks). Names outside it are never probed,
+     * which matters for bags whose accessor throws on an unrecognized name — probing
+     * one that the spec does not read would invent an error the spec never raises.
+     *
+     * A name TC39 reads with ToString ({@see self::STRING_VALUED}) is stringified
+     * here, as it is read, rather than by whichever caller eventually consumes it.
+     * That timing is observable: an accessor may have side effects, and a value that
+     * cannot stringify throws. Coercing at read time keeps each read paired with its
+     * own coercion, so a bag whose second field throws on access cannot pre-empt the
+     * error the first field's value was already going to raise.
+     *
+     * Array bags are returned unchanged: their keys are already a snapshot, there is
+     * no accessor to fire, and passing them through preserves entries the caller
+     * inspects but did not list.
+     *
+     * @param array<array-key, mixed>|object $bag
+     * @param list<string> $props Recognized property names, in TC39 read order.
+     * @return array<array-key, mixed>
+     */
+    public static function bagSnapshot(array|object $bag, array $props): array
+    {
+        if (is_array($bag)) {
+            return $bag;
+        }
+
+        $snapshot = [];
+        foreach ($props as $prop) {
+            // Merged as a single-entry array rather than assigned to $snapshot[$prop]:
+            // the value is `mixed`, and Psalm rejects a mixed value reaching an array
+            // offset directly.
+            $read = [$prop => self::bagGet($bag, $prop)];
+            if ($read[$prop] === self::ABSENT) {
+                continue;
+            }
+            if ($read[$prop] instanceof Stringable && in_array($prop, self::STRING_VALUED, strict: true)) {
+                $read = [$prop => (string) $read[$prop]];
+            }
+            $snapshot = array_merge($snapshot, $read);
+        }
+
+        return $snapshot;
     }
 
     /**
@@ -355,7 +446,7 @@ final class Options
      * applied to an already-read value. A Number (int or float) is range-checked
      * (NaN/±∞ → RangeError) and floored to an integer in 0–9; any non-number value is
      * coerced via ToString and must equal "auto" (a JsSymbol sentinel's throwing
-     * __toString surfaces as Temporal\Exception\TypeError, exactly as ToString(Symbol)
+     * __toString surfaces as Calendrics\Exception\TypeError, exactly as ToString(Symbol)
      * does in JS). Returns null for "auto" (the no-op default), or the digit count 0–9.
      *
      * @throws RangeError if the value is a non-finite/out-of-range number or a
@@ -376,7 +467,7 @@ final class Options
             return $value;
         }
         if ($value instanceof Stringable) {
-            // JsSymbol sentinel: __toString throws Temporal\Exception\TypeError.
+            // JsSymbol sentinel: __toString throws Calendrics\Exception\TypeError.
             $value = (string) $value;
         }
         if ($value !== 'auto') {

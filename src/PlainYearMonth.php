@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
-use Temporal\Spec\PlainYearMonth as SpecPlainYearMonth;
-use Temporal\Trait\HasYearMonthProperties;
-use Temporal\Trait\HasYearMonthSpec;
+use Calendrics\Spec\PlainYearMonth as SpecPlainYearMonth;
+use Calendrics\Trait\HasLocalizedFormatting;
+use Calendrics\Trait\HasYearMonthProperties;
+use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A calendar year-month without a specific day, time, or time zone.
@@ -18,6 +19,7 @@ use Temporal\Trait\HasYearMonthSpec;
 final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMonthSpec
 {
     use HasYearMonthProperties;
+    use HasLocalizedFormatting;
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -32,7 +34,7 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
      * @param int<1, 12> $isoMonth       ISO month of the year (1–12).
      * @param Calendar   $calendar       Calendar system (default ISO 8601).
      * @param int        $referenceISODay Reference ISO day for round-trip fidelity (default 1).
-     * @throws \Temporal\Exception\RangeError if the year-month is invalid or out of range.
+     * @throws \Calendrics\Exception\RangeError if the year-month is invalid or out of range.
      */
     public function __construct(
         int $isoYear,
@@ -97,7 +99,7 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
      *
      * @param string $text ISO 8601 year-month string (e.g. "2020-01").
      * @return self
-     * @throws \Temporal\Exception\RangeError if the string cannot be parsed.
+     * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
      */
     public static function parse(string $text): self
     {
@@ -126,7 +128,7 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
      * @param int|null        $year  Year override, or null to keep current.
      * @param int<1, 12>|null $month Month override (1–12), or null to keep current.
      * @return self A new PlainYearMonth with the overridden fields.
-     * @throws \Temporal\Exception\RangeError if the resulting year-month is invalid or fields conflict.
+     * @throws \Calendrics\Exception\RangeError if the resulting year-month is invalid or fields conflict.
      */
     public function with(
         ?int $year = null,
@@ -265,11 +267,59 @@ final class PlainYearMonth implements \Stringable, \JsonSerializable, HasYearMon
     }
 
     /**
+     * Returns a locale-aware string representation of this year-month.
+     *
+     * A `PlainYearMonth` has no day, so the day and weekday options are absent
+     * from this signature. Supply `dateStyle` (a locale-provided preset, with the
+     * day component stripped out) or any combination of the individual component
+     * options — mixing the two throws.
+     *
+     * Unlike `PlainDate`, an ISO 8601 year-month is *not* projectable into another
+     * calendar: a bare year-month has no meaning outside the calendar it was
+     * expressed in, so the value's calendar must match the formatter's. Since no
+     * locale resolves to `iso8601`, formatting a default-constructed (ISO)
+     * year-month always throws — build it in the target calendar instead:
+     *
+     * ```php
+     * $ym = PlainYearMonth::fromFields(year: 2020, month: 6, calendar: Calendar::Gregory);
+     * $ym->toLocaleString('de-AT', dateStyle: FormatStyle::Long);               // 'Juni 2020'
+     * $ym->toLocaleString('en-US', month: MonthWidth::Long, year: NumberWidth::Numeric); // 'June 2020'
+     * ```
+     *
+     * @param string|null      $locale    BCP 47 locale tag; null uses the ICU default locale.
+     * @param FormatStyle|null $dateStyle Preset date verbosity; excludes the component options below.
+     * @param TextWidth|null   $era
+     * @param NumberWidth|null $year
+     * @param MonthWidth|null  $month
+     * @param Calendar|null    $calendar  Calendar to render in; null keeps the locale's own calendar.
+     * @return string
+     * @throws \Calendrics\Exception\TypeError if `dateStyle` is combined with a component option.
+     * @throws \Calendrics\Exception\RangeError if this value's calendar differs from the resolved
+     *                                        formatter's.
+     */
+    public function toLocaleString(
+        ?string $locale = null,
+        ?FormatStyle $dateStyle = null,
+        ?TextWidth $era = null,
+        ?NumberWidth $year = null,
+        ?MonthWidth $month = null,
+        ?Calendar $calendar = null,
+    ): string {
+        return $this->spec->toLocaleString($locale, self::localeOptions([
+            'dateStyle' => $dateStyle,
+            'era' => $era,
+            'year' => $year,
+            'month' => $month,
+            'calendar' => $calendar,
+        ]));
+    }
+
+    /**
      * Converts this year-month to a PlainDate by supplying the day.
      *
      * @param int<1, 31> $day Day of the month.
      * @return PlainDate
-     * @throws \Temporal\Exception\RangeError if the resulting date is invalid.
+     * @throws \Calendrics\Exception\RangeError if the resulting date is invalid.
      */
     public function toPlainDate(int $day): PlainDate
     {

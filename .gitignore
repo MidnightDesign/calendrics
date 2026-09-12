@@ -3,6 +3,8 @@
 /composer.lock
 /node_modules/
 /package-lock.json
+/tools/node_modules/
+/tools/package-lock.json
 
 # PHPUnit cache
 /.phpunit.cache/

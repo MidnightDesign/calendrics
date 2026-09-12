@@ -28,29 +28,70 @@ Composer scripts (defined in `composer.json`):
 | `infection` | Mutation testing (target: 100% MSI) |
 | `check` | Full gate: phpstan + psalm + mago + mago-format-check + test-coverage + infection |
 
-PHPUnit suites (`phpunit.xml`): `default` (everything except Porcelain/Test262), `porcelain`, `test262`.
+PHPUnit suites (`phpunit.xml`): `porcelain` and `test262`. They are exhaustive — there is no catch-all suite, so a test placed in a new top-level directory under `tests/` runs under no suite at all.
 
 ## Architecture
 
 Two parallel, fully supported public API tiers plus an internal core:
 
-- **`Temporal\`** (porcelain) — `src/*.php`. Idiomatic PHP: strict types, backed enums, named arguments, readonly value objects. What application code should normally use.
-- **`Temporal\Spec\`** (spec layer) — `src/Spec/*.php`. TC39-faithful surface, validated by the test262 conformance suite. Public API, not internal. Mirrors the porcelain class set 1:1.
-- **`Temporal\Spec\Internal\`** — genuine implementation detail. Calendar protocol/bridges (ECMA-402 calendars via `ext-intl`, plus pure-PHP Hebrew/Indian implementations), serde, calendar math. Free to break across versions; do not import from outside `Temporal\Spec\`.
+- **`Calendrics\`** (porcelain) — `src/*.php`. Idiomatic PHP: strict types, backed enums, named arguments, readonly value objects. What application code should normally use.
+- **`Calendrics\Spec\`** (spec layer) — `src/Spec/*.php`. TC39-faithful surface, validated by the test262 conformance suite. Public API, not internal. Mirrors the porcelain class set 1:1.
+- **`Calendrics\Spec\Internal\`** — genuine implementation detail. Calendar protocol/bridges (ECMA-402 calendars via `ext-intl`, plus pure-PHP Hebrew/Indian implementations), serde, calendar math. Free to break across versions; do not import from outside `Calendrics\Spec\`.
 
 Each porcelain class has a matching spec class and pairs of `toSpec()` / `fromSpec()` for round-tripping. Every porcelain↔spec seam is covered by the BC promise (`X::fromSpec($x->toSpec()) === $x` within a major).
 
 Shared property/getter logic lives in `src/Trait/Has*Properties.php` (porcelain) and `Has*Spec.php` (spec). When adding a field that crosses several classes, look for the relevant trait first.
 
+## Which layer gets which tests
+
+**Only test262 tests the spec layer.** Never hand-write a test against `Calendrics\Spec\` — that includes `Calendrics\Spec\Internal\`. There is no `tests/Spec/` directory, and adding one is wrong.
+
+This rule **overrides the test-first instruction in any skill** (`/implement`, `/tdd`, and friends). When a skill says "write a failing test first" and the code under test is in the spec layer, the rule here wins.
+
+**What makes a test a spec test is the behavior it pins, not the class it names.** Two evasions both count as spec tests and are both wrong:
+
+- Filing the test under `tests/Porcelain/` while it still imports `Calendrics\Spec\` classes. The directory does not change what it tests.
+- Reaching the same spec code through its porcelain wrapper. `Calendrics\Duration::round()` delegates to `Calendrics\Spec\Internal\DurationRounding`; a test that pins TC39 rounding semantics through the porcelain class is a spec test with a porcelain import list.
+
+Ask what the test would catch. If a TC39 change would make it fail, it belongs to test262. Porcelain tests cover what porcelain *adds* on top: enums instead of magic strings, named arguments, readonly value objects, the exception hierarchy, and `X::fromSpec($x->toSpec()) === $x` round-tripping. One case per porcelain affordance, not a table of TC39 results.
+
+The reliable tell is the diff: if the source change is under `src/Spec/`, no test in this repository belongs in the same commit.
+
+**A spec-layer fix with no test is better than a spec-layer fix with a hand-written test.** Landing the fix untested is the accepted outcome. Take these two routes first, in order:
+
+1. **Find the upstream fixture.** Start under `tests/Test262/data/<Type>/…`, but read that directory as a *subset* of test262, not as test262 — `tools/sync-test262.sh` decides what lands there. A miss means "not synced" at least as often as "not written".
+
+   Before concluding upstream has no test, gut-check the behavior: *obvious* or esoteric? A documented option any user would reach for — hour padding, a rounding mode, an overflow rejection — is almost certainly pinned somewhere in test262. "There is no way TC39 has no test for this" is usually right, so keep digging.
+
+   Work through all three before giving up:
+   - **Stale corpus** — run `composer test262:sync`.
+   - **Synced but never run** — the fixture is absent from `tests/Test262/scripts/` (regenerate with `composer test262:build`), skipped by `RunnerTest`, or reported incomplete by a transpiler gap. Fix that instead of writing your own test.
+   - **Outside the sync scope** — sparse-clone upstream and grep `test/`. ECMA-402 pins `toLocaleString` behavior under `test/intl402/DateTimeFormat/` and `test/intl402/DurationFormat/`; only the `features: [Temporal]` files there are synced, and the untagged ones still exercise `IntlFormatter`, because `toLocaleString` is specified as `new Intl.DateTimeFormat(…).format(this)`.
+
+2. **File for an upstream test.** Only after you have *actually checked* — read the candidate fixtures, confirmed the case is absent from a fresh upstream clone rather than from `tests/Test262/data/`, and confirmed the pre-fix code passes the whole suite — open an issue labeled `missing-upstream-test`. That issue tracks getting a new test contributed to tc39/test262, so it needs the input shape, the expected result, the TC39 algorithm step that mandates it, and a JS reproduction against the `Temporal` namespace. "I could not find one" is not a check; a search you can show is.
+
+   Before filing, search **open and closed** repository issues — including every issue labeled `missing-upstream-test` and focused searches for the behavior, API, and originating defect number. If an issue already tracks the same missing fixture, link or update it instead of creating a duplicate.
+
+   When the fresh-upstream check confirms a fixture is missing and no existing issue covers it, filing the `missing-upstream-test` issue is a required part of completing the spec-layer fix. Do it automatically, without waiting for a separate request, and link the tracker from the originating defect or pull request.
+
 ## test262 conformance suite
 
-`tests/Test262/data/` — verbatim mirror of upstream tc39/test262 JS files. **Do not edit these.** If a test fails, fix the implementation. `tests/Test262/data/CLAUDE.md` has the rules.
+`tests/Test262/data/` — verbatim copies of a subset of the upstream tc39/test262 JS files; `tools/sync-test262.sh` defines the subset. **Do not edit these.** If a test fails, fix the implementation. `tests/Test262/data/CLAUDE.md` has the rules.
 
-`tests/Test262/scripts/` — generated PHP transpiled from the JS. **Do not hand-edit.** Regenerate via `composer test262:build`. The scripts are loaded by `tests/Test262/RunnerTest.php` against the `Temporal\Spec\` layer.
+`tests/Test262/scripts/` — generated PHP transpiled from the JS. **Do not hand-edit.** Regenerate via `composer test262:build`. The scripts are loaded by `tests/Test262/RunnerTest.php` against the `Calendrics\Spec\` layer.
 
 ## Quality bar
 
 PHPStan level 9, Psalm error level 1, Mago lint+format clean, 100% mutation kill (Infection). The `composer check` script is the gate every PR must pass. Don't suppress warnings — fix the underlying types.
+
+## Releases
+
+Versioning and `CHANGELOG.md` are owned by [release-please](https://github.com/googleapis/release-please) (`.github/workflows/release-please.yml`, `release-please-config.json`, `.release-please-manifest.json`). Consequences when working here:
+
+- **`CHANGELOG.md` is generated. Do not hand-edit it**, and do not add an `Unreleased` section — release-please inserts each new entry between the preamble and the newest existing entry.
+- **PR titles are load-bearing.** Squash is the repository's only merge method, so the PR title becomes the commit subject release-please parses. It must be a Conventional Commit (`feat:`, `fix:`, `refactor:`, `test:`, …); `feat!:` or a `BREAKING CHANGE:` footer marks a breaking change. A subject that does not parse is skipped silently — no changelog entry, no bump. See README's *Releases* section for the type → section → bump table. Dependabot gets its prefixes from `.github/dependabot.yml`.
+- Release type is `php`, which writes no version number outside `.release-please-manifest.json`: `composer.json` has no `version` key (correct for Packagist — do not add one) and there is no `VERSION` file. The `VERSION` updater is therefore a no-op, but the `composer.json` one still re-serializes the file, so a release PR can carry a one-time reformat of it.
+- `bootstrap-sha` in the config pins the first run's starting point at the 0.2.0 handoff commit. It is ignored once a release-please PR has been merged and can be deleted then.
 
 ## Git worktrees
 

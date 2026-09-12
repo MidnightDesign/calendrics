@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262\Helper;
+namespace Calendrics\Tests\Test262\Helper;
 
+use Calendrics\Tests\Test262\JsSymbol;
 use PHPUnit\Framework\Assert as PHPUnitAssert;
-use Temporal\Tests\Test262\JsSymbol;
 
 /**
  * Behavioral check-harnesses ported from TC39's TemporalHelpers harness.
@@ -15,7 +15,7 @@ use Temporal\Tests\Test262\JsSymbol;
  * option types, fast-path objects, …) and asserts the observed behavior, rather
  * than comparing a single value object.
  *
- * Composed into {@see \Temporal\Tests\Test262\TemporalHelpers}; the public
+ * Composed into {@see \Calendrics\Tests\Test262\TemporalHelpers}; the public
  * surface is `TemporalHelpers::check*()`.
  */
 trait ChecksBehavior
@@ -58,29 +58,29 @@ trait ChecksBehavior
             /** @var mixed $plural */
             $plural = $func($plurals[$unit] ?? sprintf('%ss', $unit));
             $desc = "Plural {$plurals[$unit]} produces the same result as singular {$unit}";
-            if ($singular instanceof \Temporal\Spec\Duration) {
+            if ($singular instanceof \Calendrics\Spec\Duration) {
                 /** @psalm-suppress MixedArgument */
                 // @mago-ignore analysis:mixed-argument
                 // @phpstan-ignore argument.type
                 self::assertDurationsEqual($plural, $singular, $desc);
-            } elseif ($singular instanceof \Temporal\Spec\Instant) {
+            } elseif ($singular instanceof \Calendrics\Spec\Instant) {
                 /** @psalm-suppress MixedArgument */
                 // @mago-ignore analysis:mixed-argument
                 // @phpstan-ignore argument.type
                 self::assertInstantsEqual($plural, $singular, $desc);
-            } elseif ($singular instanceof \Temporal\Spec\PlainTime) {
+            } elseif ($singular instanceof \Calendrics\Spec\PlainTime) {
                 /** @psalm-suppress MixedArgument */
                 // @mago-ignore analysis:mixed-argument
                 PHPUnitAssert::assertTrue($singular->equals($plural), $desc); // @phpstan-ignore argument.type
-            } elseif ($singular instanceof \Temporal\Spec\PlainDateTime) {
+            } elseif ($singular instanceof \Calendrics\Spec\PlainDateTime) {
                 /** @psalm-suppress MixedArgument */
                 // @mago-ignore analysis:mixed-argument
                 PHPUnitAssert::assertTrue($singular->equals($plural), $desc); // @phpstan-ignore argument.type
-            } elseif ($singular instanceof \Temporal\Spec\PlainDate) {
+            } elseif ($singular instanceof \Calendrics\Spec\PlainDate) {
                 /** @psalm-suppress MixedArgument */
                 // @mago-ignore analysis:mixed-argument
                 PHPUnitAssert::assertTrue($singular->equals($plural), $desc); // @phpstan-ignore argument.type
-            } elseif ($singular instanceof \Temporal\Spec\ZonedDateTime) {
+            } elseif ($singular instanceof \Calendrics\Spec\ZonedDateTime) {
                 /** @psalm-suppress MixedArgument */
                 // @mago-ignore analysis:mixed-argument
                 // @phpstan-ignore argument.type
@@ -203,7 +203,7 @@ trait ChecksBehavior
             // Assert it is a Temporal domain error (not a stray PHP runtime error),
             // which counts one meaningful assertion on the expected failure.
             PHPUnitAssert::assertInstanceOf(
-                \Temporal\Exception\TemporalException::class,
+                \Calendrics\Exception\CalendricsException::class,
                 $thrown,
                 'roundingIncrement=false throws a Temporal exception',
             );
@@ -263,7 +263,7 @@ trait ChecksBehavior
                 throw $e;
             } catch (\Throwable $thrown) {
                 PHPUnitAssert::assertInstanceOf(
-                    \Temporal\Exception\RangeError::class,
+                    \Calendrics\Exception\RangeError::class,
                     $thrown,
                     sprintf(
                         'Expected RangeError for %s=%s.',
@@ -281,7 +281,7 @@ trait ChecksBehavior
             throw $e;
         } catch (\Throwable $thrown) {
             PHPUnitAssert::assertInstanceOf(
-                \Temporal\Exception\TypeError::class,
+                \Calendrics\Exception\TypeError::class,
                 $thrown,
                 sprintf('Expected TypeError for %s=Symbol().', $propertyName),
             );
@@ -328,11 +328,11 @@ trait ChecksBehavior
     public static function checkToTemporalCalendarFastPath(callable $fn): void
     {
         $objects = [
-            new \Temporal\Spec\PlainDate(2000, 5, 2),
-            new \Temporal\Spec\PlainDateTime(2000, 5, 2),
-            new \Temporal\Spec\PlainMonthDay(5, 2),
-            new \Temporal\Spec\PlainYearMonth(2000, 5),
-            new \Temporal\Spec\ZonedDateTime(0, 'UTC'),
+            new \Calendrics\Spec\PlainDate(2000, 5, 2),
+            new \Calendrics\Spec\PlainDateTime(2000, 5, 2),
+            new \Calendrics\Spec\PlainMonthDay(5, 2),
+            new \Calendrics\Spec\PlainYearMonth(2000, 5),
+            new \Calendrics\Spec\ZonedDateTime(0, 'UTC'),
         ];
         foreach ($objects as $obj) {
             try {
@@ -368,7 +368,7 @@ trait ChecksBehavior
      */
     public static function checkPlainDateTimeConversionFastPath(callable $fn, string $message = ''): void
     {
-        $dt = new \Temporal\Spec\PlainDateTime(2000, 5, 2, 12, 34, 56, 987, 654, 321);
+        $dt = new \Calendrics\Spec\PlainDateTime(2000, 5, 2, 12, 34, 56, 987, 654, 321);
         try {
             /** @var mixed $result */
             $result = $fn($dt);
@@ -403,7 +403,7 @@ trait ChecksBehavior
      */
     public static function checkToTemporalPlainDateTimeFastPath(callable $fn): void
     {
-        $date = new \Temporal\Spec\PlainDate(2000, 5, 2);
+        $date = new \Calendrics\Spec\PlainDate(2000, 5, 2);
         $calendar = $date->calendarId;
         try {
             /** @var mixed $result */
@@ -436,7 +436,7 @@ trait ChecksBehavior
      */
     public static function checkToTemporalInstantFastPath(callable $fn): void
     {
-        $zdt = new \Temporal\Spec\ZonedDateTime(1_000_000_000_987_654_321, 'UTC');
+        $zdt = new \Calendrics\Spec\ZonedDateTime(1_000_000_000_987_654_321, 'UTC');
         try {
             /** @var mixed $result */
             $result = $fn($zdt);

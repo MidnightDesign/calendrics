@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
+use Calendrics\Duration;
+use Calendrics\PlainTime;
+use Calendrics\Tests\Porcelain\Constraint\DurationEquals;
+use Calendrics\Tests\Porcelain\Constraint\PlainTimeEquals;
 use PHPUnit\Framework\TestCase;
-use Temporal\Duration;
-use Temporal\PlainTime;
-use Temporal\Tests\Porcelain\Constraint\DurationEquals;
-use Temporal\Tests\Porcelain\Constraint\PlainTimeEquals;
 
-abstract class TemporalTestCase extends TestCase
+abstract class CalendricsTestCase extends TestCase
 {
     public const int YEAR_MIN = -271_821;
     public const int YEAR_MAX = 275_760;

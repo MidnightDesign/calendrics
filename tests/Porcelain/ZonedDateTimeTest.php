@@ -2,24 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
-use Temporal\Calendar;
-use Temporal\CalendarDisplay;
-use Temporal\Disambiguation;
-use Temporal\Duration;
-use Temporal\Exception\RangeError;
-use Temporal\OffsetDisplay;
-use Temporal\OffsetOption;
-use Temporal\Overflow;
-use Temporal\PlainTime;
-use Temporal\RoundingMode;
-use Temporal\TimeZoneDisplay;
-use Temporal\TransitionDirection;
-use Temporal\Unit;
-use Temporal\ZonedDateTime;
+use Calendrics\Calendar;
+use Calendrics\CalendarDisplay;
+use Calendrics\Disambiguation;
+use Calendrics\Duration;
+use Calendrics\Exception\RangeError;
+use Calendrics\OffsetDisplay;
+use Calendrics\OffsetOption;
+use Calendrics\Overflow;
+use Calendrics\PlainTime;
+use Calendrics\RoundingMode;
+use Calendrics\TimeZoneDisplay;
+use Calendrics\TransitionDirection;
+use Calendrics\Unit;
+use Calendrics\ZonedDateTime;
 
-final class ZonedDateTimeTest extends TemporalTestCase
+final class ZonedDateTimeTest extends CalendricsTestCase
 {
     // -------------------------------------------------------------------------
     // Constructor
@@ -969,7 +969,7 @@ final class ZonedDateTimeTest extends TemporalTestCase
 
     public function testFromSpecCreatesCorrectInstance(): void
     {
-        $spec = new \Temporal\Spec\ZonedDateTime(0, 'Europe/Berlin');
+        $spec = new \Calendrics\Spec\ZonedDateTime(0, 'Europe/Berlin');
         $zdt = ZonedDateTime::fromSpec($spec);
 
         static::assertSame(0, $zdt->epochNanoseconds);
@@ -1383,7 +1383,7 @@ final class ZonedDateTimeTest extends TemporalTestCase
 
     public function testFromSpecWithNonIsoCalendar(): void
     {
-        $spec = new \Temporal\Spec\ZonedDateTime(0, 'UTC', 'hebrew');
+        $spec = new \Calendrics\Spec\ZonedDateTime(0, 'UTC', 'hebrew');
         $zdt = ZonedDateTime::fromSpec($spec);
 
         static::assertSame('hebrew', $zdt->calendar->value);

@@ -14,8 +14,8 @@
  * Translation rules (see project prompt for full table):
  *   const/let x = expr        → $x = expr;
  *   123n (BigInt)             → 123  (skipped if overflows int64)
- *   Temporal.X.y(arg)         → \Temporal\Spec\X::y($arg)
- *   new Temporal.X(...)       → new \Temporal\Spec\X(...)
+ *   Temporal.X.y(arg)         → \Calendrics\Spec\X::y($arg)
+ *   new Temporal.X(...)       → new \Calendrics\Spec\X(...)
  *   for (const x of arr)      → foreach ($arr as $x)
  *   for (const [a,b] of arr)  → foreach ($arr as [$a, $b])
  *   arr.forEach(x => {...})   → foreach ($arr as $x) {...}
@@ -38,6 +38,20 @@ import path from 'node:path';
 // ---------------------------------------------------------------------------
 
 const ACORN_OPTIONS = { ecmaVersion: 2022, sourceType: 'script' };
+
+/**
+ * Namespace prefixes for the emitted PHP. Every FQCN this transpiler writes hangs off
+ * the spec layer (the library under test) or the harness (the PHP-side test262 shims),
+ * so moving either namespace is an edit to these constants rather than to the emitter.
+ *
+ * The `_BARE` variants drop the leading `\`, which `use` statements and the namespaces
+ * quoted inside emitted error messages must not carry.
+ */
+const ROOT_NS = 'Calendrics';
+const SPEC_NS_BARE = `${ROOT_NS}\\Spec\\`;
+const HARNESS_NS_BARE = `${ROOT_NS}\\Tests\\Test262\\`;
+const SPEC_NS = `\\${SPEC_NS_BARE}`;
+const HARNESS_NS = `\\${HARNESS_NS_BARE}`;
 
 const PHP_INT_MAX = 9_223_372_036_854_775_807n;
 const PHP_INT_MIN = -9_223_372_036_854_775_808n;
@@ -126,19 +140,19 @@ const SIMPLE_METHOD_CALLS = {
   // str.padStart(len, fill) → str_pad($str, $len, $fill, STR_PAD_LEFT)
   padStart: { minArgs: 1, build: (recv, args) => `str_pad(${recv}, ${args[0]}, ${args[1] ?? "' '"}, STR_PAD_LEFT)` },
   // obj.slice(start[, end]) → Js::slice($obj, $start[, $end]) (strings and arrays)
-  slice: (recv, args) => `\\Temporal\\Tests\\Test262\\Js::slice(${recv}, ${args[0] ?? '0'}${args[1] !== undefined ? `, ${args[1]}` : ''})`,
+  slice: (recv, args) => `${HARNESS_NS}Js::slice(${recv}, ${args[0] ?? '0'}${args[1] !== undefined ? `, ${args[1]}` : ''})`,
   // str.substr(start[, len]) → substr(string: $str, offset: $start[, length: $len])
   substr: (recv, args) => `substr(string: ${recv}, offset: ${args[0] ?? '0'}${args[1] !== undefined ? `, length: ${args[1]}` : ''})`,
   // str.split(delim) → explode($delim, $str)
   split: { minArgs: 1, build: (recv, args) => `explode(${args[0]}, ${recv})` },
   // n.toPrecision(digits) → Js::toPrecision($n, $digits)
-  toPrecision: { minArgs: 1, build: (recv, args) => `\\Temporal\\Tests\\Test262\\Js::toPrecision(${recv}, ${args[0]})` },
+  toPrecision: { minArgs: 1, build: (recv, args) => `${HARNESS_NS}Js::toPrecision(${recv}, ${args[0]})` },
   // obj.includes(needle) → Js::includes($obj, $needle) (strings and arrays)
-  includes: (recv, args) => `\\Temporal\\Tests\\Test262\\Js::includes(${recv}, ${args[0] ?? "''"})`,
+  includes: (recv, args) => `${HARNESS_NS}Js::includes(${recv}, ${args[0] ?? "''"})`,
   // str.startsWith(needle) → Js::startsWith($str, $needle)
-  startsWith: (recv, args) => `\\Temporal\\Tests\\Test262\\Js::startsWith(${recv}, ${args[0] ?? "''"})`,
+  startsWith: (recv, args) => `${HARNESS_NS}Js::startsWith(${recv}, ${args[0] ?? "''"})`,
   // str.endsWith(needle) → Js::endsWith($str, $needle)
-  endsWith: (recv, args) => `\\Temporal\\Tests\\Test262\\Js::endsWith(${recv}, ${args[0] ?? "''"})`,
+  endsWith: (recv, args) => `${HARNESS_NS}Js::endsWith(${recv}, ${args[0] ?? "''"})`,
   // str.toLowerCase() / str.toUpperCase() → strtolower / strtoupper. The only corpus
   // users are the timezone-case-insensitive fixtures, whose receivers are pure-ASCII
   // IANA identifiers, so PHP's byte-wise case fold matches JS's Unicode mapping exactly.
@@ -292,26 +306,42 @@ function epochNsToFloorParts(epNsBig) {
  * Render `new Instant(epochNs)` / `new ZonedDateTime(epochNs, tz[, cal])` for an
  * over-int64 epoch as a lossless true-parts factory call. `rest` is the already
  * transpiled trailing argument list (tz[, cal]) for ZonedDateTime, or '' for
- * Instant. The fromEpochParts / fromInstantParts seams are @internal but the
+ * Instant. Both classes' fromEpochParts seams are @internal but the
  * generated scripts are excluded from the static analyzers and PHP does not
  * enforce @internal at runtime, so this is safe in transpiled output.
  */
 function emitOverInt64Ctor(cls, epNsBig, rest) {
   const { epochSec, subNs } = epochNsToFloorParts(epNsBig);
   if (cls === 'Instant') {
-    return `\\Temporal\\Spec\\Instant::fromEpochParts(${epochSec}, ${subNs})`;
+    return `${SPEC_NS}Instant::fromEpochParts(${epochSec}, ${subNs})`;
   }
-  // ZonedDateTime: fromInstantParts(epochSec, subNs, tz[, cal])
-  return `\\Temporal\\Spec\\ZonedDateTime::fromInstantParts(${epochSec}, ${subNs}, ${rest})`;
+  // ZonedDateTime: fromEpochParts(epochSec, subNs, tz[, cal])
+  return `${SPEC_NS}ZonedDateTime::fromEpochParts(${epochSec}, ${subNs}, ${rest})`;
+}
+
+/**
+ * Renders a BigInt as a PHP literal the way JS `Number(bigint)` would: as an exact int
+ * when float64 holds the integer exactly, otherwise as the nearest double. Above 2^53
+ * those differ, and it is the narrowed value the fixtures assert against.
+ * `toExponential()` with no argument emits the shortest digit string that round-trips,
+ * and PHP parses it back with a correctly-rounded strtod, so both land on the same double.
+ */
+function phpNumberFromBigInt(bigVal) {
+  const narrowed = Number(bigVal);
+  if (!Number.isFinite(narrowed)) return narrowed > 0 ? 'INF' : '-INF';
+  if (BigInt(narrowed) === bigVal) return phpInt(bigVal.toString());
+  return narrowed.toExponential().replace('e', 'E');
 }
 
 /**
  * Recursively evaluate a pure-numeric (non-BigInt) constant expression at transpile time.
  * Returns the numeric value if fully evaluable, or null if any operand is non-literal.
+ * `numVars` resolves identifiers bound to a compile-time numeric constant.
  */
-function tryEvalNumeric(node) {
+function tryEvalNumeric(node, numVars = null) {
   if (!node) return null;
   if (node.type === 'Literal' && typeof node.value === 'number') return node.value;
+  if (node.type === 'Identifier' && numVars?.has(node.name)) return numVars.get(node.name);
   // Number.MAX_SAFE_INTEGER / Number.MIN_SAFE_INTEGER — exact-integer constants.
   // (transpileMember folds these in the porcelain path; here we fold them so that
   // BigInt(Number.MAX_SAFE_INTEGER) and similar constant expressions resolve.)
@@ -324,7 +354,7 @@ function tryEvalNumeric(node) {
   // Date.UTC(year, month0, day, h, min, s, ms) — evaluate at transpile time.
   // month is 0-indexed in JS (January = 0).
   if (node.type === 'CallExpression' && isMember(node.callee, 'Date', 'UTC')) {
-    const args = node.arguments.map(a => tryEvalNumeric(a));
+    const args = node.arguments.map(a => tryEvalNumeric(a, numVars));
     if (args.every(v => v !== null)) {
       const [y = 1970, m0 = 0, d = 1, h = 0, min = 0, s = 0, ms = 0] = args;
       const date = new Date(Date.UTC(y, m0, d, h, min, s, ms));
@@ -332,12 +362,12 @@ function tryEvalNumeric(node) {
     }
   }
   if (node.type === 'UnaryExpression' && node.operator === '-') {
-    const v = tryEvalNumeric(node.argument);
+    const v = tryEvalNumeric(node.argument, numVars);
     return v !== null ? -v : null;
   }
   if (node.type === 'BinaryExpression') {
-    const l = tryEvalNumeric(node.left);
-    const r = tryEvalNumeric(node.right);
+    const l = tryEvalNumeric(node.left, numVars);
+    const r = tryEvalNumeric(node.right, numVars);
     if (l === null || r === null) return null;
     switch (node.operator) {
       case '*': return l * r;
@@ -350,11 +380,42 @@ function tryEvalNumeric(node) {
 }
 
 /**
+ * Recognizes a function declaration that only computes a BigInt from its arguments —
+ * `function f(a) { const k = 1n; return (a - 2n) * k; }`. Such a helper has no PHP
+ * counterpart (its intermediates routinely exceed int64, which is why it is spelled in
+ * BigInt at all), but it is pure and every call site in the corpus passes compile-time
+ * BigInts, so the calls fold and the function itself never has to be emitted.
+ *
+ * The shape accepted is a block of single-declarator variable declarations followed by
+ * a `return`; anything else (branches, loops, reassignment) is left to the incomplete
+ * path rather than given a second, divergent evaluator.
+ *
+ * @return {{params: string[], consts: Array<{name: string, init: object}>, returnExpr: object}|null}
+ */
+function asPureBigIntFunction(fnNode) {
+  if (fnNode.async || fnNode.generator) return null;
+  if (!fnNode.params.every(p => p.type === 'Identifier')) return null;
+  const body = fnNode.body;
+  if (body?.type !== 'BlockStatement' || body.body.length === 0) return null;
+  const consts = [];
+  for (const stmt of body.body.slice(0, -1)) {
+    if (stmt.type !== 'VariableDeclaration' || stmt.declarations.length !== 1) return null;
+    const [d] = stmt.declarations;
+    if (d.id.type !== 'Identifier' || !d.init) return null;
+    consts.push({ name: d.id.name, init: d.init });
+  }
+  const last = body.body[body.body.length - 1];
+  if (last.type !== 'ReturnStatement' || !last.argument) return null;
+  return { params: fnNode.params.map(p => p.name), consts, returnExpr: last.argument };
+}
+
+/**
  * Recursively evaluate a BigInt expression at transpile time.
  * Returns the BigInt value if fully evaluable, or null if any operand is not a BigInt literal.
- * Also handles BigInt(numericExpr) where numericExpr is a constant numeric expression.
+ * Also handles BigInt(numericExpr) where numericExpr is a constant numeric expression,
+ * and a call to one of the `fns` helpers recognized by asPureBigIntFunction.
  */
-function tryEvalBigInt(node, scalarVars = null) {
+function tryEvalBigInt(node, scalarVars = null, numVars = null, fns = null) {
   if (!node) return null;
   if (node.type === 'Literal' && node.bigint !== undefined) return BigInt(node.bigint);
   // A const variable bound to a fully-evaluable BigInt expression (e.g.
@@ -364,12 +425,12 @@ function tryEvalBigInt(node, scalarVars = null) {
     return scalarVars.get(node.name);
   }
   if (node.type === 'UnaryExpression' && node.operator === '-') {
-    const v = tryEvalBigInt(node.argument, scalarVars);
+    const v = tryEvalBigInt(node.argument, scalarVars, numVars, fns);
     return v !== null ? -v : null;
   }
   if (node.type === 'BinaryExpression') {
-    const l = tryEvalBigInt(node.left, scalarVars);
-    const r = tryEvalBigInt(node.right, scalarVars);
+    const l = tryEvalBigInt(node.left, scalarVars, numVars, fns);
+    const r = tryEvalBigInt(node.right, scalarVars, numVars, fns);
     if (l === null || r === null) return null;
     switch (node.operator) {
       case '*':  return l * r;
@@ -387,10 +448,31 @@ function tryEvalBigInt(node, scalarVars = null) {
   if (node.type === 'CallExpression'
       && node.callee?.type === 'Identifier' && node.callee.name === 'BigInt'
       && node.arguments.length === 1) {
-    const numVal = tryEvalNumeric(node.arguments[0]);
+    const numVal = tryEvalNumeric(node.arguments[0], numVars);
     if (numVal !== null && Number.isInteger(numVal)) {
       return BigInt(Math.trunc(numVal));
     }
+  }
+  // A call to a transpile-time-only BigInt helper: bind the arguments to the parameters
+  // and evaluate the body in that scope. The helper is dropped from `fns` for its own
+  // body, so a recursive call simply fails to fold instead of spinning here.
+  if (node.type === 'CallExpression' && node.callee?.type === 'Identifier' && fns?.has(node.callee.name)) {
+    const fn = fns.get(node.callee.name);
+    if (node.arguments.length !== fn.params.length) return null;
+    const inner = new Map(fns);
+    inner.delete(node.callee.name);
+    const scope = new Map(scalarVars ?? []);
+    for (const [i, param] of fn.params.entries()) {
+      const v = tryEvalBigInt(node.arguments[i], scalarVars, numVars, fns);
+      if (v === null) return null;
+      scope.set(param, v);
+    }
+    for (const { name, init } of fn.consts) {
+      const v = tryEvalBigInt(init, scope, numVars, inner);
+      if (v === null) return null;
+      scope.set(name, v);
+    }
+    return tryEvalBigInt(fn.returnExpr, scope, numVars, inner);
   }
   return null;
 }
@@ -460,29 +542,20 @@ function arrowBigIntArgIsAlwaysTypeError(fnNode) {
   return body.arguments.some(a => a.type === 'Literal' && a.bigint !== undefined && !overflowsInt64(BigInt(a.bigint)));
 }
 
-/** Returns true if the arrow body directly calls methodName with a plain number literal arg. */
-function arrowCallsWithNumber(fnNode, methodName) {
-  if (!fnNode || fnNode.type !== 'ArrowFunctionExpression') return false;
-  const body = fnNode.body;
-  if (body.type !== 'CallExpression') return false;
-  const callee = body.callee;
-  if (!callee || callee.type !== 'MemberExpression' || callee.property.name !== methodName) return false;
-  return body.arguments.some(a => a.type === 'Literal' && typeof a.value === 'number');
-}
+/** Temporal constructors whose first argument is an epochNanoseconds converted with ToBigInt. */
+const EPOCH_NANOSECONDS_CTORS = new Set(['Instant', 'ZonedDateTime']);
 
 /**
- * Returns true if the arrow body is `new Temporal.Instant(arg)` where arg is a
- * plain Number literal (not a BigInt). PHP int64 can't replicate JS BigInt-vs-Number
- * type distinction, so these TypeError assertions are untranslatable.
+ * Renders a JS Number literal sitting in a ToBigInt argument position as a PHP float
+ * literal, or null if the node is not one. The spec layer models a JS BigInt as a PHP
+ * int and a JS Number as a PHP float, so `new Temporal.Instant(42)` must reach it as
+ * `42.0` to be rejected the way ToBigInt(Number) rejects it; emitting int `42` would
+ * make it a BigInt and construct successfully.
  */
-function arrowInstantCtorWithNumberArg(fnNode) {
-  if (!fnNode || fnNode.type !== 'ArrowFunctionExpression') return false;
-  const body = fnNode.body;
-  if (body.type !== 'NewExpression') return false;
-  const callee = body.callee;
-  if (!callee || callee.type !== 'MemberExpression') return false;
-  if (callee.object?.name !== 'Temporal' || callee.property?.name !== 'Instant') return false;
-  return body.arguments.some(a => a.type === 'Literal' && typeof a.value === 'number');
+function toBigIntArgAsPhpFloat(argNode) {
+  if (argNode?.type !== 'Literal' || typeof argNode.value !== 'number') return null;
+  const digits = String(argNode.value);
+  return /[.eE]/.test(digits) ? digits : `${digits}.0`;
 }
 
 /** Operator precedence table (higher = binds tighter). */
@@ -495,7 +568,7 @@ function typeofToPhp(phpArg, jsType) {
     case 'string':    return `is_string(${phpArg})`;
     case 'number':    return `(is_int(${phpArg}) || is_float(${phpArg}))`;
     case 'boolean':   return `is_bool(${phpArg})`;
-    case 'object':    return `(is_object(${phpArg}) && !(${phpArg} instanceof \\Temporal\\Tests\\Test262\\JsSymbol))`;
+    case 'object':    return `(is_object(${phpArg}) && !(${phpArg} instanceof ${HARNESS_NS}JsSymbol))`;
     // typeof matches JS strictly: `typeof null === 'object'`, not `'undefined'`.
     // Only the JsUndefined sentinel counts as JS undefined here. (Compare with
     // the `x === undefined` pattern handled in transpileBinary, which uses the
@@ -505,7 +578,7 @@ function typeofToPhp(phpArg, jsType) {
     case 'function':  return `is_callable(${phpArg})`;
     // 'symbol' is representable via the JsSymbol stand-in, so check it at runtime.
     // 'bigint' has no PHP equivalent (we lower BigInt to int/float) — always false.
-    case 'symbol':    return `${phpArg} instanceof \\Temporal\\Tests\\Test262\\JsSymbol`;
+    case 'symbol':    return `${phpArg} instanceof ${HARNESS_NS}JsSymbol`;
     case 'bigint':    return 'false';
     default:          return null;
   }
@@ -549,12 +622,22 @@ class Emitter {
     // Maps JS variable name → Temporal class name (e.g. 'Instant' → 'Instant').
     this.temporalClassAliases = new Map();
     // Set to true by processFile() when the script imports any TemporalHelpers
-    // observer (toPrimitiveObserver / propertyBagObserver). Our PHP helpers are
-    // passthroughs that do not record property-access order, so any statement
-    // consuming the JS "calls" array (assert.compareArray, .splice, .length=N)
-    // is skipped at emit time. In observer-using fixtures these statements are
-    // universally tracking artifacts, never independent assertions.
+    // observer (toPrimitiveObserver / propertyBagObserver). Gates the emit-time
+    // rules for the JS-only argument-coercion patterns those fixtures pair with
+    // the observers (see transpileExprStmt).
     this.observersInUse = false;
+    // Names of the arrays the observers record their trace into — argument 0 of a
+    // toPrimitiveObserver / propertyBagObserver call. The trace is real in PHP, so
+    // `compareArray(tracker, expected)` becomes a genuine order-of-operations
+    // assertion and `tracker.splice(0)` / `tracker.length = 0` a genuine reset.
+    // Only a compareArray whose first argument is one of these names is rewritten;
+    // any other compareArray in an observer fixture stays an ordinary array check.
+    this.observerTrackers = new Set();
+    // Set when a statement is skipped in observer mode, cleared when a tracker is
+    // reset. A trace assertion covering a call PHP never makes would compare an empty
+    // tracker against the JS reads, so it is skipped until the next reset — unlike the
+    // assertions around it, which still describe calls that did happen.
+    this.observerTraceStale = false;
     // Maps `const X = [...]` Identifier names to the literal element count.
     // Lets the observer-mode skip rule recognize `new Ctor(...X)` patterns where
     // X was statically constructed with too few elements (e.g. PlainMonthDay's
@@ -564,6 +647,10 @@ class Emitter {
     // Array-literal variables whose elements include a BigInt literal — a for-of
     // over one is not faithfully translatable (PHP has no BigInt type).
     this.bigIntArrayVars = new Set();
+    // Array-literal variables carrying a `{ toString: () => <non-String> }` entry.
+    // PHP's engine-enforced `__toString(): string` makes such a value a valid string,
+    // so a throw assertion over it cannot be reproduced and the entry is skipped.
+    this.nonStringPrimitiveArrayVars = new Set();
     // Array-literal variables whose elements include a plain Number literal — used
     // to decide when a BigInt-containing wrong-type table can be safely lowered.
     this.numberLiteralArrayVars = new Set();
@@ -584,6 +671,10 @@ class Emitter {
     // Used by BigInt(var) constant folding to look up whether a variable holds a known
     // integer value (e.g. `const epochMs = 1735213600321` → constNumericVars.get('epochMs') = 1735213600321).
     this.constNumericVars = new Map();
+    // Every name the program ever assigns to after its declaration. A binding in there
+    // has no single compile-time value, so it is barred from constNumericVars however
+    // it was declared. Filled once per program by collectReassignedNames.
+    this.reassignedVars = new Set();
     // Variables bound to an extracted Temporal method or readonly-property getter
     // reference, used by the "branding" fixtures: `const M = Temporal.X.prototype.method`
     // or `const M = Object.getOwnPropertyDescriptor(Temporal.X.prototype, 'p').get`.
@@ -598,6 +689,23 @@ class Emitter {
     // its BigInt value. Threaded into tryEvalBigInt so later expressions like
     // `Number((nanos / Xn) % Yn)` constant-fold. Populated in transpileVarDecl.
     this.bigIntScalarVars = new Map();
+    // The subset of bigIntScalarVars whose value exceeds int64 and therefore has no
+    // PHP variable behind it (see transpileVarDecl). Every use must fold to the exact
+    // compile-time value; transpileIdentifier bails on any that reaches it unfolded.
+    this.bigIntUnrepresentableVars = new Set();
+    // Array-literal variables whose every element folds to a compile-time BigInt.
+    // Maps JS var name → the list of those values, so transpileForOf can unroll a loop
+    // over a table int64 cannot hold. See tryUnrollBigIntTableForOf.
+    this.bigIntArrayValues = new Map();
+    // Function declarations that only compute a BigInt from their arguments. They have
+    // no PHP counterpart and are never emitted; their calls fold instead. Maps JS
+    // function name → the shape asPureBigIntFunction returned.
+    this.bigIntFns = new Map();
+  }
+
+  /** tryEvalBigInt over this program's tracked bindings and transpile-time helpers. */
+  evalBigInt(node) {
+    return tryEvalBigInt(node, this.bigIntScalarVars, this.constNumericVars, this.bigIntFns);
   }
 
   emit(line) {
@@ -631,6 +739,10 @@ class Emitter {
    * incomplete tests). Keeps the generated PHP traceable to the source JS.
    */
   emitSkipComment(node, reason) {
+    // A dropped statement in an observer fixture is usually a call the trace was
+    // meant to cover, so anything asserted about the tracker before its next reset
+    // would be comparing against reads that never happened.
+    if (this.observersInUse) this.observerTraceStale = true;
     if (!node || typeof node.start !== 'number' || typeof node.end !== 'number') {
       this.emit(`// JS-only (${reason}): statement omitted`);
       return;
@@ -644,13 +756,14 @@ class Emitter {
   // ── Top-level ─────────────────────────────────────────────────────────────
 
   transpileProgram(node) {
+    collectReassignedNames(node, this.reassignedVars);
     // Canonical read-only-accessor prop-desc.js shape (whole-program match):
     // emit a single Assert::readOnlyAccessor call (member-shape reflection lives
     // in Assert beside methodExists/methodLength).
     const propDesc = parsePropDescAccessorProgram(node.body);
     if (propDesc) {
       this.emit(
-        `Assert::readOnlyAccessor(\\Temporal\\Spec\\${propDesc.class}::class, ${phpStr(propDesc.prop)});`,
+        `Assert::readOnlyAccessor(${SPEC_NS}${propDesc.class}::class, ${phpStr(propDesc.prop)});`,
       );
       return;
     }
@@ -755,7 +868,7 @@ class Emitter {
         // Getter-only Temporal subclass (use-internal-slots fixtures): register the
         // class as an alias of its Temporal base and drop the declaration. The
         // throwing getters can never fire in PHP (property reads don't dispatch
-        // through getters), and `new X(args)` rewrites to `new Temporal\Spec\Base`.
+        // through getters), and `new X(args)` rewrites to `new Calendrics\Spec\Base`.
         const baseClass = parseGetterOnlyTemporalSubclass(node);
         if (baseClass !== null) {
           this.temporalClassAliases.set(node.id.name, baseClass);
@@ -802,7 +915,7 @@ class Emitter {
           }
           continue; // no PHP emitted for this declaration
         }
-        // const { method } = Temporal.X; → $method = [\Temporal\X::class, 'method'];
+        // const { method } = Temporal.X; → $method = [\Calendrics\X::class, 'method'];
         if (decl.init?.type === 'MemberExpression' && !decl.init.computed
             && decl.init.object?.type === 'Identifier' && decl.init.object.name === 'Temporal'
             && decl.init.property?.type === 'Identifier') {
@@ -810,7 +923,7 @@ class Emitter {
           for (const prop of decl.id.properties) {
             if (prop.type === 'Property' && !prop.computed && prop.key?.type === 'Identifier') {
               const methodName = prop.value?.name ?? prop.key.name;
-              this.emit(`$${methodName} = [\\Temporal\\Spec\\${className}::class, '${methodName}'];`);
+              this.emit(`$${methodName} = [${SPEC_NS}${className}::class, '${methodName}'];`);
             }
           }
           continue; // handled
@@ -861,6 +974,17 @@ class Emitter {
         }
         continue;
       }
+      // `const options = undefined;` binds the JsUndefined sentinel rather than PHP
+      // null. The sentinel reaches GetOptionsObject as an ordinary object and
+      // snapshots empty, which is what the spec's "OrdinaryObjectCreate for
+      // undefined" step does; PHP null is JS null and must stay a TypeError.
+      // transpileArgs trims a literal trailing `undefined`, but a binding survives
+      // to the call site, so the two rules have to agree.
+      if (decl.id.type === 'Identifier'
+          && decl.init?.type === 'Identifier' && decl.init.name === 'undefined') {
+        this.emit(`$${decl.id.name} = JsUndefined::singleton();`);
+        continue;
+      }
       // Track object literals: in array mode they become PHP arrays ['key' => val]
       // and use ['key'] access; in objectMode they become (object) [...] (stdClass)
       // and use ->key access. The objectMode flag on the emitter governs which one
@@ -887,6 +1011,14 @@ class Emitter {
           this.instanceVarClasses.set(decl.id.name, ctorTarget.class);
         }
       }
+      // An observer tracker's `const actual = []` becomes the ObserverTrace the
+      // observers record into — an object, so every observer shares the one the
+      // fixture later asserts on.
+      if (decl.id.type === 'Identifier' && decl.init?.type === 'ArrayExpression'
+          && decl.init.elements.length === 0 && this.observerTrackers.has(decl.id.name)) {
+        this.emit(`$${decl.id.name} = new ${HARNESS_NS}ObserverTrace();`);
+        continue;
+      }
       // Track variables initialized from array literals — used in observer mode
       // to detect `new TemporalCtor(...arr)` "missing args" assertions where `arr`
       // was statically constructed with fewer elements than the constructor needs.
@@ -898,11 +1030,25 @@ class Emitter {
         if (hasBigIntLiteral(decl.init)) {
           this.bigIntArrayVars.add(decl.id.name);
         }
+        // Tables whose every element folds to an exact BigInt (e.g. the epoch-limit
+        // fixtures' `[nsMax + 1n, nsMin - 1n, 2n ** 128n, -(2n ** 128n)]`). Recording
+        // the values lets transpileForOf unroll the loop instead of bailing on the
+        // over-int64 elements the emitted array cannot hold.
+        const elementValues = decl.init.elements.map(e => this.evalBigInt(e));
+        if (elementValues.length > 0 && elementValues.every(v => v !== null)) {
+          this.bigIntArrayValues.set(decl.id.name, elementValues);
+        }
         // Track tables that ALSO contain a plain Number literal: such a sibling,
         // when asserted to throw, proves the tested slot rejects the Number type,
         // so lowering a BigInt (→ Number) to plain int is safe (see transpileForOf).
         if (hasNumberLiteral(decl.init)) {
           this.numberLiteralArrayVars.add(decl.id.name);
+        }
+        // Track tables carrying a `{ toString: () => <non-String> }` entry, whose
+        // TypeError PHP cannot reproduce (see transpileObject / JsNonStringPrimitive).
+        // A for-of asserting a throw over such a table skips those entries.
+        if (decl.init.elements.some(hasNonStringToPrimitive)) {
+          this.nonStringPrimitiveArrayVars.add(decl.id.name);
         }
       }
       // Detect inline JS-only ToPrimitive observers: `const X = { valueOf() {} }`
@@ -973,38 +1119,41 @@ class Emitter {
         // a BigInt source (a BigInt literal or BigInt(...) call) — e.g.
         // `const nanos = BigInt(Number.MAX_SAFE_INTEGER) + 2n`. Record its compile-time
         // BigInt value so later expressions like `Number((nanos / Xn) % Yn)` fold.
-        // Gate on hasBigIntLiteral || BigInt(...) so plain integer consts (handled by
+        // Gate on hasBigIntLiteral || BigInt(...) || a read of an already-tracked BigInt
+        // const (`var nsMin = -nsMax;`) so plain integer consts (handled by
         // constNumericVars / normal emit) are not swept in.
         //
-        // ONLY track values that fit int64: the variable is emitted as a real PHP int
-        // and may be referenced by downstream code that is NOT folded (e.g.
-        // `const min = -nsMax; new ZonedDateTime(min, …)`). An overflowing value cannot
-        // be emitted as a PHP int, and recording it without an emit would leave the PHP
-        // variable undefined at those downstream sites — so leave overflowing consts to
-        // the existing overflow-bail path.
-        if (decl.init && (hasBigIntLiteral(decl.init) || referencesBigIntCall(decl.init))) {
-          const bigVal = tryEvalBigInt(decl.init, this.bigIntScalarVars);
-          if (bigVal !== null && !overflowsInt64(bigVal)) {
+        // A value that fits int64 also gets a real PHP variable, so unfolded uses still
+        // work. One that does not fit is tracked value-only: nothing is emitted, the name
+        // joins bigIntUnrepresentableVars, and every use must fold to the compile-time
+        // value (over-int64 epoch constructions lower to the (epochSec, subNs) parts
+        // factories; template interpolations lower to the exact decimal string). Uses
+        // that reach transpileIdentifier unfolded bail there rather than referencing an
+        // undefined PHP variable.
+        if (decl.init && (hasBigIntLiteral(decl.init) || referencesBigIntCall(decl.init)
+            || expressionRefsAny(decl.init, new Set(this.bigIntScalarVars.keys())))) {
+          const bigVal = this.evalBigInt(decl.init);
+          if (bigVal !== null) {
             this.bigIntScalarVars.set(decl.id.name, bigVal);
-            this.emit(`$${decl.id.name} = ${phpInt(bigVal.toString())};`);
+            if (overflowsInt64(bigVal)) {
+              this.bigIntUnrepresentableVars.add(decl.id.name);
+              this.emit(`// Folded (BigInt ${bigVal} exceeds int64): ${decl.id.name}`);
+            } else {
+              this.emit(`$${decl.id.name} = ${phpInt(bigVal.toString())};`);
+            }
             continue;
           }
         }
       }
       const lhs = this.transpilePattern(decl.id);
       const rhs = this.transpileExpr(decl.init);
-      // Track const numeric variables that are assigned from Date.UTC(...) calls,
-      // enabling BigInt(dateUTCVar) to be constant-folded later. We specifically restrict
-      // this to Date.UTC results (not arbitrary numeric literals) because:
-      //  (a) Date.UTC always returns a value ≤ ~8e12 ms (unix timestamps), safely within
-      //      the float64 exact-integer range and never used in large multiplications.
-      //  (b) Arbitrary numeric vars like `seconds = 8692288669465520` might be used in
-      //      BigInt arithmetic that exposes precision differences between our PHP int
-      //      implementation and JS's exact BigInt semantics — those tests should remain
-      //      incomplete rather than generating wrong-answer PHP code.
+      // Track variables bound to a compile-time integer, so `BigInt(v)` folds later —
+      // both alone and nested inside a larger BigInt expression. PHP int never performs
+      // the arithmetic: tryEvalBigInt runs it under Node, whose BigInt is exact and
+      // unbounded, and only the result is emitted.
       if (decl.id.type === 'Identifier' && decl.init !== null
-          && decl.init.type === 'CallExpression' && isMember(decl.init.callee, 'Date', 'UTC')) {
-        const numVal = tryEvalNumeric(decl.init);
+          && !this.reassignedVars.has(decl.id.name)) {
+        const numVal = tryEvalNumeric(decl.init, this.constNumericVars);
         if (numVal !== null && Number.isInteger(numVal)) {
           this.constNumericVars.set(decl.id.name, numVal);
         }
@@ -1048,24 +1197,22 @@ class Emitter {
       this.emitIncomplete('untranslatable: anonymous FunctionDeclaration');
       return;
     }
-    const params = node.params.map(p => this.transpilePattern(p)).join(', ');
-    // If any parameter is an ObjectPattern (destructured object), the body cannot
-    // faithfully execute: the transpiler can't extract the destructured fields, so
-    // the body will reference outer-scope captures instead of local defaults.
-    // Emitting incomplete preserves the prior "ArgumentCountError → incomplete" behaviour.
-    if (node.params.some(p => {
-      // AssignmentPattern wrapping an ObjectPattern: `{a = 1} = {}`
-      const inner = (p.type === 'AssignmentPattern') ? p.left : p;
-      return inner.type === 'ObjectPattern';
-    })) {
-      this.emitIncomplete('untranslatable: function parameter ObjectPattern destructuring');
-      return;
-    }
+    const destructured = this.destructureParams(node.params);
+    if (destructured === null) return;
+    const { params, prologue, boundNames: paramNames } = destructured;
     // If the function body uses BigInt arithmetic (or an overflowing BigInt literal),
     // the computation may overflow PHP int64 or diverge from JS BigInt semantics.
     // A plain, non-overflowing BigInt literal passed straight through (e.g.
     // `new Temporal.ZonedDateTime(0n, tz)`) is safe and lowers to a plain int.
     if (hasUnsafeBigInt(node.body)) {
+      // A helper that only computes a BigInt from its arguments needs no PHP closure:
+      // its calls fold at transpile time, so record it and emit nothing rather than
+      // abandoning the fixture over arithmetic that never runs in PHP.
+      const pureBigIntFn = asPureBigIntFunction(node);
+      if (pureBigIntFn !== null) {
+        this.bigIntFns.set(name, pureBigIntFn);
+        return;
+      }
       this.emitIncomplete('untranslatable: BigInt arithmetic in function body');
       return;
     }
@@ -1086,9 +1233,12 @@ class Emitter {
       return;
     }
     if (savedIncomplete) return; // already incomplete; nothing to emit
+    // Bind destructured parameters ahead of the body, so the names it references are
+    // locals rather than same-named captures from the enclosing scope.
+    inner.unshift(...prologue);
     // Track variables defined within the body to exclude from the use clause.
     // This prevents spurious capture of foreach loop variables and local assignments.
-    const localVars = new Set(node.params.map(p => p.type === 'Identifier' ? p.name : null).filter(Boolean));
+    const localVars = new Set(paramNames);
     for (const line of inner) {
       // Regular assignment: $var = ...
       for (const m of line.matchAll(/\$([a-zA-Z_]\w*)\s*=/g)) localVars.add(m[1]);
@@ -1222,26 +1372,56 @@ class Emitter {
       this.emitSkipComment(node, 'references JS-only ToPrimitive tracker variable');
       return;
     }
-    // In observer-using fixtures, drop statements that are JS-only artifacts.
-    // Our PHP passthrough observers don't record property-access order, and our
-    // typed signatures pre-validate where JS uses ToObject/ToPrimitive coercion,
-    // so several JS-spec patterns either trivially fail or throw a different
-    // PHP-native error class.
+    // In observer-using fixtures, handle the statements that consume the trace, and
+    // drop the JS-only coercion patterns those fixtures pair with the observers: our
+    // typed signatures pre-validate where JS uses ToObject/ToPrimitive coercion, so
+    // several JS-spec patterns either trivially fail or throw a different PHP-native
+    // error class.
     if (this.observersInUse) {
       const e = node.expression;
-      // assert.compareArray(*, ...) — call-order tracking, always empty in PHP.
+      const isTracker = n => n?.type === 'Identifier' && this.observerTrackers.has(n.name);
+      // assert.compareArray(tracker, expected) — the order-of-operations assertion.
+      // Routed through compareObserverTrace, which drops the ToNumber events PHP
+      // cannot produce before comparing (see Assert::compareObserverTrace).
+      if (e.type === 'CallExpression' && isMember(e.callee, 'assert', 'compareArray')
+          && isTracker(e.arguments[0])) {
+        if (this.observerTraceStale) {
+          this.emitSkipComment(node, 'trace covers a call skipped above, so the tracker is empty here');
+          return;
+        }
+        const args = this.transpileArgs(e.arguments);
+        if (args === null) return;
+        this.emit(`Assert::compareObserverTrace(${args});`);
+        return;
+      }
+      // tracker.splice(...) / tracker.length = N — clear the trace between phases.
+      if (e.type === 'CallExpression'
+          && e.callee.type === 'MemberExpression' && !e.callee.computed
+          && e.callee.property?.type === 'Identifier' && e.callee.property.name === 'splice'
+          && isTracker(e.callee.object)) {
+        this.emit(`$${e.callee.object.name}->clear();`);
+        this.observerTraceStale = false;
+        return;
+      }
+      if (e.type === 'AssignmentExpression'
+          && e.left.type === 'MemberExpression' && !e.left.computed
+          && e.left.property?.type === 'Identifier' && e.left.property.name === 'length'
+          && isTracker(e.left.object)) {
+        this.emit(`$${e.left.object.name}->clear();`);
+        this.observerTraceStale = false;
+        return;
+      }
+      // The same shapes against a non-tracker array remain JS-only artifacts.
       if (e.type === 'CallExpression' && isMember(e.callee, 'assert', 'compareArray')) {
         this.emitSkipComment(node, 'observer call-order check, tracker is empty in PHP');
         return;
       }
-      // X.splice(...) — clear-the-tracking-array calls.
       if (e.type === 'CallExpression'
           && e.callee.type === 'MemberExpression' && !e.callee.computed
           && e.callee.property?.type === 'Identifier' && e.callee.property.name === 'splice') {
         this.emitSkipComment(node, 'observer tracker reset (no-op in PHP)');
         return;
       }
-      // X.length = N — alternate clear pattern.
       if (e.type === 'AssignmentExpression'
           && e.left.type === 'MemberExpression' && !e.left.computed
           && e.left.property?.type === 'Identifier' && e.left.property.name === 'length') {
@@ -1329,13 +1509,63 @@ class Emitter {
     if (php !== null) this.emit(`${php};`);
   }
 
+  /**
+   * Unrolls `for (const x of <table>)` where every element of the table folds to an
+   * exact BigInt and at least one exceeds int64 — the shape the epoch-limit fixtures
+   * use to enumerate out-of-range epoch nanoseconds. A PHP array cannot hold those
+   * values, so the loop is replayed once per element with the loop variable bound to
+   * the element's compile-time value, letting the over-int64 lowerings
+   * ({@see emitOverInt64Ctor}, template interpolation) see each one.
+   *
+   * All-or-nothing: if any iteration's body turns out untranslatable, nothing is
+   * emitted and the caller's normal (bail) handling takes over.
+   *
+   * Returns true when the loop was unrolled.
+   */
+  tryUnrollBigIntTableForOf(node) {
+    const table = node.right.type === 'Identifier'
+      ? this.bigIntArrayValues.get(node.right.name)
+      : null;
+    if (!table || !table.some(overflowsInt64)) return false;
+
+    const loopVar = node.left.declarations?.[0]?.id ?? node.left;
+    if (loopVar.type !== 'Identifier') return false;
+
+    const savedScalar = this.bigIntScalarVars.get(loopVar.name);
+    const savedUnrepresentable = this.bigIntUnrepresentableVars.has(loopVar.name);
+    const savedLines = this.lines;
+    const unrolled = [];
+    let failed = false;
+    for (const value of table) {
+      this.bigIntScalarVars.set(loopVar.name, value);
+      this.bigIntUnrepresentableVars[overflowsInt64(value) ? 'add' : 'delete'](loopVar.name);
+      this.lines = [];
+      this.transpileStatement(node.body);
+      if (this.incomplete) {
+        this.incomplete = false;
+        failed = true;
+        break;
+      }
+      unrolled.push(...this.lines);
+    }
+    this.lines = savedLines;
+    if (savedScalar === undefined) this.bigIntScalarVars.delete(loopVar.name);
+    else this.bigIntScalarVars.set(loopVar.name, savedScalar);
+    this.bigIntUnrepresentableVars[savedUnrepresentable ? 'add' : 'delete'](loopVar.name);
+    if (failed) return false;
+
+    this.emit(`// Unrolled (${table.length} over-int64 BigInt values): ${loopVar.name}`);
+    for (const line of unrolled) this.emit(line);
+    return true;
+  }
+
   // Decide whether a for-of over a wrong-type data table containing a BigInt
   // literal can be lowered to a plain PHP foreach. Such a loop relies on the JS
   // Number-vs-BigInt type distinction, which PHP has no equivalent for — `Nn`
   // and `N` both become PHP int — so a throw assertion that depends on it can't
   // be reproduced. Returns one of:
   //   'incomplete' — the loop can't be faithfully lowered; emit incomplete.
-  //   'skip-null'  — lowering is safe, but `null` elements must be skipped.
+  //   'lower'      — lowering is safe; transpile the whole table.
   //   null         — the BigInt-table rule does not apply; transpile normally.
   classifyBigIntTableForOf(node) {
     // Only applies to a for-of over a BigInt-containing data table (inline, or a
@@ -1376,7 +1606,7 @@ class Emitter {
       // The lookalike `with/options-wrong-type` field-validation ordering gap (RangeError
       // from a non-string property bag) is rejected by isStringParseFromOptionsWrongTypeBody.
       if (tableHasNumberLiteral && isStringParseFromOptionsWrongTypeBody(node.body)) {
-        return 'skip-null';
+        return 'lower';
       }
       // The `with/options-wrong-type` property-bag family: RangeError comes from the
       // partial-field coercion, which the PHP spec layer now performs BEFORE the
@@ -1389,12 +1619,11 @@ class Emitter {
       }
       return 'incomplete';
     }
-    // A `null` table element may be an OMITTED positional argument (e.g. a
-    // positional calendar → ISO, no throw) rather than a wrong-type value, which
-    // would fail an `assert.throws`. Skip the null iteration in the lowered loop;
-    // the remaining elements still cover the throw path. (A property-bag null
-    // that DOES throw is merely left untested here — never red.)
-    return 'skip-null';
+    // A `null` table element is JS null wherever it lands — a value the algorithms
+    // reject, positional slot or option key alike. Nothing to skip: PHP null now
+    // means JS null everywhere, and JS undefined arrives as the JsUndefined
+    // sentinel or as an omitted argument.
+    return 'lower';
   }
 
   transpileForOf(node) {
@@ -1434,17 +1663,13 @@ class Emitter {
       // TemporalHelpers::notYetSupportedCalendars().
     }
 
+    if (this.tryUnrollBigIntTableForOf(node)) return;
+
     const bigIntTable = this.classifyBigIntTableForOf(node);
     if (bigIntTable === 'incomplete') {
       this.emitIncomplete('BigInt literal in wrong-type for-of data table; Number-vs-BigInt distinction not representable in PHP');
       return;
     }
-    // `null` data-table elements must be skipped when the BigInt table is lowered as
-    // 'skip-null' (a null may be an omitted-positional sentinel). The 'lower' signal
-    // (with/options-wrong-type property-bag family) keeps null — there it is a genuine
-    // wrong-type options value — so it falls through to the normal null-keeping foreach.
-    const nullSkipForOf = bigIntTable === 'skip-null';
-
     // Special case: for (const [k, v] of Object.entries(obj)) → foreach ($obj as $k => $v)
     // Also handles: for (const [k, {a, b, c}] of Object.entries(obj)) where the value slot
     // is an ObjectPattern — the properties are bound inside the loop body.
@@ -1543,9 +1768,6 @@ class Emitter {
       this.emit(`foreach (${iter2} as ${tmpVar2}) {`);
       const opened2 = this.lines.length > before2;
       this.emit(`${pat} = array_pad(${tmpVar2}, ${n}, null);`);
-      if (nullSkipForOf) {
-        this.emit(`if (${parts[0]} === null) { continue; }`);
-      }
       // Emit default assignments for elements with AssignmentPattern defaults.
       for (let i = 0; i < patNode2.elements.length; i++) {
         const el = patNode2.elements[i];
@@ -1636,8 +1858,14 @@ class Emitter {
     const before = this.lines.length;
     this.emit(`foreach (${iter} as ${pat}) {`);
     const opened = this.lines.length > before;
-    if (nullSkipForOf) {
-      this.emit(`if (${pat} === null) { continue; }`);
+    // A `{ toString: () => <non-String> }` entry only belongs in a wrong-type table
+    // under JS semantics; in PHP it is an ordinary stringifiable value, so skip it
+    // rather than assert a rejection the language cannot produce.
+    const tableHasNonStringPrimitive =
+      (node.right.type === 'ArrayExpression' && node.right.elements.some(hasNonStringToPrimitive))
+      || (node.right.type === 'Identifier' && this.nonStringPrimitiveArrayVars.has(node.right.name));
+    if (tableHasNonStringPrimitive && subtreeHasAssertThrows(node.body)) {
+      this.emit(`if (${pat} instanceof ${HARNESS_NS}JsNonStringPrimitive) { continue; }`);
     }
     this.transpileStatement(node.body);
     if (opened) this.lines.push('}'); // always close what was opened
@@ -1752,6 +1980,13 @@ class Emitter {
   }
 
   transpileIdentifier(node) {
+    // A const whose BigInt value exceeds int64 has no PHP variable behind it — the
+    // value only survives where a caller folds it (see transpileVarDecl). Reaching
+    // here means no caller did, so bail instead of emitting an undefined variable.
+    if (this.bigIntUnrepresentableVars.has(node.name)) {
+      this.emitIncomplete(`cannot represent value of '${node.name}' in PHP (BigInt overflow)`);
+      return null;
+    }
     switch (node.name) {
       // Default: PHP null. The JsUndefined sentinel only appears when transpileArray
       // sees `undefined` in element position (parametric test-data tables) or when
@@ -1767,7 +2002,7 @@ class Emitter {
       // The test262 harness's Test262Error → its PHP counterpart. Used both as a
       // class reference in `assert.throws(Test262Error, …)` (via transpileAsClassRef)
       // and as a thrown value in positive-probe getter bodies (`throw new Test262Error()`).
-      case 'Test262Error': return '\\Temporal\\Tests\\Test262\\Test262Error';
+      case 'Test262Error': return `${HARNESS_NS}Test262Error`;
       case 'Infinity':   return 'INF';
       case 'NaN':        return 'NAN';
       case 'Temporal':
@@ -1797,6 +2032,17 @@ class Emitter {
           const innerPhp = this.transpileExpr(exprNode.argument);
           if (innerPhp === null) return null;
           result += `" . (gettype(${innerPhp})) . "`;
+          continue;
+        }
+        // An over-int64 BigInt constant has no PHP value, but JS interpolates it as its
+        // decimal digits — which is all these description strings ever need.
+        if (expressionRefsAny(exprNode, this.bigIntUnrepresentableVars)) {
+          const bigVal = this.evalBigInt(exprNode);
+          if (bigVal === null) {
+            this.emitIncomplete('untranslatable: unfoldable BigInt in template literal');
+            return null;
+          }
+          result += bigVal.toString();
           continue;
         }
         const exprPhp = this.transpileExpr(exprNode);
@@ -1917,13 +2163,13 @@ class Emitter {
             // (missing required fields on a non-property-bag object).
             // Emit new \stdClass() — not a string, array, or Temporal type → TypeError.
             // Note: instanceof and TemporalHelpers.checkSubclassing* use transpileTemporalClassRef
-            // directly, bypassing this path, so they still get \Temporal\X::class.
+            // directly, bypassing this path, so they still get \Calendrics\X::class.
             return 'new \\stdClass()';
           case 'prototype':
             return 'new \\stdClass()';
           case 'staticMethod':
           case 'instanceMethod':
-            this.emitIncomplete(`\\Temporal\\Spec\\${temporalTarget.class}::${temporalTarget.method} used as a value`);
+            this.emitIncomplete(`${SPEC_NS}${temporalTarget.class}::${temporalTarget.method} used as a value`);
             return null;
         }
       }
@@ -1954,11 +2200,9 @@ class Emitter {
       if (node.object.type === 'Identifier' && node.object.name === 'Number') {
         switch (node.property.name) {
           case 'MAX_SAFE_INTEGER': return '9_007_199_254_740_991';
-          case 'MAX_VALUE':
-            // Number.MAX_VALUE ≈ 1.8e308 has no PHP int equivalent; PHP_INT_MAX µs/ns
-            // is within the valid Duration range, so this test cannot be faithfully translated.
-            this.emitIncomplete('Number.MAX_VALUE exceeds PHP_INT_MAX; no exact PHP int equivalent');
-            return null;
+          // PHP_FLOAT_MAX is bit-for-bit Number.MAX_VALUE; the fixtures that use it
+          // pass it where a JS Number is expected, which the spec layer takes as a float.
+          case 'MAX_VALUE':        return 'PHP_FLOAT_MAX';
           case 'MIN_SAFE_INTEGER': return '-9_007_199_254_740_991';
           case 'MIN_VALUE':        return '5.0E-324';
           case 'EPSILON':          return '2.220446049250313E-16';
@@ -2055,6 +2299,24 @@ class Emitter {
       return `array_map(fn(${params}) => ${body}, ${arr})`;
     }
 
+    // arr.find(cb) / arr.some(cb) → Js::arrayFind / Js::arraySome with a PHP
+    // closure. Only arrow callbacks are supported (the only form in the corpus);
+    // anything else falls out as incomplete.
+    if (callee.type === 'MemberExpression' && !callee.computed
+        && (callee.property.name === 'find' || callee.property.name === 'some')) {
+      const cb = node.arguments[0];
+      if (!cb || cb.type !== 'ArrowFunctionExpression') {
+        this.emitIncomplete(`untranslatable: Array.prototype.${callee.property.name}()`);
+        return null;
+      }
+      const arr = this.transpileExpr(callee.object);
+      if (arr === null) return null;
+      const cbPhp = this.transpileExpr(cb);
+      if (cbPhp === null) return null;
+      const helper = callee.property.name === 'find' ? 'arrayFind' : 'arraySome';
+      return `${HARNESS_NS}Js::${helper}(${arr}, ${cbPhp})`;
+    }
+
     // TemporalHelpers.ISO.method() chains: translate known methods to TemporalHelpers::isoMethod().
     // All seven ISO string-array helpers used in the corpus are listed here.
     if (callee.type === 'MemberExpression' && !callee.computed
@@ -2101,7 +2363,7 @@ class Emitter {
         return null;
       }
       // checkSubclassingIgnored / checkSubclassingIgnoredStatic:
-      // first arg is Temporal.X (class reference) → translate to \Temporal\X::class
+      // first arg is Temporal.X (class reference) → translate to \Calendrics\X::class
       if (method === 'checkSubclassingIgnored' || method === 'checkSubclassingIgnoredStatic') {
         const [classArg, ...rest] = node.arguments;
         const classRef = this.transpileTemporalClassRef(classArg);
@@ -2112,6 +2374,13 @@ class Emitter {
         const restArgs = this.transpileArgs(rest);
         if (restArgs === null) return null;
         return `TemporalHelpers::${method}(${classRef}, ${restArgs})`;
+      }
+      // The observers record their property-access trace into the array passed as
+      // argument 0. Remember its name so the compareArray / reset statements that
+      // consume it downstream are recognized as trace handling rather than dropped.
+      if (method === 'toPrimitiveObserver' || method === 'propertyBagObserver') {
+        const tracker = node.arguments[0];
+        if (tracker?.type === 'Identifier') this.observerTrackers.add(tracker.name);
       }
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
@@ -2128,13 +2397,27 @@ class Emitter {
       return `Assert::assertTrue(${valPhp}, ${msgPhp})`;
     }
 
+    // A call to a transpile-time-only BigInt helper (see asPureBigIntFunction). No PHP
+    // function was emitted for it, so the value has to fold here or the fixture bails.
+    if (callee.type === 'Identifier' && this.bigIntFns.has(callee.name)) {
+      const bigVal = this.evalBigInt(node);
+      if (bigVal === null) {
+        this.emitIncomplete('untranslatable: BigInt arithmetic in function body');
+        return null;
+      }
+      // Over int64 the caller decides: an Instant/ZonedDateTime argument lowers to the
+      // exact (epochSec, subNs) parts, anything else bails where the value is consumed.
+      if (overflowsInt64(bigVal)) return null;
+      return phpInt(bigVal.toString());
+    }
+
     // BigInt(x) — try constant-folding (BigInt(4 * 1e9), BigInt(5 * 60 + 4), etc.)
     if (callee.type === 'Identifier' && callee.name === 'BigInt') {
       // tryEvalBigInt handles BigInt(numericConstExpr) via tryEvalNumeric.
       // Only constant numeric expressions (not runtime variables) are safe to fold here,
       // since we can't know whether a runtime variable's value will overflow int64 when
       // later multiplied (e.g. BigInt(seconds) * 1_000_000n may overflow).
-      const bigVal = tryEvalBigInt(node, this.bigIntScalarVars);
+      const bigVal = this.evalBigInt(node);
       if (bigVal !== null) {
         if (overflowsInt64(bigVal)) return null; // caller handles overflow
         return phpInt(bigVal.toString());
@@ -2160,15 +2443,17 @@ class Emitter {
       // equal to PHP int when values match numerically.
       if (!node.arguments.length) return '0';
       const arg0 = node.arguments[0];
-      // Number(<fully-evaluable BigInt expression>) — fold to its exact integer
-      // value. Covers `Number((nanos / Xn) % Yn)` where `nanos` is a tracked
-      // BigInt-const variable. JS Number(bigint) is exact for int64-range values;
-      // when the folded value overflows int64 we keep bailing below.
+      // Number(<fully-evaluable BigInt expression>) — fold to the value JS produces.
+      // Covers `Number((nanos / Xn) % Yn)` where `nanos` is a tracked BigInt-const
+      // variable, and the precision fixtures' `Number(BigInt(s) * 1000n + BigInt(ms))`.
+      // Past 2^53 the narrowing is lossy and the narrowed double is precisely what the
+      // fixture asserts against, so phpNumberFromBigInt emits that rather than the
+      // exact integer.
       if (referencesBigIntCall(arg0) || hasBigIntLiteral(arg0)
           || (arg0.type === 'Identifier' && this.bigIntScalarVars.has(arg0.name))) {
-        const bigVal = tryEvalBigInt(arg0, this.bigIntScalarVars);
-        if (bigVal !== null && !overflowsInt64(bigVal)) {
-          return phpInt(bigVal.toString());
+        const bigVal = this.evalBigInt(arg0);
+        if (bigVal !== null) {
+          return phpNumberFromBigInt(bigVal);
         }
       }
       // If the argument is a BigInt literal or a variable known to hold BigInt values,
@@ -2199,7 +2484,7 @@ class Emitter {
       if (isSafeLiteral) {
         return `(string) (${argPhp})`;
       }
-      return `\\Temporal\\Tests\\Test262\\Js::toString(${argPhp})`;
+      return `${HARNESS_NS}Js::toString(${argPhp})`;
     }
 
     // Symbol() called as bare function → JsSymbol sentinel. JsSymbol is Stringable
@@ -2207,7 +2492,7 @@ class Emitter {
     // This makes e.g. `fractionalSecondDigits: Symbol()` raise TypeError while a
     // plain non-Stringable object falls through to RangeError.
     if (callee.type === 'Identifier' && callee.name === 'Symbol') {
-      return '\\Temporal\\Tests\\Test262\\JsSymbol::singleton()';
+      return `${HARNESS_NS}JsSymbol::singleton()`;
     }
 
     // verifyProperty(target, prop, descriptor) → Assert::method checks
@@ -2219,12 +2504,12 @@ class Emitter {
       return 'false';
     }
 
-    // Date.UTC(year, month0, day, h, min, s, ms) → \Temporal\Tests\Test262\Js::dateUTC(...)
+    // Date.UTC(year, month0, day, h, min, s, ms) → \Calendrics\Tests\Test262\Js::dateUTC(...)
     // JS month is 0-indexed; our PHP helper mirrors this convention.
     if (isMember(callee, 'Date', 'UTC')) {
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `\\Temporal\\Tests\\Test262\\Js::dateUTC(${args})`;
+      return `${HARNESS_NS}Js::dateUTC(${args})`;
     }
 
     // Temporal class alias static method calls: Instant.from() after const { Instant } = Temporal;
@@ -2241,7 +2526,7 @@ class Emitter {
       }
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `\\Temporal\\Spec\\${className}::${method}(${args})`;
+      return `${SPEC_NS}${className}::${method}(${args})`;
     }
 
     // Temporal.X() called without new (should be called with new in PHP)
@@ -2249,7 +2534,7 @@ class Emitter {
         && callee.object.type === 'Identifier' && callee.object.name === 'Temporal'
         && callee.property.type === 'Identifier') {
       // This is Temporal.X() — not Temporal.X.y()
-      this.emitIncomplete(`\\Temporal\\Spec\\${callee.property.name}() must be called with new`);
+      this.emitIncomplete(`${SPEC_NS}${callee.property.name}() must be called with new`);
       return null;
     }
 
@@ -2261,6 +2546,18 @@ class Emitter {
         && node.arguments.length === 1
         && node.arguments[0].type === 'Literal' && node.arguments[0].value === 'timeZone') {
       return '\\DateTimeZone::listIdentifiers()';
+    }
+
+    // Intl.supportedValuesOf('calendar') → the same list derived from ICU's keyword
+    // values. The toLocaleString calendar-mismatch fixtures use it to pick a calendar
+    // that is neither ISO nor the locale's, so the list must not be narrowed to the
+    // calendars this library implements — see TemporalHelpers::supportedCalendars().
+    if (callee.type === 'MemberExpression' && !callee.computed
+        && callee.object.type === 'Identifier' && callee.object.name === 'Intl'
+        && callee.property.name === 'supportedValuesOf'
+        && node.arguments.length === 1
+        && node.arguments[0].type === 'Literal' && node.arguments[0].value === 'calendar') {
+      return 'TemporalHelpers::supportedCalendars()';
     }
 
     // Calls on JS built-in globals that have no PHP equivalent
@@ -2290,6 +2587,15 @@ class Emitter {
       // which is unconditionally true, so the argument's value is discarded.
       if (name === 'Object' && method === 'isExtensible') {
         return 'true';
+      }
+
+      // Object.create(null) → an empty options bag. A null-prototype object with
+      // no own properties is indistinguishable from {} to the spec layer (both
+      // read as "no options provided").
+      if (name === 'Object' && method === 'create'
+          && node.arguments.length === 1
+          && node.arguments[0].type === 'Literal' && node.arguments[0].value === null) {
+        return this.objectMode ? '(object) []' : '[]';
       }
 
       const jsGlobals = ['Object', 'Reflect', 'Symbol', 'Proxy', 'Array', 'JSON', 'Date'];
@@ -2423,6 +2729,17 @@ class Emitter {
         this.emitIncomplete(incompleteReasonFor(className, method));
         return null;
       }
+      // Instant.fromEpochNanoseconds(<over-int64 BigInt>) — same true-parts lowering the
+      // Instant / ZonedDateTime constructors get, so the ±8.64e21 boundary fixtures can
+      // express their arguments at all.
+      if (key === 'Instant::fromEpochNanoseconds' && node.arguments.length === 1) {
+        const epNsBig = this.evalBigInt(node.arguments[0]);
+        if (epNsBig !== null && overflowsInt64(epNsBig)) {
+          return emitOverInt64Ctor('Instant', epNsBig, '');
+        }
+        const epNsFloat = toBigIntArgAsPhpFloat(node.arguments[0]);
+        if (epNsFloat !== null) return `${SPEC_NS}Instant::fromEpochNanoseconds(${epNsFloat})`;
+      }
       // JS auto-coerces objects to strings; PHP does not. If an objectVars variable
       // is passed to a string-accepting method, the test relies on JS-specific behaviour.
       // Duration.from/compare and PlainDate.from/compare accept property bags (objects),
@@ -2437,7 +2754,7 @@ class Emitter {
       }
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `\\Temporal\\Spec\\${className}::${method}(${args})`;
+      return `${SPEC_NS}${className}::${method}(${args})`;
     }
 
     // Generic call (best-effort)
@@ -2498,13 +2815,16 @@ class Emitter {
       return null;
     }
 
-    switch (target.type) {
-      case 'namespace':
-        return 'Assert::assertTrue(true)';
+    // The Temporal namespace object itself carries no PHP counterpart; every other
+    // target names a spec class, so resolve it once for the branches below.
+    if (target.type === 'namespace') {
+      return 'Assert::assertTrue(true)';
+    }
+    const cls = target.class;
+    const phpClass = `${SPEC_NS}${cls}`;
 
+    switch (target.type) {
       case 'class': {
-        const cls = target.class;
-        const phpClass = `\\Temporal\\Spec\\${cls}`;
         if (propName === 'length') {
           const value = descNode ? this.getDescriptorValue(descNode) : null;
           if (value !== null) {
@@ -2523,8 +2843,6 @@ class Emitter {
       }
 
       case 'prototype': {
-        const cls = target.class;
-        const phpClass = `\\Temporal\\Spec\\${cls}`;
         if (propName === 'length' || propName === 'name' || propName === 'constructor') {
           return 'Assert::assertTrue(true)';
         }
@@ -2535,26 +2853,11 @@ class Emitter {
         return null;
       }
 
-      case 'staticMethod': {
-        const { class: cls, method } = target;
-        const phpClass = `\\Temporal\\Spec\\${cls}`;
-        if (propName === 'length') {
-          const value = descNode ? this.getDescriptorValue(descNode) : null;
-          if (value !== null) {
-            if (isPhpMethodImplemented(cls, method)) {
-              return `Assert::methodLength('${phpClass}', '${method}', ${value})`;
-            }
-            this.emitIncomplete(incompleteReasonFor(cls, method));
-            return null;
-          }
-          return 'Assert::assertTrue(true)';
-        }
-        return 'Assert::assertTrue(true)';
-      }
-
+      // Both spellings check the same thing: a method's declared arity. Static vs
+      // instance is a JS-side distinction with no bearing on the emitted assertion.
+      case 'staticMethod':
       case 'instanceMethod': {
-        const { class: cls, method } = target;
-        const phpClass = `\\Temporal\\Spec\\${cls}`;
+        const { method } = target;
         if (propName === 'length') {
           const value = descNode ? this.getDescriptorValue(descNode) : null;
           if (value !== null) {
@@ -2564,7 +2867,6 @@ class Emitter {
             this.emitIncomplete(incompleteReasonFor(cls, method));
             return null;
           }
-          return 'Assert::assertTrue(true)';
         }
         return 'Assert::assertTrue(true)';
       }
@@ -2586,6 +2888,35 @@ class Emitter {
     return null;
   }
 
+  /**
+   * Emits `new Temporal.<cls>(…)`. The epochNanoseconds argument of the Instant and
+   * ZonedDateTime constructors is ToBigInt-converted, which gives it two lowerings of
+   * its own: an over-int64 BigInt carries its true epoch parts through
+   * {@link emitOverInt64Ctor}, and a Number literal becomes a PHP float.
+   */
+  transpileTemporalCtor(cls, argNodes) {
+    if (!IMPLEMENTED_CTORS.has(cls)) {
+      this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
+      return null;
+    }
+    if (EPOCH_NANOSECONDS_CTORS.has(cls) && argNodes.length > 0) {
+      const epNsBig = this.evalBigInt(argNodes[0]);
+      if (epNsBig !== null && overflowsInt64(epNsBig)) {
+        const rest = this.transpileArgs(argNodes.slice(1));
+        return rest === null ? null : emitOverInt64Ctor(cls, epNsBig, rest);
+      }
+      const epNsFloat = toBigIntArgAsPhpFloat(argNodes[0]);
+      if (epNsFloat !== null) {
+        const rest = this.transpileArgs(argNodes.slice(1));
+        if (rest === null) return null;
+        return `new ${SPEC_NS}${cls}(${rest === '' ? epNsFloat : `${epNsFloat}, ${rest}`})`;
+      }
+    }
+    const args = this.transpileArgs(argNodes, CONSTRUCTOR_PARAM_NAMES[cls] ?? null);
+    if (args === null) return null;
+    return `new ${SPEC_NS}${cls}(${args})`;
+  }
+
   transpileNew(node) {
     // new Temporal.X(…)
     const callee = node.callee;
@@ -2594,56 +2925,125 @@ class Emitter {
     if (callee.type === 'Identifier' && callee.name === 'Proxy') {
       return 'null';
     }
-    // new X(…) where X is a Temporal class alias (from const { X } = Temporal;)
-    if (callee.type === 'Identifier' && this.temporalClassAliases.has(callee.name)) {
-      const cls = this.temporalClassAliases.get(callee.name);
-      if (!IMPLEMENTED_CTORS.has(cls)) {
-        this.emitIncomplete(`\\Temporal\\Spec\\${cls} is not yet implemented`);
-        return null;
-      }
-      if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
-        const epNsBig = tryEvalBigInt(node.arguments[0], this.bigIntScalarVars);
-        if (epNsBig !== null && overflowsInt64(epNsBig)) {
-          const rest = node.arguments.length > 1 ? this.transpileArgs(node.arguments.slice(1)) : '';
-          if (rest === null) return null;
-          return emitOverInt64Ctor(cls, epNsBig, rest);
-        }
-      }
+    // new Set(iterable) → JsSet, which models the members, insertion order and the
+    // add/delete/has/size/values surface the fixtures use. The `[...new Set(...)]`
+    // dedup idiom is lowered to Js::unique() before reaching here.
+    if (callee.type === 'Identifier' && callee.name === 'Set') {
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
-      return `new \\Temporal\\Spec\\${cls}(${args})`;
+      return `new ${HARNESS_NS}JsSet(${args})`;
+    }
+    // new X(…) where X is a Temporal class alias (from const { X } = Temporal;)
+    if (callee.type === 'Identifier' && this.temporalClassAliases.has(callee.name)) {
+      return this.transpileTemporalCtor(this.temporalClassAliases.get(callee.name), node.arguments);
     }
     if (callee.type === 'MemberExpression' && !callee.computed
         && callee.object.type === 'Identifier' && callee.object.name === 'Temporal') {
-      const cls = callee.property.name;
-      if (!IMPLEMENTED_CTORS.has(cls)) {
-        this.emitIncomplete(`\\Temporal\\Spec\\${cls} is not yet implemented`);
-        return null;
-      }
-      if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
-        const epNsBig = tryEvalBigInt(node.arguments[0], this.bigIntScalarVars);
-        if (epNsBig !== null && overflowsInt64(epNsBig)) {
-          const rest = node.arguments.length > 1 ? this.transpileArgs(node.arguments.slice(1)) : '';
-          if (rest === null) return null;
-          return emitOverInt64Ctor(cls, epNsBig, rest);
-        }
-      }
-      const args = this.transpileArgs(node.arguments);
-      if (args === null) return null;
-      return `new \\Temporal\\Spec\\${cls}(${args})`;
+      return this.transpileTemporalCtor(callee.property.name, node.arguments);
     }
     // new Temporal.X.method() or new Temporal.X.prototype.method() → TypeError
     const deepTarget = parseVerifyPropertyTarget(callee);
     if (deepTarget && (deepTarget.type === 'staticMethod' || deepTarget.type === 'instanceMethod')) {
       return `throw new \\TypeError('PHP: cannot use method as constructor')`;
     }
+    // new Intl.DateTimeFormat(locales?, options?) → the harness's IntlDateTimeFormat
+    // shim, which formats through the same ext-intl plumbing the spec layer uses.
+    // Other Intl constructors (DurationFormat, …) have no ext-intl equivalent.
+    if (callee.type === 'MemberExpression' && !callee.computed
+        && callee.object.type === 'Identifier' && callee.object.name === 'Intl'
+        && callee.property.type === 'Identifier') {
+      if (callee.property.name === 'DateTimeFormat') {
+        const args = this.transpileArgs(node.arguments);
+        if (args === null) return null;
+        return `new ${HARNESS_NS}IntlDateTimeFormat(${args})`;
+      }
+      this.emitIncomplete(`untranslatable: Intl.${callee.property.name} has no harness shim`);
+      return null;
+    }
+    // new Date(epochMs) → the harness's legacy-Date shim. Non-numeric constructions
+    // (date strings, field lists) don't appear in the corpus; JsDate's int|float
+    // parameter type rejects them loudly if one ever does.
+    if (callee.type === 'Identifier' && callee.name === 'Date') {
+      const args = this.transpileArgs(node.arguments);
+      if (args === null) return null;
+      return `new ${HARNESS_NS}JsDate(${args})`;
+    }
     this.emitIncomplete(`untranslatable new expression`);
     return null;
   }
 
+  /**
+   * Lowers a parameter list that may destructure object arguments.
+   *
+   * `({ a, b = 2 } = {}) => …` becomes a synthetic `$__dpN` parameter plus a prologue
+   * that binds each name through Js::destructure(), which handles the shapes the
+   * argument can arrive as (array, ArrayAccess, stdClass). A default on the pattern
+   * itself becomes the parameter's default; a default on a field becomes a
+   * null-coalesce, matching how array destructuring is lowered elsewhere here — PHP
+   * cannot tell an absent key from an explicit null, and the corpus never relies on
+   * the difference.
+   *
+   * Nested patterns, rest elements, and computed keys stay untranslatable.
+   *
+   * @returns {{params: string, prologue: string[], boundNames: Set<string>}|null}
+   */
+  destructureParams(params) {
+    const prologue = [];
+    const boundNames = new Set();
+    const paramParts = [];
+    for (const [idx, param] of params.entries()) {
+      // `{…} = {}` — a default for the whole pattern.
+      const hasPatternDefault = param.type === 'AssignmentPattern' && param.left?.type === 'ObjectPattern';
+      const p = hasPatternDefault ? param.left : param;
+      if (p.type !== 'ObjectPattern') {
+        paramParts.push(this.transpilePattern(param));
+        if (param.type === 'Identifier') boundNames.add(param.name);
+        continue;
+      }
+      const fields = p.properties.every(pr => pr.type === 'Property' && !pr.computed
+        && pr.key?.type === 'Identifier'
+        && (pr.value?.type === 'Identifier'
+          || (pr.value?.type === 'AssignmentPattern' && pr.value.left?.type === 'Identifier')));
+      if (!fields) {
+        this.emitIncomplete('untranslatable: function parameter ObjectPattern destructuring');
+        return null;
+      }
+      // Only `= {}` is supported as the pattern default: any other default would have
+      // to be destructured too, and the corpus never does that.
+      if (hasPatternDefault
+          && !(param.right?.type === 'ObjectExpression' && param.right.properties.length === 0)) {
+        this.emitIncomplete('untranslatable: function parameter ObjectPattern destructuring');
+        return null;
+      }
+      const tmp = `__dp${idx}`;
+      paramParts.push(hasPatternDefault ? `$${tmp} = []` : `$${tmp}`);
+      boundNames.add(tmp);
+      for (const pr of p.properties) {
+        const withDefault = pr.value.type === 'AssignmentPattern';
+        const name = withDefault ? pr.value.left.name : pr.value.name;
+        let read = `${HARNESS_NS}Js::destructure($${tmp}, '${pr.key.name}')`;
+        if (withDefault) {
+          const fallback = this.transpileExpr(pr.value.right);
+          if (fallback === null) return null;
+          read += ` ?? ${fallback}`;
+        }
+        prologue.push(`$${name} = ${read};`);
+        boundNames.add(name);
+      }
+    }
+    return { params: paramParts.join(', '), prologue, boundNames };
+  }
+
   transpileArrow(node) {
     // () => expr  or  (arg) => expr  or  arg => expr
-    const params = node.params.map(p => this.transpilePattern(p)).join(', ');
+    //
+    // Destructured object parameters — `({ type }) => expr` — bind each shorthand
+    // field from a synthetic `$__dpN` parameter via Js::destructure(), which
+    // handles the shapes the value can arrive as (array, ArrayAccess, stdClass).
+    // Patterns with defaults, nesting, or computed keys stay untranslatable.
+    const destructured = this.destructureParams(node.params);
+    if (destructured === null) return null;
+    const { prologue: destructurePrologue, boundNames, params } = destructured;
     if (node.body.type === 'BlockStatement') {
       // Arrow with block body — inline the body statements
       const inner = [];
@@ -2665,27 +3065,33 @@ class Emitter {
         return null;
       }
       // Collect outer variables referenced in the closure body (exclude params and $__/$this).
-      const paramNames = new Set(node.params.map(p => p.type === 'Identifier' ? p.name : null).filter(Boolean));
+      const bodyLines = [...destructurePrologue, ...inner];
       const usedVars = new Set();
-      for (const line of inner) {
+      for (const line of bodyLines) {
         for (const m of line.matchAll(/\$([a-zA-Z_]\w*)/g)) {
           const v = m[1];
-          if (v !== '__' && v !== 'this' && !paramNames.has(v)) usedVars.add(v);
+          if (v !== '__' && v !== 'this' && !boundNames.has(v)) usedVars.add(v);
         }
       }
       const useClause = usedVars.size > 0 ? `use (${[...usedVars].map(v => `&$${v}`).join(', ')}) ` : '';
-      return `function (${params}) ${useClause}{ ${inner.join(' ')} }`;
+      return `function (${params}) ${useClause}{ ${bodyLines.join(' ')} }`;
     }
     // Concise body — collect outer variable references and capture by
     // reference so that JS-style late-binding semantics are preserved when
     // the outer variable is reassigned after the closure is created.
     const body = this.transpileExpr(node.body);
     if (body === null) return null;
-    const paramNames = new Set(node.params.map(p => p.type === 'Identifier' ? p.name : null).filter(Boolean));
     const usedVars = new Set();
-    for (const m of body.matchAll(/\$([a-zA-Z_]\w*)/g)) {
-      const v = m[1];
-      if (v !== '__' && v !== 'this' && v !== '__m' && !paramNames.has(v)) usedVars.add(v);
+    const scanTargets = [...destructurePrologue, body];
+    for (const target of scanTargets) {
+      for (const m of target.matchAll(/\$([a-zA-Z_]\w*)/g)) {
+        const v = m[1];
+        if (v !== '__' && v !== 'this' && v !== '__m' && !boundNames.has(v)) usedVars.add(v);
+      }
+    }
+    if (destructurePrologue.length > 0) {
+      const useClause = usedVars.size > 0 ? `use (${[...usedVars].map(v => `&$${v}`).join(', ')}) ` : '';
+      return `function (${params}) ${useClause}{ ${destructurePrologue.join(' ')} return ${body}; }`;
     }
     if (usedVars.size > 0) {
       const useClause = `use (${[...usedVars].map(v => `&$${v}`).join(', ')}) `;
@@ -2713,6 +3119,11 @@ class Emitter {
       }
       this.emitIncomplete('untranslatable: typeof');
       return null;
+    }
+    // PHP parses `-0` as the int 0, which has no sign bit, so a fixture written to check
+    // that -0 normalizes to +0 would assert nothing. The float literal carries the sign.
+    if (node.operator === '-' && node.argument.type === 'Literal' && node.argument.value === 0) {
+      return '-0.0';
     }
     const arg = this.transpileExpr(node.argument);
     if (arg === null) return null;
@@ -2772,8 +3183,8 @@ class Emitter {
         }
       }
     }
-    // `expr instanceof Temporal.X` → `$expr instanceof \Temporal\Spec\X`
-    // (transpileTemporalClassRef returns \Temporal\Spec\X::class; strip ::class for instanceof)
+    // `expr instanceof Temporal.X` → `$expr instanceof \Calendrics\Spec\X`
+    // (transpileTemporalClassRef returns \Calendrics\Spec\X::class; strip ::class for instanceof)
     if (node.operator === 'instanceof') {
       const classRef = this.transpileTemporalClassRef(node.right);
       if (classRef !== null) {
@@ -2783,7 +3194,7 @@ class Emitter {
       }
     }
     // Check if the combined BigInt expression overflows int64 (e.g. 864n * 10n ** 19n).
-    const combinedBig = tryEvalBigInt(node, this.bigIntScalarVars);
+    const combinedBig = this.evalBigInt(node);
     if (combinedBig !== null && overflowsInt64(combinedBig)) {
       return null; // caller handles: variable decl → emitIncomplete, array → sentinel
     }
@@ -2851,7 +3262,7 @@ class Emitter {
    * Fallback: treats any other transpiled PHP starting with \ as a class ref.
    */
   /**
-   * Translates a Temporal.X MemberExpression to \Temporal\X::class.
+   * Translates a Temporal.X MemberExpression to \Calendrics\X::class.
    * Used for passing Temporal class references to TemporalHelpers methods
    * (checkSubclassingIgnored, checkSubclassingIgnoredStatic).
    * Returns null if the node is not a recognized Temporal.X expression.
@@ -2860,7 +3271,7 @@ class Emitter {
     if (node.type === 'MemberExpression' && !node.computed
         && node.object.type === 'Identifier' && node.object.name === 'Temporal'
         && node.property.type === 'Identifier') {
-      return `\\Temporal\\Spec\\${node.property.name}::class`;
+      return `${SPEC_NS}${node.property.name}::class`;
     }
     return null;
   }
@@ -2891,27 +3302,35 @@ class Emitter {
     // hit `is_array`, masking the array-side empty-bag path.
     // Spread elements { ...base, key: val } → array_merge($base, ['key' => $val]).
     // Special case (checked first): `{ toString: () => EXPR }` and equivalents are
-    // lowered to a PHP \Stringable. These objects are wrong-type values that get
-    // interpolated into assertion description strings; an array would warn on
-    // stringification. As a \Stringable the value is still not a string (type checks
-    // still throw), but interpolation yields its toString value. Independent of
-    // objectMode — the concern is stringification, not bag-vs-object access.
+    // lowered to a PHP \Stringable, so that interpolating the value into an assertion
+    // description yields its toString value instead of warning the way an array would.
+    // Independent of objectMode — the concern is stringification, not bag-vs-object
+    // access.
+    //
+    // What EXPR returns decides which PHP value is faithful. A String return makes the
+    // JS object satisfy ToPrimitiveAndRequireString, which is exactly what a PHP
+    // \Stringable does. A non-String return does NOT: TC39 rejects it with a TypeError
+    // that PHP cannot reproduce, because `__toString(): string` is engine-enforced.
+    // Those become JsNonStringPrimitive, which the wrong-type loops skip.
     const toStringRet = singleToStringReturnExpr(node);
     if (toStringRet !== null) {
       const ret = this.transpileExpr(toStringRet);
       if (ret !== null) {
-        return 'new class implements \\Stringable { #[\\Override] public function __toString(): string { return (string) (' + ret + '); } }';
+        return returnsStringValue(toStringRet)
+          ? 'new class implements \\Stringable { #[\\Override] public function __toString(): string { return (string) (' + ret + '); } }'
+          : `new ${HARNESS_NS}JsNonStringPrimitive(${ret})`;
       }
     }
 
     // Negative-probe getter bag: `{ key: literal, get probe() { throw / assertUnreachable } }`.
-    // Lower to an anon class with the literal props declared plus a throwing __get, so
-    // get_object_vars() (how the spec layer reads bags) snapshots only the real props and
-    // the probe never fires — matching the test's "must not read this property" intent.
+    // Lower to an anon class with the literal props declared plus a __get that throws for
+    // the probed names only — the spec layer reading one of them is the bug the fixture
+    // watches for, and any other name is simply absent from the object.
     const negativeBag = probeGetterBag(node, isNegativeProbeGetterBody, negativeProbeGate);
     if (negativeBag !== null) {
       const cls = this.emitProbeBagAnonClass(
         negativeBag.initProps,
+        negativeBag.getterNames,
         "throw new \\RuntimeException('test262: property '.$name.' must not be read');",
       );
       if (cls !== null) return cls;
@@ -2919,15 +3338,16 @@ class Emitter {
 
     // Positive-probe getter bag: `{ key: literal, get probe() { throw new Test262Error() } }`.
     // Lower to an anon class with the literal props declared plus a __get that throws
-    // Test262Error. The operation is expected to READ the probed key via a true Get(O, P)
-    // (Options::bagGet, used by PlainDate::toZonedDateTime / Instant::toString), so __get
-    // fires and the surrounding assert.throws(Test262Error, …) catches it. Declared props
-    // are read directly (no throw).
+    // Test262Error for the probed names. The operation is expected to READ one of them via
+    // a true Get(O, P) (Options::bagGet), so __get fires and the surrounding
+    // assert.throws(Test262Error, …) catches it. Declared props are read directly (no
+    // throw), and unrelated names report absent.
     const positiveBag = probeGetterBag(node, isPositiveProbeGetterBody);
     if (positiveBag !== null) {
       const cls = this.emitProbeBagAnonClass(
         positiveBag.initProps,
-        'throw new \\Temporal\\Tests\\Test262\\Test262Error();',
+        positiveBag.getterNames,
+        `throw new ${HARNESS_NS}Test262Error();`,
       );
       if (cls !== null) return cls;
     }
@@ -3044,22 +3464,30 @@ class Emitter {
 
   /**
    * Emits a probe-bag anonymous class: the literal init props declared as public
-   * properties plus a `__get` whose body is `throwStmt`. Shared by both probe-bag
-   * lowerings (negative: read-is-a-bug; positive: read-is-the-asserted-throw),
-   * which differ only in that throw statement. Returns null if any init prop
-   * value fails to transpile.
+   * properties plus a `__get` that runs `throwStmt` for the PROBED names and reports
+   * every other name as absent. Shared by both probe-bag lowerings (negative:
+   * read-is-a-bug; positive: read-is-the-asserted-throw), which differ only in that
+   * throw statement. Returns null if any init prop value fails to transpile.
+   *
+   * Only the source object's getters throw. The JS bag being modelled has exactly the
+   * properties it declares, so reading any other name yields `undefined` — reading
+   * `calendar` off `{ year, month, get day() { throw } }` is not the bug the fixture is
+   * watching for. `null` is how a `__get` reports that absence to `Options::bagGet()`.
    *
    * @param {Array<{ name: string, valueNode: object }>} initProps
+   * @param {string[]} getterNames the source object's accessor properties
    * @param {string} throwStmt a complete PHP throw statement, e.g. `throw new \\Foo();`
    */
-  emitProbeBagAnonClass(initProps, throwStmt) {
+  emitProbeBagAnonClass(initProps, getterNames, throwStmt) {
     const decls = initProps.map(({ name, valueNode }) => {
       const v = this.transpileExpr(valueNode);
       return v === null ? null : `public mixed $${name} = ${v};`;
     });
     if (decls.includes(null)) return null;
     const declStr = decls.length > 0 ? decls.join(' ') + ' ' : '';
-    return `new class { ${declStr}public function __get(string $name): mixed { ${throwStmt} } }`;
+    const probed = getterNames.map(n => `'${n}'`).join(', ');
+    const body = `if (in_array($name, [${probed}], true)) { ${throwStmt} } return null;`;
+    return `new class { ${declStr}public function __get(string $name): mixed { ${body} } }`;
   }
 
   // ── assert.* helpers ──────────────────────────────────────────────────────
@@ -3125,7 +3553,7 @@ class Emitter {
 
     // `Object.getPrototypeOf(<instance-expr>) === Temporal.Y.prototype`: asserts the
     // result is a Temporal Y instance. The prototype-identity check is not load-bearing
-    // beyond class identity, so lower to `<instance-expr> instanceof \Temporal\Spec\Y`.
+    // beyond class identity, so lower to `<instance-expr> instanceof \Calendrics\Spec\Y`.
     // Gated strictly: `expected` must be a Temporal Y.prototype (excludes the builtin.js
     // `getPrototypeOf(X) === Function.prototype` Function-object floor case), and the
     // getPrototypeOf argument must NOT itself be a Temporal namespace/class/method
@@ -3139,7 +3567,7 @@ class Emitter {
         const argPhp = this.transpileExpr(actual.arguments[0]);
         const msgPhp = msg ? this.transpileExpr(msg) : "''";
         if (argPhp !== null && msgPhp !== null) {
-          return `Assert::assertTrue(${argPhp} instanceof \\Temporal\\Spec\\${protoTarget.class}, ${msgPhp})`;
+          return `Assert::assertTrue(${argPhp} instanceof ${SPEC_NS}${protoTarget.class}, ${msgPhp})`;
         }
       }
     }
@@ -3173,7 +3601,8 @@ class Emitter {
       const cls = fnNode.body.callee.property.name;
       const msgPhp = msgNode ? this.transpileExpr(msgNode) : "''";
       if (msgPhp !== null) {
-        return `Assert::throws(\\TypeError::class, fn() => throw new \\TypeError('Temporal\\\\Spec\\\\${cls} cannot be called as a function; use new'), ${msgPhp})`;
+        const what = phpStr(`${SPEC_NS_BARE}${cls} cannot be called as a function; use new`);
+        return `Assert::throws(\\TypeError::class, fn() => throw new \\TypeError(${what}), ${msgPhp})`;
       }
     }
 
@@ -3195,12 +3624,12 @@ class Emitter {
         && fnNode.body.callee.property?.type === 'Identifier'
         && (fnNode.body.callee.property.name === 'call' || fnNode.body.callee.property.name === 'apply')) {
       const ref = this.brandedRefVars.get(fnNode.body.callee.object.name);
-      const what = ref.isGetter
-        ? `Temporal\\\\Spec\\\\${ref.class}::$${ref.member} getter requires a valid receiver`
-        : `Temporal\\\\Spec\\\\${ref.class}::${ref.member}() requires a valid receiver`;
+      const what = phpStr(ref.isGetter
+        ? `${SPEC_NS_BARE}${ref.class}::$${ref.member} getter requires a valid receiver`
+        : `${SPEC_NS_BARE}${ref.class}::${ref.member}() requires a valid receiver`);
       const msgPhp = msgNode ? this.transpileExpr(msgNode) : "''";
       if (msgPhp !== null) {
-        return `Assert::throws(\\TypeError::class, fn() => throw new \\TypeError('${what}'), ${msgPhp})`;
+        return `Assert::throws(\\TypeError::class, fn() => throw new \\TypeError(${what}), ${msgPhp})`;
       }
     }
 
@@ -3216,28 +3645,15 @@ class Emitter {
       return null;
     }
 
-    // TypeError tests relying on JS BigInt-vs-Number type distinction can't be replicated in PHP.
-    if (classExpr.includes('TypeError') && fnNode) {
-      // X.add/subtract/with(7n): a BigInt arg throws the SAME TypeError as a Number
-      // arg would (the param rejects all primitives), so lower 7n → 7 and emit the
-      // assertion faithfully — fall through to the generic path below. Must run
-      // before arrowHasBigIntArg, which would otherwise skip it.
-      if (!arrowBigIntArgIsAlwaysTypeError(fnNode)) {
-        if (arrowHasBigIntArg(fnNode)) {
-          // BigInt arg where a Number would NOT throw (e.g. fromEpochMilliseconds(42n)):
-          // drop just this assertion but keep the rest of the fixture running.
-          this.emitSkipAndDefer(node, 'BigInt literal in TypeError assertion; BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-        if (arrowCallsWithNumber(fnNode, 'fromEpochNanoseconds')) {
-          this.emitSkipAndDefer(node, 'Number passed to fromEpochNanoseconds; BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-        if (arrowInstantCtorWithNumberArg(fnNode)) {
-          this.emitSkipAndDefer(node, 'Number literal passed to new Temporal.Instant(); BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-      }
+    // A BigInt arg where a Number would NOT throw (e.g. fromEpochMilliseconds(42n)):
+    // the distinction is not replicable, so drop just this assertion and keep the rest
+    // of the fixture running. X.add/subtract/with(7n) is exempt — its param rejects
+    // every primitive, so a BigInt throws the SAME TypeError a Number would and the
+    // assertion lowers faithfully (7n → 7) through the generic path below.
+    if (classExpr.includes('TypeError') && fnNode
+        && !arrowBigIntArgIsAlwaysTypeError(fnNode) && arrowHasBigIntArg(fnNode)) {
+      this.emitSkipAndDefer(node, 'BigInt literal in TypeError assertion; BigInt vs Number distinction not replicable in PHP');
+      return null;
     }
 
     // PHP comparison operators (<, <=, >, >=) do not call valueOf() and thus cannot
@@ -3386,16 +3802,12 @@ class Emitter {
     const feHasNumber =
       (arrNode.type === 'ArrayExpression' && hasNumberLiteral(arrNode))
       || (arrNode.type === 'Identifier' && this.numberLiteralArrayVars.has(arrNode.name));
-    if (feHasBigInt && feHasNumber && subtreeHasAssertThrows(feCbBody)
-        && uniformAssertThrowsErrorClass(feCbBody) !== null) {
-      this.emit(`if (${param} === null) { continue; }`);
-    }
     this.transpileStatement(cbBody);
     if (opened) this.lines.push('}');
     return null; // already emitted
   }
 
-  transpileArgs(argNodes) {
+  transpileArgs(argNodes, paramNames = null) {
     // Trim trailing `undefined` identifier arguments: omitting them achieves the
     // same result in PHP as passing `undefined` in JS (the callee uses its default).
     // This allows PHP to distinguish "no argument" from explicit null.
@@ -3407,6 +3819,25 @@ class Emitter {
       } else {
         break;
       }
+    }
+    // A non-trailing `undefined` cannot be trimmed away positionally, but PHP names
+    // its parameters: `new PlainMonthDay(1, 1, undefined, 1972)` becomes
+    // `new PlainMonthDay(1, 1, referenceISOYear: 1972)`. Omission is the PHP spelling
+    // of JS undefined in either position; passing null instead would say JS null.
+    if (paramNames !== null
+        && effectiveArgs.some(a => a.type === 'Identifier' && a.name === 'undefined')) {
+      const parts = [];
+      for (let i = 0; i < effectiveArgs.length; i++) {
+        const a = effectiveArgs[i];
+        if (a.type === 'Identifier' && a.name === 'undefined') continue;
+        const php = this.transpileExpr(a);
+        if (php === null) return null;
+        const skipped = effectiveArgs
+          .slice(0, i)
+          .some(p => p.type === 'Identifier' && p.name === 'undefined');
+        parts.push(skipped && paramNames[i] ? `${paramNames[i]}: ${php}` : php);
+      }
+      return parts.join(', ');
     }
 
     const parts = [];
@@ -3462,6 +3893,30 @@ const AST_SKIP_KEYS = new Set(['start', 'end', 'loc', 'type']);
  * `has*` predicates each re-implemented; each of them is just
  * `someDescendant(node, <its own root test>)`.
  */
+/**
+ * Records into `out` every name the subtree assigns to outside its declaration:
+ * `x = …` and its compound forms, `x++`/`--x`, and the loop variable of a
+ * `for (x of …)` / `for (x in …)` that reuses an existing binding. Destructuring
+ * targets are covered via the Array/Object pattern elements.
+ */
+function collectReassignedNames(node, out) {
+  const mark = target => {
+    if (!target || typeof target !== 'object') return;
+    if (target.type === 'Identifier') out.add(target.name);
+    else if (target.type === 'ArrayPattern') target.elements.forEach(mark);
+    else if (target.type === 'ObjectPattern') target.properties.forEach(p => mark(p.value ?? p.argument));
+    else if (target.type === 'AssignmentPattern') mark(target.left);
+    else if (target.type === 'RestElement') mark(target.argument);
+  };
+  forEachNode(node, n => {
+    if (n.type === 'AssignmentExpression') mark(n.left);
+    else if (n.type === 'UpdateExpression') mark(n.argument);
+    else if ((n.type === 'ForOfStatement' || n.type === 'ForInStatement')
+        && n.left?.type !== 'VariableDeclaration') mark(n.left);
+  });
+  return out;
+}
+
 function someDescendant(node, predicate) {
   if (!node || typeof node !== 'object') return false;
   if (predicate(node)) return true;
@@ -3551,6 +4006,33 @@ function hasMethodShorthand(node) {
  * Anything more complex (extra properties, computed/renamed key, params, a non-trivial
  * body) returns null so the caller falls through to ordinary object handling.
  */
+/** True for a `{ toString: () => <non-String> }` object literal. */
+function hasNonStringToPrimitive(node) {
+  const ret = singleToStringReturnExpr(node);
+  return ret !== null && !returnsStringValue(ret);
+}
+
+/**
+ * Returns true when EXPR — the return value of a fixture's `toString` shorthand —
+ * is statically known to be a JS String. Only the shapes the corpus actually uses
+ * are recognized; anything unrecognized is treated as non-String, which routes the
+ * value to JsNonStringPrimitive and skips it in wrong-type loops rather than
+ * asserting a rejection PHP cannot produce.
+ */
+function returnsStringValue(node) {
+  if (node?.type === 'Literal') return typeof node.value === 'string';
+  if (node?.type === 'TemplateLiteral') return true;
+  // `"a" + x` is a String whenever either side is; JS `+` stringifies the rest.
+  if (node?.type === 'BinaryExpression' && node.operator === '+') {
+    return returnsStringValue(node.left) || returnsStringValue(node.right);
+  }
+  if (node?.type === 'CallExpression'
+      && node.callee?.type === 'Identifier' && node.callee.name === 'String') {
+    return true;
+  }
+  return false;
+}
+
 function singleToStringReturnExpr(node) {
   if (node?.type !== 'ObjectExpression' || node.properties.length !== 1) return null;
   const prop = node.properties[0];
@@ -3672,7 +4154,7 @@ function probeGetterBag(node, getterPredicate, gateFn = () => true) {
 
   if (getters.length === 0) return null;
   if (!gateFn({ initProps, getters })) return null;
-  return { initProps };
+  return { initProps, getterNames: getters.map(g => g.name) };
 }
 
 /**
@@ -4022,6 +4504,13 @@ function uniformAssertThrowsErrorClass(node) {
  * RangeError) on `ZonedDateTime.from("…", value)` — a genuine ordering gap that the
  * PlainX classes do not have (they string-parse first). Verified live.
  */
+// Constructor parameter names of the spec classes, so a non-trailing `undefined`
+// argument can be dropped and the ones after it passed by name.
+const CONSTRUCTOR_PARAM_NAMES = {
+  PlainMonthDay: ['isoMonth', 'isoDay', 'calendar', 'referenceISOYear'],
+  PlainYearMonth: ['year', 'month', 'calendar', 'referenceISODay'],
+};
+
 const STRING_PARSE_FIRST_FROM_CLASSES = new Set([
   'PlainDate', 'PlainDateTime', 'PlainTime', 'PlainMonthDay', 'PlainYearMonth',
 ]);
@@ -4333,6 +4822,10 @@ function isIntlDateTimeFormatResolvedOptions(node) {
   if (callee.property?.type !== 'Identifier' || callee.property.name !== 'resolvedOptions') return false;
   const recv = callee.object;
   if (recv?.type !== 'NewExpression') return false;
+  // Only the zero-argument form maps to TemporalHelpers::defaultLocaleCalendar();
+  // a DateTimeFormat constructed with explicit locales/options lowers through the
+  // IntlDateTimeFormat harness shim, whose resolvedOptions() honors the arguments.
+  if (recv.arguments.length > 0) return false;
   const ctor = recv.callee;
   return ctor?.type === 'MemberExpression' && !ctor.computed
     && ctor.object?.type === 'Identifier' && ctor.object.name === 'Intl'
@@ -4495,8 +4988,8 @@ function parsePropDescAccessorProgram(body) {
  * throwing getters and then asserts that compare()/equals() reads internal slots,
  * never the observable getters. PHP property reads never dispatch through getters,
  * so a plain base-class instance produces the identical result. Such a class can be
- * registered as an alias of Temporal\Spec\Y and its declaration dropped: every
- * `new X(args)` rewrites to `new Temporal\Spec\Y(args)`, and the getters (which
+ * registered as an alias of Calendrics\Spec\Y and its declaration dropped: every
+ * `new X(args)` rewrites to `new Calendrics\Spec\Y(args)`, and the getters (which
  * could never fire in PHP) are discarded.
  *
  * Returns the base Temporal class name (e.g. 'PlainDate'), or null. Requiring a
@@ -4537,9 +5030,9 @@ function isPhpMethodImplemented(className, method) {
  */
 function incompleteReasonFor(className, method) {
   if (PHP_INTENTIONALLY_ABSENT_METHODS.has(method)) {
-    return PHP_ABSENT_METHOD_REASONS[method] ?? `\\Temporal\\Spec\\${className}::${method}() is intentionally not exposed`;
+    return PHP_ABSENT_METHOD_REASONS[method] ?? `${SPEC_NS}${className}::${method}() is intentionally not exposed`;
   }
-  return `\\Temporal\\Spec\\${className}::${method}() is not yet implemented`;
+  return `${SPEC_NS}${className}::${method}() is not yet implemented`;
 }
 
 /** PHP single-quoted string literal. */
@@ -4593,9 +5086,9 @@ function processFile(jsPath, dataDir, scriptsDir) {
     '// Generated by tools/transpile-test262.mjs — do not edit manually.',
     '// Re-generate: composer test262:build',
     '',
-    'use Temporal\\Tests\\Test262\\Assert;',
-    'use Temporal\\Tests\\Test262\\JsUndefined;',
-    ...(useTemporalHelpers ? ['use Temporal\\Tests\\Test262\\TemporalHelpers;'] : []),
+    `use ${HARNESS_NS_BARE}Assert;`,
+    `use ${HARNESS_NS_BARE}JsUndefined;`,
+    ...(useTemporalHelpers ? [`use ${HARNESS_NS_BARE}TemporalHelpers;`] : []),
     '',
   ];
   const includesTemporalHelpers = includes.includes('temporalHelpers.js');
@@ -4633,9 +5126,31 @@ function processFile(jsPath, dataDir, scriptsDir) {
   const observersInUse = /TemporalHelpers\.(toPrimitiveObserver|propertyBagObserver)\b/.test(stripped)
     || /\b(valueOf|toString)\s*\(\s*\)\s*\{/.test(stripped);
 
+  // Tracker names, collected before emitting: a fixture declares `const actual = []`
+  // above the observer call that names it, so the declaration has to know it is a
+  // trace in order to emit an ObserverTrace instead of an array literal.
+  //
+  // The name at the observer call site is not always the declared one — some fixtures
+  // thread the trace through a curried factory, where the call site sees a parameter
+  // (`(calls) => TemporalHelpers.toPrimitiveObserver(calls, …)`). So in a fixture that
+  // uses observers at all, every empty-array declaration is a trace too: an empty
+  // literal is how these fixtures spell "somewhere to collect events", and a genuinely
+  // empty array with another purpose does not appear in the corpus.
+  const observerTrackers = new Set(
+    [...stripped.matchAll(
+      /TemporalHelpers\.(?:toPrimitiveObserver|propertyBagObserver)\s*\(\s*([A-Za-z_$][\w$]*)\s*,/g,
+    )].map(m => m[1]),
+  );
+  if (observerTrackers.size > 0) {
+    for (const m of stripped.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\[\s*\]/g)) {
+      observerTrackers.add(m[1]);
+    }
+  }
+
   const renderPass = (objectMode) => {
     const emitter = new Emitter(stripped, objectMode);
     emitter.observersInUse = observersInUse;
+    emitter.observerTrackers = new Set(observerTrackers);
     if (unsupportedIncludes.length > 0) {
       emitter.emitIncomplete(`needs TemporalHelpers (includes: ${includes.join(', ')})`);
     } else if (parseError !== null) {

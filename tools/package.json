@@ -1,5 +1,5 @@
 {
-  "name": "temporal-php-tools",
+  "name": "calendrics-tools",
   "private": true,
   "type": "module",
   "dependencies": {

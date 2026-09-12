@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Stringable;
 
 /**
  * Validates a TC39 calendar `monthCode` FIELD value at read time, following the
@@ -17,8 +18,8 @@ use Temporal\Exception\TypeError;
  * later, calendar-specific concern.
  *
  * This is the consistent type-then-syntax behavior shared by
- * {@see Temporal\Spec\PlainDate} and {@see Temporal\Spec\PlainYearMonth}. The
- * {@see Temporal\Spec\PlainDateTime} property-bag path historically DRIFTED: it
+ * {@see Calendrics\Spec\PlainDate} and {@see Calendrics\Spec\PlainYearMonth}. The
+ * {@see Calendrics\Spec\PlainDateTime} property-bag path historically DRIFTED: it
  * skipped the type-check at read time (only validating syntax when the value was
  * already a string) and deferred the TypeError to after the year field was
  * coerced. Routing that path through this helper deliberately realigns it with
@@ -36,17 +37,25 @@ final class MonthCode
 
     /**
      * Validates a freshly-read monthCode field value and returns the well-formed
-     * string. A non-string $value is a TypeError; an ill-formed string is a
-     * RangeError. Both messages are owned here and are non-contractual:
-     * `tests/Test262/Assert.php::throws()` checks only the exception CLASS, and the
-     * project's PHPUnit suites have no message assertions, so the wording is free.
-     * Only the TypeError-vs-RangeError TYPE split is contractual.
+     * string. A value that cannot stringify is a TypeError; one that stringifies to
+     * an ill-formed code is a RangeError. Both messages are owned here and are
+     * non-contractual: `tests/Test262/Assert.php::throws()` checks only the exception
+     * CLASS, and the project's PHPUnit suites have no message assertions, so the
+     * wording is free. Only the TypeError-vs-RangeError TYPE split is contractual.
      *
-     * @throws TypeError  if $value is not a string.
-     * @throws RangeError if $value is a string that is not well-formed.
+     * TC39 reads monthCode with ToPrimitiveAndRequireString, so a value that renders
+     * itself as a string is legitimate input, not a type error — a PHP bag may hand
+     * over any \Stringable. (A JsSymbol sentinel's throwing __toString surfaces as
+     * TypeError, exactly as ToString(Symbol) does in JS.)
+     *
+     * @throws TypeError  if $value is neither a string nor \Stringable.
+     * @throws RangeError if $value stringifies to an ill-formed monthCode.
      */
     public static function validate(mixed $value): string
     {
+        if ($value instanceof Stringable) {
+            $value = (string) $value;
+        }
         if (!is_string($value)) {
             throw new TypeError('monthCode must be a string.');
         }

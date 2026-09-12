@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
 /**
  * Temporal calendar and clock units, from largest (year) to smallest (nanosecond).

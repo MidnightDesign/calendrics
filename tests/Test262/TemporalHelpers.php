@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262;
+namespace Calendrics\Tests\Test262;
 
-use Temporal\Tests\Test262\Helper\AssertsValueObjects;
-use Temporal\Tests\Test262\Helper\ChecksBehavior;
-use Temporal\Tests\Test262\Helper\IsoStringData;
-use Temporal\Tests\Test262\Helper\ObserversAndCalendar;
+use Calendrics\Tests\Test262\Helper\AssertsValueObjects;
+use Calendrics\Tests\Test262\Helper\ChecksBehavior;
+use Calendrics\Tests\Test262\Helper\IsoStringData;
+use Calendrics\Tests\Test262\Helper\ObserversAndCalendar;
 
 /**
  * PHP port of TC39's TemporalHelpers test harness.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
 /**
  * Controls how out-of-range values are handled when constructing or modifying Temporal objects.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal\Calendar;
+namespace Calendrics\Spec\Internal\Calendar;
 
 /**
  * Defines all calendar-dependent operations required by Temporal types.
@@ -94,6 +94,11 @@ interface CalendarProtocol
      * backward from isoDate2 (the later date) rather than forward from isoDate1.
      * This matches TC39's asymmetric behavior for since() vs until().
      *
+     * `day` and `week` differences are not asked of a calendar: they are the same
+     * Julian-day subtraction whatever the calendar, and every caller needs the raw
+     * day count anyway to round it into a Duration.
+     *
+     * @param 'month'|'year' $largestUnit
      * @return array{0: int, 1: int, 2: int, 3: int} [years, months, weeks, days]
      */
     public function dateUntil(
@@ -133,7 +138,7 @@ interface CalendarProtocol
      * era should be ignored. Throws if the era is invalid for this calendar.
      *
      * @return int|null The resolved year, or null if era is not applicable.
-     * @throws \Temporal\Exception\RangeError if the era is not valid for this calendar.
+     * @throws \Calendrics\Exception\RangeError if the era is not valid for this calendar.
      */
     public function resolveEra(string $era, int $eraYear): ?int;
 }

@@ -19,4 +19,17 @@ class DateTimeZone
     public function getTransitions($timestampBegin = PHP_INT_MIN, $timestampEnd = PHP_INT_MAX)
     {
     }
+
+    /**
+     * Every IANA identifier PHP ships is a non-empty name, so the list never
+     * contains the empty string. The default stub widens to plain string, which
+     * loses that guarantee for callers that key or return identifiers.
+     *
+     * @param int $timezoneGroup
+     * @param string|null $countryCode
+     * @return list<non-empty-string>
+     */
+    public static function listIdentifiers($timezoneGroup = DateTimeZone::ALL, $countryCode = null)
+    {
+    }
 }

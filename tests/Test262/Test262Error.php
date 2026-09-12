@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262;
+namespace Calendrics\Tests\Test262;
 
 /**
  * PHP counterpart of the test262 harness's `Test262Error`.

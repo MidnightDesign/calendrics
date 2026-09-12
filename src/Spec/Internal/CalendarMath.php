@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\Calendar\CalendarFactory;
-use Temporal\Spec\Internal\Calendar\CalendarProtocol;
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\Calendar\CalendarProtocol;
 
 /** @internal */
 final class CalendarMath
@@ -44,6 +44,20 @@ final class CalendarMath
         return $calendarId !== null
         && $calendarId !== 'iso8601'
         && !in_array($calendarId, ['chinese', 'dangi'], strict: true);
+    }
+
+    /**
+     * Returns true if a property bag's era/eraYear values are read at all for this
+     * calendar. ISO exposes no eras, so its CalendarExtraFields list omits both and their
+     * values are never even coerced.
+     *
+     * Deliberately wider than {@see supportsEras()}, which also excludes the eraless
+     * chinese/dangi: those two do read and coerce era fields today, then discard the
+     * resolved year.
+     */
+    public static function readsEraFields(?string $calendarId): bool
+    {
+        return $calendarId !== null && $calendarId !== 'iso8601';
     }
 
     /**
@@ -130,7 +144,7 @@ final class CalendarMath
             return (int) $floatVal;
         }
         // Stringable: cast to string then re-run the numeric checks. The JsSymbol
-        // sentinel's __toString throws Temporal\Exception\TypeError here, while a
+        // sentinel's __toString throws Calendrics\Exception\TypeError here, while a
         // plain stdClass (not Stringable) falls through to RangeError below.
         if ($value instanceof \Stringable) {
             $str = (string) $value;
@@ -368,6 +382,43 @@ final class CalendarMath
     }
 
     /**
+     * Converts time-of-day fields to total nanoseconds since midnight.
+     */
+    public static function timeToNs(int $h, int $min, int $sec, int $ms, int $us, int $ns): int
+    {
+        return (
+            ($h * 3_600_000_000_000)
+            + ($min * 60_000_000_000)
+            + ($sec * 1_000_000_000)
+            + ($ms * 1_000_000)
+            + ($us * 1_000)
+            + $ns
+        );
+    }
+
+    /**
+     * Splits nanoseconds since midnight (0 ≤ $timeNs < 86,400,000,000,000) back
+     * into time-of-day fields.
+     *
+     * @return array{int, int, int, int, int, int} [hour, minute, second, ms, us, ns]
+     */
+    public static function nsToTime(int $timeNs): array
+    {
+        $h = intdiv(num1: $timeNs, num2: 3_600_000_000_000);
+        $rem = $timeNs % 3_600_000_000_000;
+        $min = intdiv(num1: $rem, num2: 60_000_000_000);
+        $rem %= 60_000_000_000;
+        $sec = intdiv(num1: $rem, num2: 1_000_000_000);
+        $rem %= 1_000_000_000;
+        $ms = intdiv(num1: $rem, num2: 1_000_000);
+        $rem %= 1_000_000;
+        $us = intdiv(num1: $rem, num2: 1_000);
+        $ns = $rem % 1_000;
+
+        return [$h, $min, $sec, $ms, $us, $ns];
+    }
+
+    /**
      * Validates and returns the integer value of a `roundingIncrement` option.
      *
      * Accepts int, float, string, or bool. Returns the truncated integer value
@@ -380,6 +431,7 @@ final class CalendarMath
      * Duration, which performs its own operation-specific range check at the call
      * site after the increment is validated.
      *
+     * @return int<1, max>
      * @throws RangeError if the value is non-numeric, NaN, infinite, or outside 1–1000000000.
      * @throws TypeError if the value is a Symbol (its `__toString` throws).
      */
@@ -387,7 +439,7 @@ final class CalendarMath
     {
         if (!is_int($value) && !is_float($value) && !is_string($value) && !is_bool($value)) {
             // Stringable: cast to string so the JsSymbol sentinel's __toString
-            // raises Temporal\Exception\TypeError; everything else => RangeError.
+            // raises Calendrics\Exception\TypeError; everything else => RangeError.
             if ($value instanceof \Stringable) {
                 $value = (string) $value;
             } else {
@@ -466,29 +518,26 @@ final class CalendarMath
     }
 
     /**
-     * ISO 8601 day of week using Sakamoto's algorithm.
+     * ISO 8601 day of week, derived from the Julian Day Number.
      *
      * Returns 1 = Monday … 7 = Sunday.
+     *
+     * JDN 0 is a Monday, so the weekday is the JDN modulo 7. The modulo is taken
+     * Euclidean rather than with PHP's `%`, whose result carries the sign of the
+     * dividend: JDNs go negative around ISO year -4713, well inside Temporal's
+     * ±273,972-year range, and a truncated remainder would map those days onto
+     * negative weekday numbers.
+     *
+     * Sharing {@see self::toJulianDay()} keeps the proleptic-Gregorian leap-year
+     * math in one place; a Sakamoto-style formula would have to repeat it, and
+     * repeats it wrongly for negative years unless every division floors too.
      *
      * @return int<1, 7>
      */
     public static function isoWeekday(int $year, int $month, int $day): int
     {
-        /** @var array<int, int> $t */
-        static $t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-        if ($month < 3) {
-            $year--;
-        }
-        $dow =
-            (
-                $year + intdiv(num1: $year, num2: 4) - intdiv(num1: $year, num2: 100)
-                + intdiv(num1: $year, num2: 400)
-                + $t[$month - 1]
-                + $day
-            )
-            % 7;
-        /** @var int<1, 7> Sakamoto maps 0→7, rest 1–6 unchanged */
-        return $dow === 0 ? 7 : $dow;
+        $jdn = self::toJulianDay($year, $month, $day);
+        return ((($jdn % 7) + 7) % 7) + 1;
     }
 
     /**
@@ -619,39 +668,5 @@ final class CalendarMath
         $year = (100 * $b) + $d - 4800 + $mDiv10;
 
         return self::$fromJulianDayCache[$jdn] = [$year, $month, $day];
-    }
-
-    /**
-     * Shared "day" / "week" early return for {@see CalendarProtocol::dateUntil()}.
-     *
-     * When `$largestUnit` is `'day'` or `'week'`, computes the signed difference
-     * purely from Julian Day Numbers — no calendar-specific year/month trial
-     * iteration is needed — and returns a `[years, months, weeks, days]` tuple.
-     * Returns `null` when `$largestUnit` is `'year'` or `'month'` so the caller
-     * falls through to its calendar-specific logic.
-     *
-     * @return array{int, int, int, int}|null
-     */
-    public static function dayOrWeekDateUntil(
-        int $isoY1,
-        int $isoM1,
-        int $isoD1,
-        int $isoY2,
-        int $isoM2,
-        int $isoD2,
-        string $largestUnit,
-    ): ?array {
-        if ($largestUnit !== 'day' && $largestUnit !== 'week') {
-            return null;
-        }
-
-        $totalDays = self::toJulianDay($isoY2, $isoM2, $isoD2) - self::toJulianDay($isoY1, $isoM1, $isoD1);
-
-        if ($largestUnit === 'week') {
-            $weeks = intdiv(num1: $totalDays, num2: 7);
-            return [0, 0, $weeks, $totalDays - ($weeks * 7)];
-        }
-
-        return [0, 0, 0, $totalDays];
     }
 }

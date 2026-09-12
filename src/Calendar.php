@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
-use Temporal\Exception\InvalidArgument;
+use Calendrics\Exception\InvalidArgument;
 
 /**
  * ECMA-402 calendar systems supported by the TC39 Temporal proposal.

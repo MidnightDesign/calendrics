@@ -2,16 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasPlainLocaleString;
+use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\LocaleComponentMode;
+use Calendrics\Spec\Internal\MonthCode;
+use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\Calendar\CalendarFactory;
-use Temporal\Spec\Internal\CalendarMath;
-use Temporal\Spec\Internal\MonthCode;
-use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\TemporalSerde;
 
 /**
  * A calendar month-day without a year, time, or time zone.
@@ -21,9 +25,19 @@ use Temporal\Spec\Internal\TemporalSerde;
  *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-plainmonthday-objects
  */
-final class PlainMonthDay implements Stringable
+final class PlainMonthDay implements PlainLocaleFormattable, Stringable
 {
-    use TemporalSerde;
+    use HasPlainLocaleString;
+    use HasStringRepresentations;
+
+    /**
+     * The calendar fields a PlainMonthDay is built from, as passed to
+     * PrepareCalendarFields. `era`/`eraYear` are CalendarExtraFields, added by
+     * {@see FieldBag} only for calendars that have eras.
+     *
+     * @var list<string>
+     */
+    private const array CALENDAR_FIELDS = ['year', 'month', 'monthCode', 'day'];
 
     // -------------------------------------------------------------------------
     // Virtual (get-only) properties
@@ -48,9 +62,7 @@ final class PlainMonthDay implements Stringable
      * @psalm-api
      */
     public int $month {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoMonth
-            : CalendarFactory::get($this->calendarId)->month($this->referenceISOYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->month($this->referenceISOYear, $this->isoMonth, $this->isoDay);
     }
 
     /**
@@ -59,9 +71,7 @@ final class PlainMonthDay implements Stringable
      * @psalm-api
      */
     public int $day {
-        get => $this->calendarId === 'iso8601'
-            ? $this->isoDay
-            : CalendarFactory::get($this->calendarId)->day($this->referenceISOYear, $this->isoMonth, $this->isoDay);
+        get => CalendarFactory::get($this->calendarId)->day($this->referenceISOYear, $this->isoMonth, $this->isoDay);
     }
 
     // -------------------------------------------------------------------------
@@ -138,6 +148,7 @@ final class PlainMonthDay implements Stringable
             );
         }
         /** @psalm-suppress InvalidPropertyAssignmentValue — $dayInt <= $daysInMonth <= 31 */
+        // @mago-ignore analysis:invalid-property-assignment-value
         $this->isoDay = $dayInt;
 
         // TC39 range: the resulting date (referenceISOYear-month-day) must be within the
@@ -191,16 +202,15 @@ final class PlainMonthDay implements Stringable
             return $result;
         }
 
-        // Object / instance / property-bag branch: GetOptionsObject and
-        // GetTemporalOverflowOption are read before the algorithmic field validation
-        // (CalendarMonthDayFromFields).
-        $overflow = Options::overflowFromValue($options);
-
+        // An existing PlainMonthDay is copied wholesale — no fields are read — but the
+        // options argument is still put through GetOptionsObject.
         if ($item instanceof self) {
+            Options::overflowFromValue($options);
             return new self($item->isoMonth, $item->isoDay, $item->calendarId, $item->referenceISOYear);
         }
         // Temporal objects with calendar fields: extract as a property bag
-        // per TC39 ToTemporalMonthDay step that calls CalendarFields.
+        // per TC39 ToTemporalMonthDay step that calls CalendarFields. Reading an
+        // internal slot is not observable, so the options follow as usual.
         if ($item instanceof PlainDate || $item instanceof PlainDateTime) {
             $bag = [
                 'year' => $item->year,
@@ -209,11 +219,14 @@ final class PlainMonthDay implements Stringable
                 'day' => $item->day,
                 'calendar' => $item->calendarId,
             ];
-            return self::fromPropertyBag($bag, $overflow);
+            return self::fromPropertyBag($bag, Options::overflowFromValue($options));
         }
-        if (is_object($item)) {
-            $item = get_object_vars($item);
-        }
+
+        // Property-bag branch: PrepareCalendarFields reads the bag BEFORE
+        // GetOptionsObject, and both precede the algorithmic field validation in
+        // CalendarMonthDayFromFields.
+        $item = FieldBag::forCalendarType($item, self::CALENDAR_FIELDS, [], 'PlainMonthDay');
+        $overflow = Options::overflowFromValue($options);
         return self::fromPropertyBag($item, $overflow);
     }
 
@@ -252,7 +265,7 @@ final class PlainMonthDay implements Stringable
         }
 
         // Normalize inputs to array up front so the body has a single path.
-        $bag = is_object($fields) ? get_object_vars($fields) : $fields;
+        $bag = FieldBag::forPartial($fields, self::CALENDAR_FIELDS, $this->calendarId);
 
         // IsPartialTemporalObject step 3: calendar key present → TypeError.
         if (array_key_exists('calendar', $bag)) {
@@ -290,24 +303,19 @@ final class PlainMonthDay implements Stringable
                 );
             }
 
-            // Resolve monthCode: use provided, or default to current.
+            // Resolve monthCode: use provided, or default to current. It stays null only
+            // when a month replaces it, which is what puts the resolution on the month path.
             $monthCode = null;
-            $useMonthCode = false;
             if ($hasMonthCode) {
                 // MonthCode::validate: non-string TYPE => TypeError, ill-formed STRING => RangeError.
                 $monthCode = MonthCode::validate($bag['monthCode']);
-                $useMonthCode = true;
+            } elseif (!$hasMonth) {
+                $monthCode = $this->monthCode;
             }
 
             $month = null;
             if ($hasMonth) {
                 $month = CalendarMath::toFiniteInt($bag['month'], 'PlainMonthDay::with() month');
-                $useMonthCode = false;
-            }
-            if (!$hasMonth && !$hasMonthCode) {
-                // Default: preserve current monthCode.
-                $monthCode = $this->monthCode;
-                $useMonthCode = true;
             }
 
             $day = $this->day;
@@ -330,16 +338,14 @@ final class PlainMonthDay implements Stringable
                 $overflow = $resolveOverflow();
 
                 // Validate month/monthCode conflict with year context.
-                if ($useMonthCode && $hasMonth) {
-                    assert($monthCode !== null, description: '$useMonthCode implies monthCode was provided');
-                    /** @var int $month */
+                if ($monthCode !== null && $month !== null) {
                     $resolvedMonth = $calendar->monthCodeToMonth($monthCode, $calYear);
                     if ($month !== $resolvedMonth) {
                         throw new RangeError('Conflicting month and monthCode fields.');
                     }
                 }
 
-                if ($useMonthCode && $monthCode !== null) {
+                if ($monthCode !== null) {
                     [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode(
                         $calYear,
                         $monthCode,
@@ -363,9 +369,9 @@ final class PlainMonthDay implements Stringable
             // No year: use monthCode path with reference year resolution. Resolve the
             // options object (GetOptionsObject) now that all fields have been read.
             $resolveOverflow();
-            // $useMonthCode is always true here: month-without-year-or-monthCode was
-            // rejected above, and every other no-year shape sets useMonthCode = true.
-            /** @var string $monthCode — guaranteed non-null when $useMonthCode is true */
+            // Never null here: month-without-year-or-monthCode was rejected above, so every
+            // remaining no-year shape either carries a monthCode or defaults to the current one.
+            /** @var string $monthCode */
             return self::resolveNonIsoReferenceYear($calendar, $this->calendarId, $monthCode, $day);
         }
 
@@ -390,7 +396,20 @@ final class PlainMonthDay implements Stringable
             $refYear = CalendarMath::toFiniteInt($bag['year'], 'PlainMonthDay::with() year');
         }
 
-        // Resolve monthCode.
+        // `month` and `day` are read with ToPositiveIntegerWithTruncation, so a
+        // non-positive value is rejected during field preparation — before the options.
+        if ($hasMonth && $month < 1) {
+            throw new RangeError("Invalid month {$month}: must be at least 1.");
+        }
+        if ($day < 1) {
+            throw new RangeError("Invalid day {$day}: must be at least 1.");
+        }
+
+        // All fields have been read/coerced; resolve the options object now — still
+        // ahead of CalendarMonthDayFromFields, which is what decides whether the month
+        // code names a month this calendar has.
+        $overflow = $resolveOverflow();
+
         if ($hasMonthCode) {
             /** @var string $monthCode */
             $mcMonth = CalendarMath::monthCodeToMonth($monthCode);
@@ -399,16 +418,6 @@ final class PlainMonthDay implements Stringable
             }
             $month = $mcMonth;
         }
-
-        if ($month < 1) {
-            throw new RangeError("Invalid month {$month}: must be at least 1.");
-        }
-        if ($day < 1) {
-            throw new RangeError("Invalid day {$day}: must be at least 1.");
-        }
-
-        // All fields have been read/coerced; resolve the options object now.
-        $overflow = $resolveOverflow();
 
         if ($overflow === 'constrain') {
             /**
@@ -469,14 +478,14 @@ final class PlainMonthDay implements Stringable
      *   always     → "YYYY-MM-DD[u-ca=<id>]"
      *   critical   → "YYYY-MM-DD[!u-ca=<id>]"
      *
-     * @param array<array-key, mixed>|object|null $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
+     * @param array<array-key, mixed>|object $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
      * @throws RangeError for invalid calendarName values.
      * @psalm-api
      */
     #[\Override]
-    public function toString(array|object|null $options = null): string
+    public function toString(mixed $options = []): string
     {
-        $opts = Options::normalizeOptions($options);
+        $opts = Options::requireObject($options, ['calendarName']);
 
         $calendarName = 'auto';
         if (array_key_exists('calendarName', $opts)) {
@@ -528,7 +537,13 @@ final class PlainMonthDay implements Stringable
      */
     public function toPlainDate(array|object $fields): PlainDate
     {
-        $bag = is_object($fields) ? get_object_vars($fields) : $fields;
+        // PrepareCalendarFields uses THIS month-day's calendar, so era/eraYear are
+        // fields only when that calendar has eras. Probing them otherwise would fire an
+        // accessor on a name the spec never reads.
+        $bag = FieldBag::forFields(
+            $fields,
+            CalendarMath::supportsEras($this->calendarId) ? ['year', 'era', 'eraYear'] : ['year'],
+        );
 
         $calendar = $this->calendarId !== 'iso8601' ? CalendarFactory::get($this->calendarId) : null;
 
@@ -649,7 +664,7 @@ final class PlainMonthDay implements Stringable
                 // TwoDashes (0 or 2) + 2 month digits + separator (0 or 1) + 2 day digits.
                 $dashPrefix = str_starts_with($s, '--') ? 2 : 0;
                 // A separator dash is present iff the month-day span exceeds MMDD (4 digits).
-                $hasSeparator = ($s[$dashPrefix + 2] ?? '') === '-';
+                $hasSeparator = $s[$dashPrefix + 2] === '-';
                 $dateLen = $dashPrefix + 2 + ($hasSeparator ? 1 : 0) + 2;
                 $afterDate = substr(string: $s, offset: $dateLen);
                 $bracketPos = strpos(haystack: $afterDate, needle: '[');
@@ -1319,21 +1334,15 @@ final class PlainMonthDay implements Stringable
     }
 
     #[\Override]
-    protected function localeDefaultComponents(): string
+    protected function localeDefaultComponents(): LocaleComponentMode
     {
-        return 'monthday';
+        return LocaleComponentMode::MonthDay;
     }
 
     #[\Override]
-    protected function localeIsDateOnly(): bool
+    protected function localeCalendarId(): string
     {
-        return true;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
+        return $this->calendarId;
     }
 
     #[\Override]

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Trait;
+namespace Calendrics\Trait;
 
 /**
  * Virtual (get-only) time-of-day properties that delegate to a spec

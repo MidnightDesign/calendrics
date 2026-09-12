@@ -2,15 +2,21 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\EpochLimits;
+use Calendrics\Spec\Internal\EpochRounding;
+use Calendrics\Spec\Internal\FieldBag;
+use Calendrics\Spec\Internal\HasPlainLocaleString;
+use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\IsoFraction;
+use Calendrics\Spec\Internal\LocaleComponentMode;
+use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\CalendarMath;
-use Temporal\Spec\Internal\EpochLimits;
-use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\TemporalSerde;
 
 /**
  * A wall-clock time without a date or time zone.
@@ -20,9 +26,25 @@ use Temporal\Spec\Internal\TemporalSerde;
  *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-plaintime-objects
  */
-final class PlainTime implements Stringable
+final class PlainTime implements PlainLocaleFormattable, Stringable
 {
-    use TemporalSerde;
+    use HasPlainLocaleString;
+    use HasStringRepresentations;
+
+    /**
+     * The fields a PlainTime is built from. A time carries no calendar, so this list is
+     * fixed — there are no CalendarExtraFields to add.
+     *
+     * @var list<string>
+     */
+    private const array TIME_FIELDS = [
+        'hour',
+        'minute',
+        'second',
+        'millisecond',
+        'microsecond',
+        'nanosecond',
+    ];
 
     private const int NS_PER_HOUR = 3_600_000_000_000;
     private const int NS_PER_MINUTE = 60_000_000_000;
@@ -181,9 +203,7 @@ final class PlainTime implements Stringable
             Options::overflowFromValue($options);
             return $result;
         }
-        if (is_object($item)) {
-            $item = get_object_vars($item);
-        }
+        $item = FieldBag::forFields($item, self::TIME_FIELDS);
         // ToTemporalTime steps 2.c-2.e: read fields then validate options.
         $overflow = Options::overflowFromValue($options);
         return self::fromPropertyBag($item, $overflow);
@@ -242,7 +262,7 @@ final class PlainTime implements Stringable
             throw new TypeError('PlainTime::with() argument must be an object.');
         }
 
-        $fields = is_object($fields) ? get_object_vars($fields) : $fields;
+        $fields = FieldBag::forPartial($fields, self::TIME_FIELDS, null);
 
         // RejectObjectWithCalendarOrTimeZone: calendar/timeZone keys are date-specific
         // and must not appear in a PlainTime fields bag.
@@ -355,7 +375,7 @@ final class PlainTime implements Stringable
      * @throws RangeError for invalid option values.
      * @psalm-api
      */
-    public function until(string|array|object $other, array|object|null $options = []): Duration
+    public function until(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         $diffNs = $o->ns - $this->ns;
@@ -372,7 +392,7 @@ final class PlainTime implements Stringable
      * @throws RangeError for invalid option values.
      * @psalm-api
      */
-    public function since(string|array|object $other, array|object|null $options = []): Duration
+    public function since(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         $diffNs = $this->ns - $o->ns;
@@ -403,13 +423,13 @@ final class PlainTime implements Stringable
                     throw new TypeError('PlainTime::round() requires a non-undefined options argument.');
                 }
             }
-            $options = Options::requireObject($options);
+            $options = Options::requireObject($options, ['roundingIncrement', 'roundingMode', 'smallestUnit']);
         }
 
         /** @var mixed $suRaw */
         $suRaw = $options['smallestUnit'] ?? null;
         if ($suRaw === null) {
-            throw new RangeError('Temporal\\PlainTime::round() requires smallestUnit.');
+            throw new RangeError('Calendrics\\PlainTime::round() requires smallestUnit.');
         }
         $suRaw = Options::coerceEnumOption($suRaw, 'smallestUnit');
 
@@ -430,7 +450,7 @@ final class PlainTime implements Stringable
             'hours' => [3_600_000_000_000, 24],
         ];
         if (!array_key_exists($suRaw, $unitMap)) {
-            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Temporal\\PlainTime::round().");
+            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Calendrics\\PlainTime::round().");
         }
         [$nsPerUnit, $maxIncrement] = $unitMap[$suRaw];
 
@@ -457,7 +477,7 @@ final class PlainTime implements Stringable
 
         $nsIncrement = $nsPerUnit * $increment;
         // Round $this->ns (always non-negative) using the given mode.
-        $rounded = self::roundPositiveNs($this->ns, $nsIncrement, $roundingMode);
+        $rounded = EpochRounding::roundAsIfPositive($this->ns, $nsIncrement, $roundingMode);
         // Wrap modulo one day (rounded could reach exactly NS_PER_DAY).
         $rounded %= self::NS_PER_DAY;
         return self::fromNs($rounded);
@@ -492,11 +512,11 @@ final class PlainTime implements Stringable
      * @psalm-api
      */
     #[\Override]
-    public function toString(array|object|null $options = []): string
+    public function toString(mixed $options = []): string
     {
         // GetOptionsObject: explicit null / non-object primitive / Symbol => TypeError.
         // An omitted options argument arrives as the empty-array default.
-        $options = Options::requireObject($options);
+        $options = Options::requireObject($options, ['fractionalSecondDigits', 'roundingMode', 'smallestUnit']);
 
         // $digits: -2 = 'auto', -1 = minute format (no seconds), 0-9 = fixed digits.
         $digits = -2;
@@ -551,7 +571,7 @@ final class PlainTime implements Stringable
         };
 
         // Round the nanoseconds (always non-negative).
-        $nsToFormat = self::roundPositiveNs($this->ns, $nsIncrement, $roundingMode);
+        $nsToFormat = EpochRounding::roundAsIfPositive($this->ns, $nsIncrement, $roundingMode);
         // Wrap modulo one day (rounding could reach exactly NS_PER_DAY for ceil-like modes).
         $nsToFormat %= self::NS_PER_DAY;
 
@@ -690,7 +710,7 @@ final class PlainTime implements Stringable
                 $secNum = 59;
             }
             $fracRaw = $m[6] !== '' ? $m[6] : '';
-            $subNs = $fracRaw !== '' ? self::parseFraction($fracRaw) : 0;
+            $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
 
             CalendarMath::validateTimeFields($hourNum, $minNum, $secNum, 0, 0, 0);
 
@@ -757,7 +777,7 @@ final class PlainTime implements Stringable
                 $secNum = 59;
             }
             $fracRaw = $m2[4] !== '' ? $m2[4] : '';
-            $subNs = $fracRaw !== '' ? self::parseFraction($fracRaw) : 0;
+            $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
 
             CalendarMath::validateTimeFields($hourNum, $minNum, $secNum, 0, 0, 0);
 
@@ -781,7 +801,7 @@ final class PlainTime implements Stringable
                 $secNum = 59;
             }
             $fracRaw = $m3[4] !== '' ? $m3[4] : '';
-            $subNs = $fracRaw !== '' ? self::parseFraction($fracRaw) : 0;
+            $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
             $annotationSection = $m3[5] !== '' ? $m3[5] : '';
             CalendarMath::validateAnnotations($annotationSection, $s, false);
 
@@ -827,12 +847,16 @@ final class PlainTime implements Stringable
         }
 
         // DateSpecYearMonth: four-digit year, optional hyphen, two-digit month 01–12.
+        /** @var list<string> $ym */
+        $ym = [];
         if (preg_match('/^\d{4}-?(\d{2})$/', $body, $ym) === 1) {
             $month = (int) $ym[1];
             return $month >= 1 && $month <= 12;
         }
 
         // DateSpecMonthDay: optional leading "--", two-digit month, optional hyphen, two-digit day.
+        /** @var list<string> $md */
+        $md = [];
         if (preg_match('/^(?:--)?(\d{2})-?(\d{2})$/', $body, $md) === 1) {
             $month = (int) $md[1];
             $day = (int) $md[2];
@@ -892,19 +916,6 @@ final class PlainTime implements Stringable
         }
 
         return new self($h, $min, $sec, $ms, $us, $ns);
-    }
-
-    /**
-     * Parses fractional-second string (".123" or ",123456789") into nanoseconds.
-     * Pads or truncates to exactly 9 digits.
-     *
-     * @return int<0, 999999999>
-     */
-    private static function parseFraction(string $fractionRaw): int
-    {
-        $digits = substr(string: $fractionRaw, offset: 1); // strip leading '.' or ','
-        /** @var int<0, 999999999> — 9 decimal digits, range 000000000–999999999 */
-        return (int) str_pad(substr(string: $digits, offset: 0, length: 9), length: 9, pad_string: '0');
     }
 
     /**
@@ -972,7 +983,7 @@ final class PlainTime implements Stringable
 
         // GetOptionsObject: explicit null / non-object primitive / Symbol => TypeError.
         // An omitted options argument arrives as the empty-array default.
-        $opts = Options::requireObject($options);
+        $opts = Options::requireObject($options, ['largestUnit', 'roundingIncrement', 'roundingMode', 'smallestUnit']);
 
         if ($opts !== []) {
             if (array_key_exists('largestUnit', $opts)) {
@@ -1154,37 +1165,6 @@ final class PlainTime implements Stringable
     }
 
     /**
-     * Rounds a non-negative nanosecond value to the nearest multiple of $increment
-     * using the given rounding mode (standard positive-value rounding).
-     *
-     * @throws RangeError for unknown rounding modes.
-     */
-    private static function roundPositiveNs(int $ns, int $increment, string $mode): int
-    {
-        $q = intdiv(num1: $ns, num2: $increment);
-        $rem = $ns - ($q * $increment);
-        $r1 = $q * $increment; // floor multiple
-        $r2 = $r1 + $increment; // ceil multiple
-        if ($mode === 'halfEven') {
-            $cmp = $rem * 2;
-            if ($cmp < $increment) {
-                return $r1;
-            }
-            if ($cmp > $increment) {
-                return $r2;
-            }
-            return ($q % 2) === 0 ? $r1 : $r2;
-        }
-        return match ($mode) {
-            'trunc', 'floor' => $r1,
-            'ceil', 'expand' => $rem === 0 ? $r1 : $r2,
-            'halfExpand', 'halfCeil' => ($rem * 2) >= $increment ? $r2 : $r1,
-            'halfTrunc', 'halfFloor' => ($rem * 2) > $increment ? $r2 : $r1,
-            default => throw new RangeError("Invalid roundingMode \"{$mode}\"."),
-        };
-    }
-
-    /**
      * Rounds a signed nanosecond diff to the nearest multiple of $increment,
      * correctly handling directional modes (floor, ceil, halfFloor, halfCeil) for
      * negative values.
@@ -1254,31 +1234,29 @@ final class PlainTime implements Stringable
     }
 
     #[\Override]
-    protected function localeDefaultComponents(): string
+    protected function localeDefaultComponents(): LocaleComponentMode
     {
-        return 'time';
+        return LocaleComponentMode::Time;
     }
 
     #[\Override]
-    protected function localeIsDateOnly(): bool
+    protected function localeCalendarId(): null
     {
-        return false;
+        return null;
     }
 
     #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return true;
-    }
-
-    #[\Override]
-    protected function toLocaleTimestamp(): int
+    protected function toLocaleTimestamp(): int|float
     {
         // Use Unix epoch date (1970-01-01) with the given time
         $dt = new \DateTime(
             sprintf('1970-01-01T%02d:%02d:%02d', $this->hour, $this->minute, $this->second),
             new \DateTimeZone('UTC'),
         );
-        return $dt->getTimestamp();
+        $subNs = ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond;
+        if ($subNs === 0) {
+            return $dt->getTimestamp();
+        }
+        return (float) $dt->getTimestamp() + ((float) $subNs / 1e9);
     }
 }

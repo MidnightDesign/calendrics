@@ -1,0 +1,18 @@
+<?php
+
+/**
+ * Psalm counterpart to tools/phpstan-stubs/DateTimeZone.stub.
+ *
+ * Psalm's built-in signature widens the identifier list to plain string, which
+ * loses the guarantee that every IANA identifier PHP ships is a non-empty name.
+ * Callers that key or return those identifiers need that guarantee to hold.
+ */
+class DateTimeZone
+{
+    /**
+     * @return list<non-empty-string>
+     */
+    public static function listIdentifiers(int $timezoneGroup = DateTimeZone::ALL, ?string $countryCode = null): array
+    {
+    }
+}

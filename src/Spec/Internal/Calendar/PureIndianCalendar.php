@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal\Calendar;
+namespace Calendrics\Spec\Internal\Calendar;
 
-use Temporal\Exception\RangeError;
-use Temporal\Spec\Internal\CalendarMath;
+use Calendrics\Exception\RangeError;
+use Calendrics\Spec\Internal\CalendarMath;
 
 /**
  * Pure PHP implementation of the Indian National (Saka) calendar.
@@ -298,11 +298,6 @@ final class PureIndianCalendar implements CalendarProtocol
         string $largestUnit,
         bool $receiverIsLater = false,
     ): array {
-        $dayOrWeek = CalendarMath::dayOrWeekDateUntil($isoY1, $isoM1, $isoD1, $isoY2, $isoM2, $isoD2, $largestUnit);
-        if ($dayOrWeek !== null) {
-            return $dayOrWeek;
-        }
-
         $jdn1 = CalendarMath::toJulianDay($isoY1, $isoM1, $isoD1);
         $jdn2 = CalendarMath::toJulianDay($isoY2, $isoM2, $isoD2);
 

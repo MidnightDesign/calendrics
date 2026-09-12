@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262\Helper;
+namespace Calendrics\Tests\Test262\Helper;
 
 /**
  * ISO string-array data providers ported from TC39's TemporalHelpers harness.
@@ -12,7 +12,7 @@ namespace Temporal\Tests\Test262\Helper;
  * (harness/temporalHelpers.js). The arrays are copied verbatim from upstream
  * and must not be modified.
  *
- * Composed into {@see \Temporal\Tests\Test262\TemporalHelpers}; the public
+ * Composed into {@see \Calendrics\Tests\Test262\TemporalHelpers}; the public
  * surface is `TemporalHelpers::iso*()` / `isoMonths()` / `notYetSupportedCalendars()`.
  */
 trait IsoStringData

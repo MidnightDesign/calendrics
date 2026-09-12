@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain\Constraint;
+namespace Calendrics\Tests\Porcelain\Constraint;
 
+use Calendrics\Duration;
 use PHPUnit\Framework\Constraint\Constraint;
-use Temporal\Duration;
 
 final class DurationEquals extends Constraint
 {

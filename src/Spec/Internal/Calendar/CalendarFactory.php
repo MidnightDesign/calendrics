@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal\Calendar;
+namespace Calendrics\Spec\Internal\Calendar;
 
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
 
 /**
  * Singleton factory for calendar protocol instances.
@@ -105,9 +105,7 @@ final class CalendarFactory
      */
     public static function resolveConstructorCalendar(mixed $value, string $context): string
     {
-        if ($value === null) {
-            $value = 'iso8601';
-        } elseif (!is_string($value)) {
+        if (!is_string($value)) {
             throw new TypeError("{$context} calendar argument must be a string.");
         }
         return self::canonicalize($value);

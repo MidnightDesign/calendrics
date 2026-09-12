@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain\Constraint;
+namespace Calendrics\Tests\Porcelain\Constraint;
 
+use Calendrics\PlainTime;
 use PHPUnit\Framework\Constraint\Constraint;
-use Temporal\PlainTime;
 
 final class PlainTimeEquals extends Constraint
 {

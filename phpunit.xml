@@ -3,12 +3,12 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          cacheDirectory=".phpunit.cache">
+    <!--
+        There is deliberately no catch-all suite: a test in a new top-level
+        directory runs under no suite at all, which is how that mistake is
+        meant to surface.
+    -->
     <testsuites>
-        <testsuite name="default">
-            <directory>tests/</directory>
-            <exclude>tests/Test262</exclude>
-            <exclude>tests/Porcelain</exclude>
-        </testsuite>
         <testsuite name="porcelain">
             <directory>tests/Porcelain</directory>
         </testsuite>

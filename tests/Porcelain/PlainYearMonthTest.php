@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
-use Temporal\Calendar;
-use Temporal\CalendarDisplay;
-use Temporal\Duration;
-use Temporal\Exception\RangeError;
-use Temporal\PlainYearMonth;
-use Temporal\RoundingMode;
-use Temporal\Unit;
+use Calendrics\Calendar;
+use Calendrics\CalendarDisplay;
+use Calendrics\Duration;
+use Calendrics\Exception\RangeError;
+use Calendrics\PlainYearMonth;
+use Calendrics\RoundingMode;
+use Calendrics\Unit;
 
-final class PlainYearMonthTest extends TemporalTestCase
+final class PlainYearMonthTest extends CalendricsTestCase
 {
     // -------------------------------------------------------------------------
     // Constructor & readonly properties
@@ -438,7 +438,7 @@ final class PlainYearMonthTest extends TemporalTestCase
 
     public function testFromSpecCreatesInstance(): void
     {
-        $spec = new \Temporal\Spec\PlainYearMonth(2020, 6);
+        $spec = new \Calendrics\Spec\PlainYearMonth(2020, 6);
         $ym = PlainYearMonth::fromSpec($spec);
 
         static::assertSame(2020, $ym->year);
@@ -582,7 +582,7 @@ final class PlainYearMonthTest extends TemporalTestCase
 
     public function testFromSpecPreservesCalendar(): void
     {
-        $spec = new \Temporal\Spec\PlainYearMonth(2020, 6);
+        $spec = new \Calendrics\Spec\PlainYearMonth(2020, 6);
         $ym = PlainYearMonth::fromSpec($spec);
 
         static::assertSame(Calendar::Iso8601, $ym->calendar);

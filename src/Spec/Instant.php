@@ -2,21 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec;
+namespace Calendrics\Spec;
 
+use Calendrics\Exception\RangeError;
+use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\EpochLimits;
+use Calendrics\Spec\Internal\EpochRounding;
+use Calendrics\Spec\Internal\EpochValue;
+use Calendrics\Spec\Internal\HasEpochParts;
+use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\IsoFraction;
+use Calendrics\Spec\Internal\IsoOffset;
+use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\TimeZoneHelper;
 use DateTimeImmutable;
 use DateTimeZone;
 use Stringable;
-use Temporal\Exception\RangeError;
-use Temporal\Exception\TypeError;
-use Temporal\Spec\Internal\CalendarMath;
-use Temporal\Spec\Internal\EpochLimits;
-use Temporal\Spec\Internal\EpochRounding;
-use Temporal\Spec\Internal\EpochValue;
-use Temporal\Spec\Internal\HasEpochParts;
-use Temporal\Spec\Internal\IntlFormatter;
-use Temporal\Spec\Internal\Options;
-use Temporal\Spec\Internal\TimeZoneHelper;
 
 /**
  * A fixed point in time with nanosecond precision.
@@ -66,6 +68,11 @@ final class Instant implements Stringable
         if (is_bool($epochNanoseconds)) {
             $epochNanoseconds = (int) $epochNanoseconds;
         }
+        // ToBigInt(Number) is a TypeError, so a PHP float (our Number stand-in) is
+        // rejected; an over-int64 instant is supplied as a decimal string instead.
+        if (is_float($epochNanoseconds)) {
+            throw new TypeError('epochNanoseconds must be an integer, not a float.');
+        }
         if (is_string($epochNanoseconds)) {
             // Exact decomposition of a (possibly over-int64) decimal integer string
             // into floor epoch-seconds + sub-second nanoseconds, preserving full
@@ -75,16 +82,14 @@ final class Instant implements Stringable
             }
             [$sec, $subNs] = self::decimalStringToEpochParts($epochNanoseconds);
             $epoch = self::normalizeEpochParts($sec, $subNs);
-            $this->epochNanoseconds = $epoch->epochNanoseconds;
-            $this->applyEpoch($epoch);
-            return;
+        } else {
+            // An int argument is the instant exactly, sentinel-valued or not: PHP_INT_MIN
+            // and PHP_INT_MAX are ordinary nanosecond counts here, and stamping their true
+            // parts keeps them from reading as the over-int64 clamp markers of the same value.
+            $epoch = EpochValue::fromNanoseconds($epochNanoseconds);
         }
-        // ToBigInt(Number) is a TypeError, so a PHP float (our Number stand-in) is
-        // rejected; an over-int64 instant is supplied as a decimal string instead.
-        if (is_float($epochNanoseconds)) {
-            throw new TypeError('epochNanoseconds must be an integer, not a float.');
-        }
-        $this->epochNanoseconds = $epochNanoseconds;
+        $this->epochNanoseconds = $epoch->epochNanoseconds;
+        $this->applyEpoch($epoch);
     }
 
     /**
@@ -139,7 +144,8 @@ final class Instant implements Stringable
         $epoch = EpochValue::fromParts($epochSec, $subNs);
 
         // Range-check against the spec bound on the normalized pair (subNs in [0, 1e9)).
-        [$normSec, $normSubNs] = $epoch->parts();
+        $normSec = $epoch->trueEpochSec;
+        $normSubNs = $epoch->trueSubNs;
         $maxSec = EpochLimits::MAX_EPOCH_SECONDS;
         if ($normSec < -$maxSec || $normSec > $maxSec || $normSec === $maxSec && $normSubNs > 0) {
             throw new RangeError('Instant result is outside the representable nanosecond range.');
@@ -157,14 +163,11 @@ final class Instant implements Stringable
      * paths, arithmetic, rounding, and the toInstant()/toZonedDateTimeISO()
      * converters so every over-int64 instant carries its true value.
      *
-     * The test262 transpiler renders over-int64 BigInt epoch-seconds (only ever
-     * produced for deliberately out-of-range fixtures, since every valid instant's
-     * epochSec ≤ 8.64e12 fits int64) as PHP float literals, so $epochSec/$subNs
-     * accept int|float. A finite over-int64 float epoch-second is always outside the
-     * spec range and therefore throws RangeError — never a TypeError.
+     * $epochSec/$subNs accept int|float and are narrowed by
+     * {@see EpochValue::narrowParts()}, which documents where float parts come from.
      *
      * @internal
-     * @psalm-internal Temporal\Spec
+     * @psalm-internal Calendrics\Spec
      * @throws RangeError if a part is a non-integer float or the result
      *         is outside the representable Temporal range.
      */
@@ -175,28 +178,15 @@ final class Instant implements Stringable
         // to which the test262 transpiler maps the JS-spec RangeError. Normalization,
         // the range check, and the over-int64 sentinel are shared with the
         // constructor via normalizeEpochParts().
-        $maxSec = EpochLimits::MAX_EPOCH_SECONDS;
-        if (is_float($epochSec)) {
-            // A finite over-int64 float epochSec cannot be in the ±8.64e12 s spec
-            // range, so it is unconditionally out of range. (float)PHP_INT_MAX rounds
-            // up past PHP_INT_MAX, so compare against the spec bound directly.
-            if (!is_finite($epochSec) || $epochSec > (float) $maxSec || $epochSec < -(float) $maxSec) {
-                throw new RangeError('Instant result is outside the representable nanosecond range.');
-            }
-            $epochSec = (int) $epochSec;
+        $parts = EpochValue::narrowParts($epochSec, $subNs);
+        if ($parts === null) {
+            throw new RangeError('Instant result is outside the representable nanosecond range.');
         }
-        if (is_float($subNs)) {
-            if (
-                !is_finite($subNs)
-                || floor($subNs) !== $subNs
-                || $subNs > (float) PHP_INT_MAX
-                || $subNs < (float) PHP_INT_MIN
-            ) {
-                throw new RangeError('Instant result is outside the representable nanosecond range.');
-            }
-            $subNs = (int) $subNs;
-        }
+        [$epochSec, $subNs] = $parts;
 
+        // The constructor derives its own parts from the int it is handed, which is the
+        // clamp rather than the instant once the value overflows int64, so re-stamp from
+        // the value that knows both.
         $epoch = self::normalizeEpochParts($epochSec, $subNs);
         $self = new self($epoch->epochNanoseconds);
         $self->applyEpoch($epoch);
@@ -240,7 +230,7 @@ final class Instant implements Stringable
         }
         // TC39 sec-temporal-totemporalinstant step 1.b: a ZonedDateTime carries a
         // Nanoseconds internal slot — extract it directly as the fast path.
-        if ($item instanceof \Temporal\Spec\ZonedDateTime) {
+        if ($item instanceof \Calendrics\Spec\ZonedDateTime) {
             [$epochSec, $subNs] = $item->epochParts();
             return self::fromEpochParts($epochSec, $subNs);
         }
@@ -327,7 +317,10 @@ final class Instant implements Stringable
 
         // Parse the offset to [sign, absSec, fracNs].  The offset is applied
         // manually so that sub-minute precision is handled correctly.
-        [$offsetSign, $offsetAbsSec, $offsetFracNs] = self::parseOffset($offsetRaw, $text);
+        [$offsetSign, $offsetAbsSec, $offsetFracNs] = IsoOffset::parts($offsetRaw);
+        if ((($offsetAbsSec * EpochLimits::NS_PER_SECOND) + $offsetFracNs) > 86_399_999_999_999) {
+            throw new RangeError("Invalid Instant string \"{$text}\": UTC offset out of range.");
+        }
 
         CalendarMath::validateAnnotations($annotationSection, $text, false);
 
@@ -351,7 +344,7 @@ final class Instant implements Stringable
 
         // $localSec: Unix seconds for the local date/time as if it were UTC.
         $localSec = $dt->getTimestamp();
-        $localSubNs = $fractionRaw !== '' ? self::parseFraction($fractionRaw) : 0;
+        $localSubNs = $fractionRaw !== '' ? IsoFraction::toNanoseconds($fractionRaw) : 0;
 
         // UTC epoch seconds = local seconds − offset seconds.
         // We avoid multiplying large second values by 10^9 (which would overflow
@@ -469,7 +462,7 @@ final class Instant implements Stringable
                 // A non-string, non-Stringable value (number, bool, plain object,
                 // Temporal type other than Instant) is a wrong-TYPE argument —
                 // TC39 throws TypeError before any string coercion is attempted.
-                throw new TypeError('Temporal\\Instant argument must be an Instant or an ISO string.');
+                throw new TypeError('Calendrics\\Instant argument must be an Instant or an ISO string.');
             }
         }
         return self::from($arg);
@@ -510,19 +503,18 @@ final class Instant implements Stringable
      * Uses RoundNumberToIncrementAsIfPositive (spec §8.3.13): rounding is always applied
      * using the unsigned mode for a positive sign, regardless of the actual sign of the epoch.
      *
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @throws RangeError if options are invalid.
      * @throws TypeError if the timeZone option is a non-string.
      */
-    public function toString(array|object|null $options = null): string
+    public function toString(mixed $options = []): string
     {
-        // Read "timeZone" via the faithful TC39 Get(O, P) helper on the ORIGINAL
-        // bag (before normalizeOptions snapshots it) so that an accessor getter —
-        // used by test262's positive-probe `{ get timeZone(){ throw } }` — fires on
-        // read. normalizeOptions uses get_object_vars(), which never triggers __get.
-        // The resulting value is validated below exactly as before.
-        $timeZoneRaw = $options === null ? Options::ABSENT : Options::bagGet($options, 'timeZone');
-        $options = Options::normalizeOptions($options);
+        $options = Options::requireObject($options, [
+            'fractionalSecondDigits',
+            'roundingMode',
+            'smallestUnit',
+            'timeZone',
+        ]);
 
         // $digits: -2 = 'auto' (strip trailing zeros), -1 = minute format, 0-9 = fixed.
         $digits = -2;
@@ -560,8 +552,10 @@ final class Instant implements Stringable
         }
 
         // timeZone: must be a string; non-string (including null) → TypeError.
-        // $timeZoneRaw was read from the original bag above (firing any accessor
-        // getter); ABSENT means the property was not present.
+        // Read last, matching the order TC39 prescribes — the snapshot above fired any
+        // accessor getter in that same order.
+        /** @var mixed $timeZoneRaw */
+        $timeZoneRaw = array_key_exists('timeZone', $options) ? $options['timeZone'] : Options::ABSENT;
         $hasTimeZone = $timeZoneRaw !== Options::ABSENT;
         if ($hasTimeZone) {
             if (!is_string($timeZoneRaw)) {
@@ -581,17 +575,17 @@ final class Instant implements Stringable
                 $tzOffsetSec = $resolved;
             } else {
                 // IANA timezone: extract the timezone name from the string.
-                // For bracket annotations, extract the bracket content.
+                // For bracket annotations, extract the bracket content (dropping the
+                // `!` critical flag, which is not part of the identifier).
                 $bm2 = null;
-                if (preg_match('/\[([^\]]+)\]/', $tzStr, $bm2) === 1) {
-                    // Group 1 is `[^\]]+`, so the capture is always non-empty (Psalm
-                    // does not infer non-emptiness from the pattern on its own).
-                    /** @var non-empty-string $bracketTz */
-                    $bracketTz = $bm2[1];
-                    $ianaTimeZone = $bracketTz;
+                if (preg_match('/\[!?([^\]]+)\]/', $tzStr, $bm2) === 1) {
+                    $ianaTimeZone = $bm2[1];
                 } else {
                     $ianaTimeZone = $tzStr;
                 }
+                // An unrecognized name is a RangeError; a bracket annotation's inline
+                // offset is not a fallback for one.
+                $ianaTimeZone = TimeZoneHelper::normalizeTimezoneId($ianaTimeZone);
             }
         }
 
@@ -761,15 +755,11 @@ final class Instant implements Stringable
                 $sign = $om[1] === '+' ? 1 : -1;
                 return $sign * (((int) $om[2] * 3600) + ((int) $om[3] * 60));
             }
-            // IANA timezone in bracket: return null to signal epoch-dependent resolution.
-            try {
-                new \DateTimeZone($bracket);
-                return null; // Caller will use ianaOffsetSeconds
-            } catch (\Exception $e) {
-                // Not a valid timezone; ignore the error and fall through to
-                // the inline-offset path below.
-                unset($e);
-            }
+            // IANA timezone in bracket: return null to signal epoch-dependent
+            // resolution. Whether the name is recognized is decided by the caller's
+            // normalization — an unknown one is a RangeError, and the inline offset
+            // is not a fallback for it.
+            return null;
         }
         // Datetime strings without bracket: use inline offset or Z.
         $om = null;
@@ -830,23 +820,24 @@ final class Instant implements Stringable
      *   - calendar: calendar identifier appended as u-ca locale extension
      *
      * @param string|array<array-key, mixed>|null $locales  BCP 47 locale string or array of strings.
-     * @param array<array-key, mixed>|object|null $options  Intl.DateTimeFormat options array.
+     * @param array<array-key, mixed>|object $options  Intl.DateTimeFormat options array.
      * @psalm-api
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
     {
         $locale = IntlFormatter::resolveLocale($locales);
         /** @var array<string, mixed> $opts */
-        $opts = is_object($options) ? get_object_vars($options) : $options ?? [];
+        $opts = $options === null ? [] : Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES);
+
+        IntlFormatter::validateOptionValues($opts);
 
         /** @var mixed $tzOpt */
         $tzOpt = $opts['timeZone'] ?? null;
         $timeZone = is_string($tzOpt) ? $tzOpt : 'UTC';
 
-        $opts['_locale'] = $locale;
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts);
-        [$seconds] = $this->epochParts();
-        $result = $formatter->format($seconds);
+        [$seconds, $subNs] = $this->epochParts();
+        $result = IntlFormatter::formatEpoch($formatter, $seconds, $subNs, $timeZone, $locale);
 
         return $result !== false ? $result : $this->toString();
     }
@@ -863,7 +854,7 @@ final class Instant implements Stringable
     {
         $tzId = self::parseTimeZoneId($timeZone);
         [$epochSec, $subNs] = $this->epochParts();
-        return ZonedDateTime::fromInstantParts($epochSec, $subNs, $tzId);
+        return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId);
     }
 
     /**
@@ -978,7 +969,7 @@ final class Instant implements Stringable
         $d = Duration::from($duration);
         if ($d->years !== 0 || $d->months !== 0 || $d->weeks !== 0 || $d->days !== 0) {
             throw new RangeError(
-                'Temporal\\Instant::add() does not support calendar fields (years, months, weeks, days).',
+                'Calendrics\\Instant::add() does not support calendar fields (years, months, weeks, days).',
             );
         }
         [$epochSec, $subNs] = $this->epochParts();
@@ -1008,7 +999,7 @@ final class Instant implements Stringable
         $d = Duration::from($duration);
         if ($d->years !== 0 || $d->months !== 0 || $d->weeks !== 0 || $d->days !== 0) {
             throw new RangeError(
-                'Temporal\\Instant::subtract() does not support calendar fields (years, months, weeks, days).',
+                'Calendrics\\Instant::subtract() does not support calendar fields (years, months, weeks, days).',
             );
         }
         [$epochSec, $subNs] = $this->epochParts();
@@ -1048,13 +1039,13 @@ final class Instant implements Stringable
                     throw new TypeError('Instant::round() requires a non-undefined options argument.');
                 }
             }
-            $roundTo = Options::requireObject($roundTo);
+            $roundTo = Options::requireObject($roundTo, ['roundingIncrement', 'roundingMode', 'smallestUnit']);
         }
 
         /** @var mixed $suRaw */
         $suRaw = $roundTo['smallestUnit'] ?? null;
         if ($suRaw === null) {
-            throw new RangeError('Temporal\\Instant::round() requires smallestUnit.');
+            throw new RangeError('Calendrics\\Instant::round() requires smallestUnit.');
         }
         $suRaw = Options::coerceEnumOption($suRaw, 'smallestUnit');
         // Maps unit name → [ns-per-unit, max-increment-divisor (next unit size)]
@@ -1073,7 +1064,7 @@ final class Instant implements Stringable
             'hours' => [3_600_000_000_000, 24],
         ];
         if (!array_key_exists($suRaw, $unitMap)) {
-            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Temporal\\Instant::round().");
+            throw new RangeError("Invalid smallestUnit \"{$suRaw}\" for Calendrics\\Instant::round().");
         }
         [$nsPerUnit, $maxDivisor] = $unitMap[$suRaw];
 
@@ -1111,10 +1102,10 @@ final class Instant implements Stringable
      * The result is positive when $this is after $other.
      *
      * @param string|object $other The starting instant (Instant or ISO string).
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @psalm-api used by test262 scripts
      */
-    public function since(string|object $other, array|object|null $options = null): Duration
+    public function since(string|object $other, mixed $options = []): Duration
     {
         $otherInst = $other instanceof self ? $other : self::coerceToInstant($other);
         [$aSec, $aSubNs] = $this->epochParts();
@@ -1128,10 +1119,10 @@ final class Instant implements Stringable
      * The result is positive when $other is after $this.
      *
      * @param string|object $other The ending instant (Instant or ISO string).
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @psalm-api used by test262 scripts
      */
-    public function until(string|object $other, array|object|null $options = null): Duration
+    public function until(string|object $other, mixed $options = []): Duration
     {
         $otherInst = $other instanceof self ? $other : self::coerceToInstant($other);
         [$aSec, $aSubNs] = $otherInst->epochParts();
@@ -1153,98 +1144,6 @@ final class Instant implements Stringable
     private static function validateRoundingMode(string $mode): void
     {
         Options::roundingMode($mode);
-    }
-
-    /**
-     * Parses an offset string captured by the regex into [sign, absSec, fracNs].
-     *
-     * Accepted forms:
-     *   Z                              → [+1, 0, 0]
-     *   ±HH                            → [sign, H*3600, 0]
-     *   ±HH:MM | ±HH:MM:SS[.,f]       → colon-separated
-     *   ±HHMM  | ±HHMMSS[.,f]         → no separators
-     *
-     * @return array{-1|1, int<0, 86399>, int<0, 999999999>}  [sign (+1|-1), absSec, fracNs]
-     * @throws RangeError if the offset is out of range
-     */
-    private static function parseOffset(string $offset, string $original): array
-    {
-        if ($offset === 'Z' || $offset === 'z') {
-            return [1, 0, 0];
-        }
-
-        $sign = $offset[0] === '+' ? 1 : -1;
-        $rest = substr(string: $offset, offset: 1); // digits (and separators) after the sign
-
-        $hours = (int) substr(string: $rest, offset: 0, length: 2);
-        $rest = substr(string: $rest, offset: 2);
-        $minutes = 0;
-        $seconds = 0;
-        $fracNs = 0;
-
-        if ($rest !== '') {
-            if ($rest[0] === ':') {
-                // Colon-separated: :MM[:SS[.frac]]
-                $minutes = (int) substr(string: $rest, offset: 1, length: 2);
-                $rest = substr(string: $rest, offset: 3);
-                if (str_starts_with($rest, ':')) {
-                    $seconds = (int) substr(string: $rest, offset: 1, length: 2);
-                    $rest = substr(string: $rest, offset: 3);
-                    if (str_starts_with($rest, '.') || str_starts_with($rest, ',')) {
-                        $fracNs = self::parseFraction($rest);
-                    }
-                }
-            } else {
-                // No separators: MM[SS[.frac]]
-                $minutes = (int) substr(string: $rest, offset: 0, length: 2);
-                $rest = substr(string: $rest, offset: 2);
-                if (strlen($rest) >= 2) {
-                    $seconds = (int) substr(string: $rest, offset: 0, length: 2);
-                    $rest = substr(string: $rest, offset: 2);
-                    if (str_starts_with($rest, '.') || str_starts_with($rest, ',')) {
-                        $fracNs = self::parseFraction($rest);
-                    }
-                }
-            }
-        }
-
-        $absSec = ($hours * 3600) + ($minutes * 60) + $seconds;
-        if ((($absSec * EpochLimits::NS_PER_SECOND) + $fracNs) > 86_399_999_999_999) {
-            throw new RangeError("Invalid Instant string \"{$original}\": UTC offset out of range.");
-        }
-        /** @var int<0, 86399> $absSec — range validated above */
-
-        return [$sign, $absSec, $fracNs];
-    }
-
-    /**
-     * Validates the bracket-annotation section of an ISO string.
-     *
-     * Rules (per Temporal spec §13.29):
-     *  - Annotation keys must be all-lowercase.
-     *  - A critical unknown annotation (e.g. [!foo=bar]) → reject.
-     *  - Multiple time-zone annotations → reject.
-     *  - Multiple calendar annotations where any carries ! → reject.
-     *  - A time-zone annotation may only use ±HH:MM (no seconds component) as an offset.
-     *
-     * Non-critical unknown annotations and calendar annotations are ignored.
-     *
-     * @throws RangeError on any violation.
-     */
-    /**
-     * Strips the leading separator and truncates/pads the fractional-second
-     * string to exactly 9 digits, then returns the nanosecond count.
-     *
-     * The Temporal spec allows arbitrarily long fraction strings; digits beyond
-     * the 9th are discarded (truncation, not rounding).
-     *
-     * @return int<0, 999999999>
-     */
-    private static function parseFraction(string $fractionRaw): int
-    {
-        $digits = substr($fractionRaw, offset: 1); // strip leading '.' or ','
-        /** @var int<0, 999999999> — 9 decimal digits, range 000000000–999999999 */
-        return (int) str_pad(substr($digits, offset: 0, length: 9), length: 9, pad_string: '0');
     }
 
     /**
@@ -1356,7 +1255,7 @@ final class Instant implements Stringable
      *
      * @param int $diffSec   Signed whole-second difference (this − other for since, other − this for until).
      * @param int $diffSubNs Signed sub-second nanosecond difference paired with $diffSec.
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @throws RangeError for invalid unit/mode strings or invalid roundingIncrement.
      * @throws TypeError for wrong-typed option values.
      */
@@ -1425,7 +1324,12 @@ final class Instant implements Stringable
         ];
 
         // ---- Parse options ----
-        $options = Options::normalizeOptions($options);
+        $options = Options::requireObject($options, [
+            'largestUnit',
+            'roundingIncrement',
+            'roundingMode',
+            'smallestUnit',
+        ]);
 
         // Track whether largestUnit was explicitly provided.
         $luProvided = array_key_exists('largestUnit', $options) && $options['largestUnit'] !== null;

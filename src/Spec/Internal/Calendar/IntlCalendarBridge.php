@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal\Calendar;
+namespace Calendrics\Spec\Internal\Calendar;
 
-use Temporal\Exception\RangeError;
-use Temporal\Spec\Internal\CalendarMath;
+use Calendrics\Exception\RangeError;
+use Calendrics\Spec\Internal\CalendarMath;
 
 /**
  * Non-ISO calendar implementation backed by PHP's IntlCalendar (ICU).
@@ -743,13 +743,6 @@ final class IntlCalendarBridge implements CalendarProtocol
         string $largestUnit,
         bool $receiverIsLater = false,
     ): array {
-        // Day/week: pure JDN subtraction, calendar doesn't matter. Shared with
-        // IsoCalendar/PureHebrewCalendar/PureIndianCalendar.
-        $dayOrWeek = CalendarMath::dayOrWeekDateUntil($isoY1, $isoM1, $isoD1, $isoY2, $isoM2, $isoD2, $largestUnit);
-        if ($dayOrWeek !== null) {
-            return $dayOrWeek;
-        }
-
         // TC39 CalendarDateUntil: iterate from date1 toward date2 WITHOUT
         // swapping. The direction (sign) determines whether we add positive or
         // negative year/month increments. This is essential for leap-month

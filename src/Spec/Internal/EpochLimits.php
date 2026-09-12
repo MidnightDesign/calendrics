@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Spec\Internal;
+namespace Calendrics\Spec\Internal;
 
 /**
  * Temporal epoch range bounds, shared across Instant, ZonedDateTime, and Duration.
@@ -68,6 +68,15 @@ final class EpochLimits
      * decomposes into (epochSec, subNs) and routes through fromEpochParts().
      */
     public const int MAX_EPOCH_MILLISECONDS_FOR_INT64_NS = 9_223_372_036_854;
+
+    /** Nanoseconds per day. */
+    public const int NS_PER_DAY = 86_400_000_000_000;
+
+    /** Nanoseconds per hour. */
+    public const int NS_PER_HOUR = 3_600_000_000_000;
+
+    /** Nanoseconds per minute. */
+    public const int NS_PER_MINUTE = 60_000_000_000;
 
     /** Nanoseconds per second. */
     public const int NS_PER_SECOND = 1_000_000_000;

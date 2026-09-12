@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262\Helper;
+namespace Calendrics\Tests\Test262\Helper;
 
+use Calendrics\Tests\Test262\Assert;
+use Calendrics\Tests\Test262\JsUndefined;
 use PHPUnit\Framework\Assert as PHPUnitAssert;
-use Temporal\Tests\Test262\Assert;
-use Temporal\Tests\Test262\JsUndefined;
 
 /**
  * Value-object assertions ported from TC39's TemporalHelpers harness.
@@ -15,7 +15,7 @@ use Temporal\Tests\Test262\JsUndefined;
  * Temporal value object against expected field values (or against another value
  * object of the same type).
  *
- * Composed into {@see \Temporal\Tests\Test262\TemporalHelpers}; the public
+ * Composed into {@see \Calendrics\Tests\Test262\TemporalHelpers}; the public
  * surface is `TemporalHelpers::assert*()`.
  */
 trait AssertsValueObjects
@@ -26,7 +26,7 @@ trait AssertsValueObjects
      * Argument order matches JS TemporalHelpers.assertDuration(d, y,m,w,d,h,min,s,ms,us,ns,msg).
      */
     public static function assertDuration(
-        \Temporal\Spec\Duration $duration,
+        \Calendrics\Spec\Duration $duration,
         int|float $years,
         int|float $months,
         int|float $weeks,
@@ -59,8 +59,8 @@ trait AssertsValueObjects
      * Argument order matches JS TemporalHelpers.assertDurationsEqual(a, b, msg).
      */
     public static function assertDurationsEqual(
-        \Temporal\Spec\Duration $one,
-        \Temporal\Spec\Duration $two,
+        \Calendrics\Spec\Duration $one,
+        \Calendrics\Spec\Duration $two,
         string $description = '',
     ): void {
         self::assertDuration(
@@ -87,7 +87,7 @@ trait AssertsValueObjects
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      */
     public static function assertPlainDate(
-        \Temporal\Spec\PlainDate $date,
+        \Calendrics\Spec\PlainDate $date,
         int $year,
         int|float $month,
         string $monthCode,
@@ -117,8 +117,8 @@ trait AssertsValueObjects
      * Argument order matches JS TemporalHelpers.assertInstantsEqual(a, b, msg).
      */
     public static function assertInstantsEqual(
-        \Temporal\Spec\Instant $one,
-        \Temporal\Spec\Instant $two,
+        \Calendrics\Spec\Instant $one,
+        \Calendrics\Spec\Instant $two,
         string $description = '',
     ): void {
         PHPUnitAssert::assertSame(
@@ -136,7 +136,7 @@ trait AssertsValueObjects
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      */
     public static function assertPlainTime(
-        \Temporal\Spec\PlainTime $time,
+        \Calendrics\Spec\PlainTime $time,
         int $hour,
         int $minute,
         int $second,
@@ -163,8 +163,8 @@ trait AssertsValueObjects
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      */
     public static function assertPlainTimesEqual(
-        \Temporal\Spec\PlainTime $one,
-        \Temporal\Spec\PlainTime $two,
+        \Calendrics\Spec\PlainTime $one,
+        \Calendrics\Spec\PlainTime $two,
         string $description = '',
     ): void {
         self::assertPlainTime(
@@ -187,8 +187,8 @@ trait AssertsValueObjects
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      */
     public static function assertPlainDatesEqual(
-        \Temporal\Spec\PlainDate $one,
-        \Temporal\Spec\PlainDate $two,
+        \Calendrics\Spec\PlainDate $one,
+        \Calendrics\Spec\PlainDate $two,
         string $description = '',
     ): void {
         self::assertPlainDate($one, $two->year, $two->month, $two->monthCode, $two->day, $description);
@@ -202,7 +202,7 @@ trait AssertsValueObjects
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      */
     public static function assertPlainDateTime(
-        \Temporal\Spec\PlainDateTime $dt,
+        \Calendrics\Spec\PlainDateTime $dt,
         int $year,
         int|float $month,
         string $monthCode,
@@ -236,8 +236,8 @@ trait AssertsValueObjects
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      */
     public static function assertPlainDateTimesEqual(
-        \Temporal\Spec\PlainDateTime $one,
-        \Temporal\Spec\PlainDateTime $two,
+        \Calendrics\Spec\PlainDateTime $one,
+        \Calendrics\Spec\PlainDateTime $two,
         string $description = '',
     ): void {
         self::assertPlainDateTime(
@@ -262,7 +262,7 @@ trait AssertsValueObjects
      * Argument order matches JS TemporalHelpers.assertDateDuration(d, y, m, w, days, msg).
      */
     public static function assertDateDuration(
-        \Temporal\Spec\Duration $duration,
+        \Calendrics\Spec\Duration $duration,
         int|float $years,
         int|float $months,
         int|float $weeks,
@@ -284,7 +284,7 @@ trait AssertsValueObjects
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      */
     public static function assertPlainYearMonth(
-        \Temporal\Spec\PlainYearMonth $ym,
+        \Calendrics\Spec\PlainYearMonth $ym,
         int $year,
         int $month,
         string $monthCode,
@@ -304,8 +304,8 @@ trait AssertsValueObjects
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      */
     public static function assertPlainYearMonthsEqual(
-        \Temporal\Spec\PlainYearMonth $one,
-        \Temporal\Spec\PlainYearMonth $two,
+        \Calendrics\Spec\PlainYearMonth $one,
+        \Calendrics\Spec\PlainYearMonth $two,
         string $description = '',
     ): void {
         self::assertPlainYearMonth($one, $two->year, $two->month, $two->monthCode, $description);
@@ -319,7 +319,7 @@ trait AssertsValueObjects
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      */
     public static function assertPlainMonthDay(
-        \Temporal\Spec\PlainMonthDay $md,
+        \Calendrics\Spec\PlainMonthDay $md,
         string $monthCode,
         int $day,
         string $description = '',
@@ -339,8 +339,8 @@ trait AssertsValueObjects
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      */
     public static function assertZonedDateTimesEqual(
-        \Temporal\Spec\ZonedDateTime $actual,
-        \Temporal\Spec\ZonedDateTime $expected,
+        \Calendrics\Spec\ZonedDateTime $actual,
+        \Calendrics\Spec\ZonedDateTime $expected,
         string $description = '',
     ): void {
         $prefix = $description !== '' ? "{$description}: " : '';

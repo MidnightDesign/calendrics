@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
-use Temporal\Duration;
-use Temporal\Exception\RangeError;
-use Temporal\PlainTime;
-use Temporal\RoundingMode;
-use Temporal\Unit;
+use Calendrics\Duration;
+use Calendrics\Exception\RangeError;
+use Calendrics\PlainTime;
+use Calendrics\RoundingMode;
+use Calendrics\Unit;
 
-final class PlainTimeTest extends TemporalTestCase
+final class PlainTimeTest extends CalendricsTestCase
 {
     // -------------------------------------------------------------------------
     // Constructor & virtual properties
@@ -508,7 +508,7 @@ final class PlainTimeTest extends TemporalTestCase
 
     public function testFromSpecMidnight(): void
     {
-        $spec = new \Temporal\Spec\PlainTime();
+        $spec = new \Calendrics\Spec\PlainTime();
         $t = PlainTime::fromSpec($spec);
 
         static::assertPlainTimeIs(0, 0, 0, 0, 0, 0, $t);

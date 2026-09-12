@@ -1,9 +1,13 @@
 services:
   php:
-    build: .
+    build:
+      context: .
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
     volumes:
       - .:/app
-      - composer-cache:/root/.composer/cache
+      - composer-cache:/home/app/.composer/cache
     working_dir: /app
     command: sleep infinity
 

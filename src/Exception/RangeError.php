@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Exception;
+namespace Calendrics\Exception;
 
 /**
  * Thrown when a Temporal API receives a numeric value or computes a result
@@ -10,7 +10,7 @@ namespace Temporal\Exception;
  * ±10^8 days, or a date arithmetic result exceeding the ISO date limits.
  *
  * Extends `\RangeException` so existing SPL-shaped catches keep working;
- * implements {@see TemporalException} so callers can catch every
- * Temporal-origin throwable through a single marker.
+ * implements {@see CalendricsException} so callers can catch every
+ * Calendrics-origin throwable through a single marker.
  */
-final class RangeError extends \RangeException implements TemporalException {}
+final class RangeError extends \RangeException implements CalendricsException {}

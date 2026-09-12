@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
-use Temporal\Duration;
-use Temporal\Exception\RangeError;
-use Temporal\Instant;
-use Temporal\RoundingMode;
-use Temporal\Unit;
+use Calendrics\Duration;
+use Calendrics\Exception\RangeError;
+use Calendrics\Instant;
+use Calendrics\RoundingMode;
+use Calendrics\Unit;
 
-final class InstantTest extends TemporalTestCase
+final class InstantTest extends CalendricsTestCase
 {
     // -------------------------------------------------------------------------
     // Constructor
@@ -556,7 +556,7 @@ final class InstantTest extends TemporalTestCase
 
     public function testFromSpecCreatesCorrectInstance(): void
     {
-        $spec = new \Temporal\Spec\Instant(42_000_000_000);
+        $spec = new \Calendrics\Spec\Instant(42_000_000_000);
         $i = Instant::fromSpec($spec);
 
         static::assertSame(42_000_000_000, $i->epochNanoseconds);

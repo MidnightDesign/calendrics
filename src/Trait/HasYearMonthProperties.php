@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Trait;
+namespace Calendrics\Trait;
 
-use Temporal\Calendar;
+use Calendrics\Calendar;
 
 /**
  * Virtual (get-only) calendar year-month properties that delegate to a spec

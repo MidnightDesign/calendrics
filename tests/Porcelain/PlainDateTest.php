@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
+use Calendrics\Calendar;
+use Calendrics\CalendarDisplay;
+use Calendrics\Duration;
+use Calendrics\Exception\RangeError;
+use Calendrics\Overflow;
+use Calendrics\PlainDate;
+use Calendrics\RoundingMode;
+use Calendrics\Unit;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use Temporal\Calendar;
-use Temporal\CalendarDisplay;
-use Temporal\Duration;
-use Temporal\Exception\RangeError;
-use Temporal\Overflow;
-use Temporal\PlainDate;
-use Temporal\RoundingMode;
-use Temporal\Unit;
 
 final class PlainDateTest extends TestCase
 {
@@ -481,7 +481,7 @@ final class PlainDateTest extends TestCase
 
     public function testFromSpecCreatesInstance(): void
     {
-        $spec = new \Temporal\Spec\PlainDate(2020, 6, 15);
+        $spec = new \Calendrics\Spec\PlainDate(2020, 6, 15);
         $pd = PlainDate::fromSpec($spec);
 
         static::assertSame(2020, $pd->year);
@@ -779,7 +779,7 @@ final class PlainDateTest extends TestCase
     public function testToPlainDateTimeWithTime(): void
     {
         $pd = new PlainDate(2020, 6, 15);
-        $time = new \Temporal\PlainTime(13, 30, 45);
+        $time = new \Calendrics\PlainTime(13, 30, 45);
         $dt = $pd->toPlainDateTime($time);
 
         static::assertSame(2020, $dt->year);
@@ -803,7 +803,7 @@ final class PlainDateTest extends TestCase
     public function testToZonedDateTimeWithTime(): void
     {
         $pd = new PlainDate(2020, 6, 15);
-        $time = new \Temporal\PlainTime(10, 30);
+        $time = new \Calendrics\PlainTime(10, 30);
         $zdt = $pd->toZonedDateTime('UTC', $time);
 
         static::assertSame(2020, $zdt->year);

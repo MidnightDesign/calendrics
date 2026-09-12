@@ -2,70 +2,81 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Test262\Helper;
+namespace Calendrics\Tests\Test262\Helper;
+
+use Calendrics\Tests\Test262\ObserverTrace;
+use Calendrics\Tests\Test262\PropertyBagObserver;
+use Calendrics\Tests\Test262\StringCoercionObserver;
 
 /**
- * Observer stand-ins and calendar-era canonicalization from TC39's TemporalHelpers harness.
+ * Property-access observers and calendar-era canonicalization from TC39's TemporalHelpers harness.
  *
- * The JS observer helpers (toPrimitiveObserver / propertyBagObserver) log
- * property-access order to drive order-of-operations tests; PHP has no observable
- * equivalent, so these are passthrough stand-ins (see each method's docblock).
+ * The observer helpers (toPrimitiveObserver / propertyBagObserver) record the order
+ * in which an operation reads its arguments, which is what the order-of-operations
+ * fixtures assert. JS's two coercion hooks map unevenly onto PHP: ToString has an
+ * equivalent (`__toString`), ToNumber has none — no object can stand in for an
+ * integer — so string values are observed and numeric ones are handed over bare.
+ * {@see \Calendrics\Tests\Test262\Assert::compareObserverTrace()} drops the
+ * correspondingly unobservable `…valueOf` events from each fixture's expected trace.
+ *
  * canonicalizeCalendarEra normalizes implementation-specific era casing/aliases.
  *
- * Composed into {@see \Temporal\Tests\Test262\TemporalHelpers}; the public
+ * Composed into {@see \Calendrics\Tests\Test262\TemporalHelpers}; the public
  * surface is `TemporalHelpers::toPrimitiveObserver()` etc.
  */
 trait ObserversAndCalendar
 {
     /**
-     * Passthrough stand-in for the JS TemporalHelpers.toPrimitiveObserver.
+     * Port of the JS TemporalHelpers.toPrimitiveObserver, for the half PHP can observe.
      *
-     * The JS version returns an object whose `valueOf` and `toString` getters log
-     * "get" events and whose returned functions log "call" events to a shared array,
-     * so that order-of-operations tests can verify the spec's prescribed sequence
-     * of property accesses on argument objects.
+     * The JS version returns an object whose `valueOf` / `toString` accessors log a
+     * "get" event and whose returned functions log a "call" event, so a fixture can
+     * assert that each argument is coerced at the point the spec says it is.
      *
-     * PHP does not distinguish property-get from method-call on a normal object
-     * (no JS-style ToPrimitive coercion for object args), so we return the primitive
-     * directly. Tests that care purely about the call sequence — `assert.compareArray`
-     * on the calls array, and explicit `.splice(0)` clears — are dropped at the
-     * transpiler level, which leaves the constructor / from() / etc. behavior under
-     * test still exercised.
+     * A string becomes a {@see StringCoercionObserver}, which logs both events from
+     * `__toString()`. Anything else is returned bare: PHP reaches ToNumber only for
+     * real int/float values, so wrapping a number would change the outcome under test
+     * rather than observe it.
      *
-     * @psalm-suppress UnusedParam
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
-     *
-     * @param list<string> $calls Ignored — we do not track property-access order.
      */
-    public static function toPrimitiveObserver(array &$calls, mixed $primitiveValue, string $propertyName): mixed
+    public static function toPrimitiveObserver(ObserverTrace $calls, mixed $primitiveValue, string $propertyName): mixed
     {
-        return $primitiveValue;
+        if (!is_string($primitiveValue)) {
+            return $primitiveValue;
+        }
+
+        return new StringCoercionObserver($calls, $primitiveValue, $propertyName);
     }
 
     /**
-     * Passthrough stand-in for the JS TemporalHelpers.propertyBagObserver.
+     * Port of the JS TemporalHelpers.propertyBagObserver.
      *
-     * The JS version wraps `propertyBag` in a Proxy that logs `get`/`has`/`ownKeys`
-     * events and wraps each property's value via {@see toPrimitiveObserver}. Same
-     * rationale as toPrimitiveObserver: PHP has no observable equivalent, and the
-     * compareArray order-checks at the call sites are dropped by the transpiler.
+     * The JS version wraps `propertyBag` in a Proxy that logs each `get` and routes
+     * the value through {@see toPrimitiveObserver}. {@see PropertyBagObserver} is the
+     * PHP spelling: `__get` does the logging and the same wrapping, and the spec layer
+     * reaches it because it reads bags through a faithful `Get(O, P)`.
      *
-     * @psalm-suppress UnusedParam
+     * An array bag is normalized to the observer object rather than passed through —
+     * a JS property bag is always an object, and only the object path fires accessors.
+     *
      * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
      *
-     * @param list<string>      $calls            Ignored.
-     * @param array<string, mixed>|object $propertyBag    Returned unchanged.
-     * @param list<string>|null $skipToPrimitive  Ignored.
-     *
-     * @return array<string, mixed>|object
+     * @param array<array-key, mixed>|object $propertyBag  Values the returned bag exposes.
+     * @param list<string>|null           $skipToPrimitive Names handed over without ToString wrapping.
      */
     public static function propertyBagObserver(
-        array &$calls,
+        ObserverTrace $calls,
         array|object $propertyBag,
         string $objectName,
         ?array $skipToPrimitive = null,
-    ): array|object {
-        return $propertyBag;
+    ): PropertyBagObserver {
+        return new PropertyBagObserver(
+            $calls,
+            is_array($propertyBag) ? $propertyBag : get_object_vars($propertyBag),
+            $objectName,
+            $skipToPrimitive,
+        );
     }
 
     /**
@@ -141,5 +152,58 @@ trait ObserversAndCalendar
     private static function defaultIntlCalendar(): ?\IntlCalendar
     {
         return \IntlCalendar::createInstance();
+    }
+
+    /**
+     * Returns the value of `Intl.supportedValuesOf("calendar")` — every calendar the
+     * runtime can format with, as BCP-47 unicode `ca` keys, sorted ascending.
+     *
+     * Derived from ICU's own keyword-value list rather than from this library's
+     * calendar registry, so the fixtures that pick "some calendar other than the
+     * locale's" are not silently narrowed to whatever we already support.
+     *
+     * @psalm-api used by dynamically-required test scripts in tests/Test262/scripts/
+     *
+     * @return list<string>
+     */
+    public static function supportedCalendars(): array
+    {
+        $calendars = [];
+        foreach (self::icuCalendarTypes() as $icuType) {
+            // ICU calendar type → BCP-47 unicode `ca` key (the few that differ).
+            $calendars[] = match ($icuType) {
+                'gregorian' => 'gregory',
+                'ethiopic-amete-alem' => 'ethioaa',
+                default => $icuType,
+            };
+        }
+        sort($calendars);
+
+        return $calendars;
+    }
+
+    /**
+     * Returns every calendar type ICU knows, in ICU's own vocabulary.
+     *
+     * Wrapped behind an explicit `list<string>` return type for the same reason as
+     * {@see self::defaultIntlCalendar()}: it keeps the iterator's element type out of
+     * the caller, where the analyzers disagree about it.
+     *
+     * @return list<string>
+     */
+    private static function icuCalendarTypes(): array
+    {
+        // 'und' asks for every calendar rather than the ones common in some region;
+        // getKeywordValuesForLocale() is only false for a keyword ICU does not know.
+        $values = \IntlCalendar::getKeywordValuesForLocale('calendar', locale: 'und', onlyCommon: false);
+        // The runtime returns false for a keyword ICU does not know; PHPStan's stub
+        // types the return non-false, so the guard reads as always-false to it.
+        // @phpstan-ignore identical.alwaysFalse
+        if ($values === false) {
+            return [];
+        }
+
+        /** @var list<string> */
+        return array_values(iterator_to_array($values));
     }
 }

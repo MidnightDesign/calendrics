@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Temporal\Tests\Porcelain;
+namespace Calendrics\Tests\Porcelain;
 
+use Calendrics\Duration;
+use Calendrics\Exception\RangeError;
+use Calendrics\PlainDate;
+use Calendrics\RoundingMode;
+use Calendrics\Unit;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Temporal\Duration;
-use Temporal\Exception\RangeError;
-use Temporal\PlainDate;
-use Temporal\RoundingMode;
-use Temporal\Unit;
 
-final class DurationTest extends TemporalTestCase
+final class DurationTest extends CalendricsTestCase
 {
     // -------------------------------------------------------------------------
     // Construction

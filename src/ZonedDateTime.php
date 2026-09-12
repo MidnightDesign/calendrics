@@ -2,17 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Temporal;
+namespace Calendrics;
 
-use Temporal\Spec\Internal\DateTimeFields;
-use Temporal\Trait\HasDayOfMonthProperties;
-use Temporal\Trait\HasDayOfMonthSpec;
-use Temporal\Trait\HasEpochProperties;
-use Temporal\Trait\HasEpochSpec;
-use Temporal\Trait\HasTimeOfDayProperties;
-use Temporal\Trait\HasTimeOfDaySpec;
-use Temporal\Trait\HasYearMonthProperties;
-use Temporal\Trait\HasYearMonthSpec;
+use Calendrics\Spec\Internal\PhpDateTimeInterop;
+use Calendrics\Trait\HasDayOfMonthProperties;
+use Calendrics\Trait\HasDayOfMonthSpec;
+use Calendrics\Trait\HasEpochProperties;
+use Calendrics\Trait\HasEpochSpec;
+use Calendrics\Trait\HasLocalizedFormatting;
+use Calendrics\Trait\HasTimeOfDayProperties;
+use Calendrics\Trait\HasTimeOfDaySpec;
+use Calendrics\Trait\HasYearMonthProperties;
+use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A date-time anchored to a specific time zone and instant.
@@ -34,6 +35,7 @@ final class ZonedDateTime implements
     use HasYearMonthProperties;
     use HasDayOfMonthProperties;
     use HasTimeOfDayProperties;
+    use HasLocalizedFormatting;
 
     // -------------------------------------------------------------------------
     // Virtual (get-only) time-zone-specific properties
@@ -86,7 +88,7 @@ final class ZonedDateTime implements
      * @param int      $epochNanoseconds Nanoseconds since the Unix epoch.
      * @param string   $timeZoneId       Timezone identifier: 'UTC', '+-HH:MM', or an IANA name.
      * @param Calendar $calendar         Calendar system (default ISO 8601).
-     * @throws \Temporal\Exception\RangeError if the epoch nanoseconds or time zone are invalid.
+     * @throws \Calendrics\Exception\RangeError if the epoch nanoseconds or time zone are invalid.
      */
     public function __construct(int $epochNanoseconds, string $timeZoneId, Calendar $calendar = Calendar::Iso8601)
     {
@@ -106,7 +108,7 @@ final class ZonedDateTime implements
      * @param string         $text           ISO 8601 ZonedDateTime string.
      * @param Disambiguation $disambiguation How to resolve ambiguous wall-clock times.
      * @param OffsetOption   $offsetOption   How to handle a provided UTC offset.
-     * @throws \Temporal\Exception\RangeError if the string cannot be parsed.
+     * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
      */
     public static function parse(
         string $text,
@@ -236,15 +238,9 @@ final class ZonedDateTime implements
      */
     public static function fromDateTime(\DateTimeInterface $dt): self
     {
-        // Mago's stubs type \DateTimeInterface::getTimezone() as \DateTimeZone|false; in practice
-        // it never returns false for \DateTimeImmutable. PHPStan and Psalm correctly model the
-        // runtime. Suppress Mago here rather than adding a runtime check the other analyzers
-        // (correctly) flag as redundant.
-        // @mago-ignore analysis:invalid-method-access
-        // @mago-ignore analysis:mixed-argument
         $tzId = $dt->getTimezone()->getName();
 
-        return new self(DateTimeFields::epochNanoseconds($dt), $tzId);
+        return new self(PhpDateTimeInterop::epochNanoseconds($dt), $tzId);
     }
 
     // -------------------------------------------------------------------------
@@ -267,7 +263,7 @@ final class ZonedDateTime implements
      * @param Overflow       $overflow       How to handle out-of-range values.
      * @param Disambiguation $disambiguation How to resolve ambiguous wall-clock times.
      * @param OffsetOption   $offsetOption   How to use the provided offset.
-     * @throws \Temporal\Exception\RangeError if fields are invalid.
+     * @throws \Calendrics\Exception\RangeError if fields are invalid.
      */
     public function with(
         ?int $year = null,
@@ -398,7 +394,7 @@ final class ZonedDateTime implements
      * @param Unit         $smallestUnit       The unit to round to.
      * @param RoundingMode $roundingMode       Rounding mode (default: HalfExpand).
      * @param int          $roundingIncrement  Must evenly divide the next-larger unit.
-     * @throws \Temporal\Exception\RangeError for invalid unit or increment values.
+     * @throws \Calendrics\Exception\RangeError for invalid unit or increment values.
      */
     public function round(
         Unit $smallestUnit,
@@ -471,6 +467,77 @@ final class ZonedDateTime implements
     }
 
     /**
+     * Returns a locale-aware string representation of this zoned date-time.
+     *
+     * The value is always rendered in its own time zone — there is no `timeZone`
+     * option; use {@see withTimeZone()} to move it first. When neither a style nor
+     * a `timeZoneName` is given, the zone name is included (short form), matching
+     * TC39's default for this type.
+     *
+     * ```php
+     * $zdt->toLocaleString('en-US', dateStyle: FormatStyle::Full, timeStyle: FormatStyle::Long);
+     * $zdt->toLocaleString('de-AT', timeZoneName: TimeZoneNameStyle::LongGeneric);
+     * ```
+     *
+     * @param string|null            $locale       BCP 47 locale tag; null uses the ICU default locale.
+     * @param FormatStyle|null       $dateStyle    Preset date verbosity; excludes the component options below.
+     * @param FormatStyle|null       $timeStyle    Preset time verbosity; excludes the component options below.
+     * @param TextWidth|null         $weekday
+     * @param TextWidth|null         $era
+     * @param NumberWidth|null       $year
+     * @param MonthWidth|null        $month
+     * @param NumberWidth|null       $day
+     * @param TextWidth|null         $dayPeriod
+     * @param NumberWidth|null       $hour
+     * @param NumberWidth|null       $minute
+     * @param NumberWidth|null       $second
+     * @param int|null               $fractionalSecondDigits Number of sub-second digits to render (1–3).
+     * @param TimeZoneNameStyle|null $timeZoneName How to name the time zone; null uses the type default.
+     * @param HourCycle|null         $hourCycle    Hour numbering; null lets the locale decide.
+     * @param Calendar|null          $calendar     Calendar to render in; null keeps the locale's own calendar.
+     * @return string
+     * @throws \Calendrics\Exception\TypeError if a style option is combined with a component option.
+     * @throws \Calendrics\Exception\RangeError if this value's calendar cannot be rendered by the
+     *                                        resolved formatter — see {@see withCalendar()}.
+     */
+    public function toLocaleString(
+        ?string $locale = null,
+        ?FormatStyle $dateStyle = null,
+        ?FormatStyle $timeStyle = null,
+        ?TextWidth $weekday = null,
+        ?TextWidth $era = null,
+        ?NumberWidth $year = null,
+        ?MonthWidth $month = null,
+        ?NumberWidth $day = null,
+        ?TextWidth $dayPeriod = null,
+        ?NumberWidth $hour = null,
+        ?NumberWidth $minute = null,
+        ?NumberWidth $second = null,
+        ?int $fractionalSecondDigits = null,
+        ?TimeZoneNameStyle $timeZoneName = null,
+        ?HourCycle $hourCycle = null,
+        ?Calendar $calendar = null,
+    ): string {
+        return $this->spec->toLocaleString($locale, self::localeOptions([
+            'dateStyle' => $dateStyle,
+            'timeStyle' => $timeStyle,
+            'weekday' => $weekday,
+            'era' => $era,
+            'year' => $year,
+            'month' => $month,
+            'day' => $day,
+            'dayPeriod' => $dayPeriod,
+            'hour' => $hour,
+            'minute' => $minute,
+            'second' => $second,
+            'fractionalSecondDigits' => $fractionalSecondDigits,
+            'timeZoneName' => $timeZoneName,
+            'hourCycle' => $hourCycle,
+            'calendar' => $calendar,
+        ]));
+    }
+
+    /**
      * Returns the ISO 8601 string representation (default formatting).
      */
     #[\Override]
@@ -514,7 +581,7 @@ final class ZonedDateTime implements
         $tzId = $this->spec->timeZoneId;
         \assert($tzId !== '', description: 'spec layer guarantees a non-empty time zone id');
 
-        return DateTimeFields::toDateTime($this->spec->epochNanoseconds, new \DateTimeZone($tzId));
+        return PhpDateTimeInterop::toDateTime($this->spec->epochNanoseconds, new \DateTimeZone($tzId));
     }
 
     /**
@@ -547,7 +614,7 @@ final class ZonedDateTime implements
      * The epoch nanoseconds remain the same; only the local time display changes.
      *
      * @param string $timeZone IANA timezone identifier, UTC offset string, or 'UTC'.
-     * @throws \Temporal\Exception\RangeError if the time zone is invalid.
+     * @throws \Calendrics\Exception\RangeError if the time zone is invalid.
      */
     public function withTimeZone(string $timeZone): self
     {
