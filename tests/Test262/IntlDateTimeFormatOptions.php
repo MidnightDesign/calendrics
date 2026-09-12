@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Calendrics\Tests\Test262;
 
 use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\LocaleComponentMode;
 
 /** Owns the ECMA-402 constructor defaults and per-value option projection used by the test shim. */
 final class IntlDateTimeFormatOptions
@@ -76,14 +77,22 @@ final class IntlDateTimeFormatOptions
 
     /**
      * @param array<string, mixed> $options
-     * @param 'date'|'datetime'|'exact'|'monthday'|'time'|'yearmonth' $kind
+     * @param LocaleComponentMode|'exact' $kind
      * @return array<string, mixed>
      */
-    public static function forKind(array $options, string $kind): array
+    public static function forKind(array $options, LocaleComponentMode|string $kind): array
     {
+        $kindName = match ($kind) {
+            LocaleComponentMode::Date => 'date',
+            LocaleComponentMode::DateTime => 'datetime',
+            LocaleComponentMode::MonthDay => 'monthday',
+            LocaleComponentMode::Time => 'time',
+            LocaleComponentMode::YearMonth => 'yearmonth',
+            'exact' => 'exact',
+        };
         $kept = false;
         foreach (self::EXPRESSIBLE_KINDS as $option => $kinds) {
-            if (!array_key_exists($kind, $kinds)) {
+            if (!array_key_exists($kindName, $kinds)) {
                 unset($options[$option]);
                 continue;
             }
@@ -93,7 +102,7 @@ final class IntlDateTimeFormatOptions
         if (!$kept) {
             throw new TypeError(sprintf(
                 'Intl.DateTimeFormat: no overlap between the requested options and a %s value.',
-                $kind,
+                $kindName,
             ));
         }
         return $options;

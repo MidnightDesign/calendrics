@@ -38,13 +38,13 @@ final class DateDifference
      * NudgeToCalendarUnit spec). For "since", the final result is negated.
      *
      * @param string $operation 'since' or 'until'
-     * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
+     * @param array<array-key, mixed>|object $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      */
     public static function between(
         PlainDate $temporalDate,
         PlainDate $other,
         string $operation,
-        array|object|null $options,
+        mixed $options,
     ): Duration {
         /** @var list<string> $validUnits */
         static $validUnits = ['auto', 'day', 'days', 'week', 'weeks', 'month', 'months', 'year', 'years'];
@@ -67,64 +67,62 @@ final class DateDifference
         $roundingMode = 'trunc';
         $roundingIncrement = 1;
 
-        if ($options !== null) {
-            $opts = Options::normalizeOptions($options, [
-                'largestUnit',
-                'roundingIncrement',
-                'roundingMode',
-                'smallestUnit',
-            ]);
+        $opts = Options::requireObject($options, [
+            'largestUnit',
+            'roundingIncrement',
+            'roundingMode',
+            'smallestUnit',
+        ]);
 
-            // largestUnit
-            if (array_key_exists('largestUnit', $opts)) {
-                /** @var mixed $lu */
-                $lu = $opts['largestUnit'];
-                if ($lu !== null) {
-                    $lu = Options::coerceEnumOption($lu, 'largestUnit');
-                }
-                if (is_string($lu)) {
-                    if (!in_array($lu, $validUnits, strict: true)) {
-                        throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
-                    }
-                    $largestUnit = $lu;
-                    $largestUnitExplicit = true;
-                }
+        // largestUnit
+        if (array_key_exists('largestUnit', $opts)) {
+            /** @var mixed $lu */
+            $lu = $opts['largestUnit'];
+            if ($lu !== null) {
+                $lu = Options::coerceEnumOption($lu, 'largestUnit');
             }
-
-            // roundingIncrement (parsed early so validation order matches spec)
-            if (array_key_exists('roundingIncrement', $opts)) {
-                /** @var mixed $ri */
-                $ri = $opts['roundingIncrement'];
-                if ($ri !== null) {
-                    $roundingIncrement = CalendarMath::validateRoundingIncrement($ri);
+            if (is_string($lu)) {
+                if (!in_array($lu, $validUnits, strict: true)) {
+                    throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
                 }
+                $largestUnit = $lu;
+                $largestUnitExplicit = true;
             }
+        }
 
-            // roundingMode
-            if (array_key_exists('roundingMode', $opts)) {
-                /** @var mixed $rm */
-                $rm = $opts['roundingMode'];
-                if ($rm !== null) {
-                    $rm = Options::coerceEnumOption($rm, 'roundingMode');
-                }
-                if (is_string($rm)) {
-                    $roundingMode = Options::roundingMode($rm);
-                }
+        // roundingIncrement (parsed early so validation order matches spec)
+        if (array_key_exists('roundingIncrement', $opts)) {
+            /** @var mixed $ri */
+            $ri = $opts['roundingIncrement'];
+            if ($ri !== null) {
+                $roundingIncrement = CalendarMath::validateRoundingIncrement($ri);
             }
+        }
 
-            // smallestUnit
-            if (array_key_exists('smallestUnit', $opts)) {
-                /** @var mixed $su */
-                $su = $opts['smallestUnit'];
-                if ($su !== null) {
-                    $su = Options::coerceEnumOption($su, 'smallestUnit');
+        // roundingMode
+        if (array_key_exists('roundingMode', $opts)) {
+            /** @var mixed $rm */
+            $rm = $opts['roundingMode'];
+            if ($rm !== null) {
+                $rm = Options::coerceEnumOption($rm, 'roundingMode');
+            }
+            if (is_string($rm)) {
+                $roundingMode = Options::roundingMode($rm);
+            }
+        }
+
+        // smallestUnit
+        if (array_key_exists('smallestUnit', $opts)) {
+            /** @var mixed $su */
+            $su = $opts['smallestUnit'];
+            if ($su !== null) {
+                $su = Options::coerceEnumOption($su, 'smallestUnit');
+            }
+            if (is_string($su)) {
+                if (!in_array($su, $validUnits, strict: true)) {
+                    throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
                 }
-                if (is_string($su)) {
-                    if (!in_array($su, $validUnits, strict: true)) {
-                        throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
-                    }
-                    $smallestUnit = $su;
-                }
+                $smallestUnit = $su;
             }
         }
 

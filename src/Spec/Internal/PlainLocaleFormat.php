@@ -17,9 +17,8 @@ use Calendrics\Spec\PlainYearMonth;
  */
 final readonly class PlainLocaleFormat
 {
-    /** @param 'date'|'datetime'|'monthday'|'time'|'yearmonth' $kind */
     private function __construct(
-        public string $kind,
+        public LocaleComponentMode $components,
         public ?string $calendarId,
         public int $epochSec,
         public int $subNs,
@@ -27,46 +26,46 @@ final readonly class PlainLocaleFormat
 
     public static function from(PlainLocaleFormattable $value): self
     {
-        [$kind, $calendarId, $isoYear, $isoMonth, $isoDay] = match (true) {
+        [$components, $calendarId, $isoYear, $isoMonth, $isoDay] = match (true) {
             $value instanceof PlainDate => [
-                'date',
+                LocaleComponentMode::Date,
                 $value->calendarId,
                 $value->isoYear,
                 $value->isoMonth,
                 $value->isoDay,
             ],
             $value instanceof PlainDateTime => [
-                'datetime',
+                LocaleComponentMode::DateTime,
                 $value->calendarId,
                 $value->isoYear,
                 $value->isoMonth,
                 $value->isoDay,
             ],
             $value instanceof PlainYearMonth => [
-                'yearmonth',
+                LocaleComponentMode::YearMonth,
                 $value->calendarId,
                 $value->isoYear,
                 $value->isoMonth,
                 $value->referenceISODay,
             ],
             $value instanceof PlainMonthDay => [
-                'monthday',
+                LocaleComponentMode::MonthDay,
                 $value->calendarId,
                 $value->referenceISOYear,
                 $value->isoMonth,
                 $value->isoDay,
             ],
-            $value instanceof PlainTime => ['time', null, 1970, 1, 1],
+            $value instanceof PlainTime => [LocaleComponentMode::Time, null, 1970, 1, 1],
             default => throw new \LogicException(sprintf('Unsupported plain locale type %s.', $value::class)),
         };
 
         $epochSec = AnchorMath::isoDateToEpochDays($isoYear, $isoMonth, $isoDay) * 86_400;
         if (!$value instanceof PlainDateTime && !$value instanceof PlainTime) {
-            return new self($kind, $calendarId, $epochSec, 0);
+            return new self($components, $calendarId, $epochSec, 0);
         }
 
         return new self(
-            $kind,
+            $components,
             $calendarId,
             $epochSec + ($value->hour * 3_600) + ($value->minute * 60) + $value->second,
             ($value->millisecond * EpochLimits::NS_PER_MILLISECOND)
@@ -77,11 +76,11 @@ final readonly class PlainLocaleFormat
 
     public function isDateOnly(): bool
     {
-        return $this->kind === 'date' || $this->kind === 'yearmonth' || $this->kind === 'monthday';
+        return $this->components->isDateOnly();
     }
 
     public function isTimeOnly(): bool
     {
-        return $this->kind === 'time';
+        return $this->components->isTimeOnly();
     }
 }

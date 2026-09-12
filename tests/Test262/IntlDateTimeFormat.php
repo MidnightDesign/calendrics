@@ -156,10 +156,10 @@ final class IntlDateTimeFormat
 
         if ($value instanceof PlainLocaleFormattable) {
             $format = PlainLocaleFormat::from($value);
-            $options = IntlDateTimeFormatOptions::forKind($this->options, $format->kind);
-            IntlFormatter::validateCalendar($format->calendarId, $locale, $options, $format->kind);
+            $options = IntlDateTimeFormatOptions::forKind($this->options, $format->components);
+            IntlFormatter::validateCalendar($format->calendarId, $locale, $options, $format->components);
             return [
-                IntlFormatter::buildIntlFormatter($locale, 'UTC', $options, $format->kind),
+                IntlFormatter::buildIntlFormatter($locale, 'UTC', $options, $format->components),
                 $format->epochSec,
                 $format->subNs,
                 'UTC',

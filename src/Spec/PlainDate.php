@@ -588,10 +588,10 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
      * Supports largestUnit, smallestUnit, roundingMode, and roundingIncrement options.
      *
      * @param self|string|array<array-key, mixed>|object $other   PlainDate or ISO 8601 date string.
-     * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
+     * @param array<array-key, mixed>|object $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      * @psalm-api
      */
-    public function since(string|array|object $other, mixed $options = null): Duration
+    public function since(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -606,10 +606,10 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
      * Returns the Duration from this date to $other (other − this).
      *
      * @param self|string|array<array-key, mixed>|object $other   PlainDate or ISO 8601 date string.
-     * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
+     * @param array<array-key, mixed>|object $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      * @psalm-api
      */
-    public function until(string|array|object $other, mixed $options = null): Duration
+    public function until(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -638,7 +638,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
     }
 
     /**
-     * @param array<array-key, mixed>|object|null $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
+     * @param array<array-key, mixed>|object $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
      * @throws RangeError for invalid calendarName values.
      * @psalm-api
      */
@@ -649,7 +649,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
         // default; PHP null (the spec layer's representation of JS undefined, since the
         // transpiler maps `undefined` → null in argument position) is the same omitted
         // case. A Symbol sentinel is rejected; a bag is normalized to an array.
-        $opts = Options::requireObject($options ?? [], ['calendarName']);
+        $opts = Options::requireObject($options, ['calendarName']);
 
         // TC39: years 0–9999 → 4 digits; years outside → ±YYYYYY (6 digits with sign prefix).
         if ($this->isoYear < 0) {

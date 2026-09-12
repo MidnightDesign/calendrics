@@ -12,6 +12,5 @@ $badOptions = [JsUndefined::singleton(), null, true, \Calendrics\Tests\Test262\J
 $instance = new \Calendrics\Spec\Duration(0, 0, 0, 0, 1);
 Assert::throws(\TypeError::class, function () use (&$instance) { return $instance->round(); }, 'TypeError on missing options argument');
 foreach ($badOptions as $value) {
-if ($value === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$instance, &$value) { return $instance->round($value); }, "TypeError on wrong options type " . (gettype($value)) . "");
 }

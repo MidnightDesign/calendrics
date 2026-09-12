@@ -17,6 +17,9 @@ use Calendrics\Exception\TypeError;
  * deliberately not users: both format an exact instant in a real time zone through
  * {@see IntlFormatter::formatEpoch()}, and each carries its own `toLocaleString()`.
  *
+ * A new user must also implement {@see PlainLocaleFormattable}: collaborators select
+ * this formatting path by that interface, and nothing else enforces the pairing.
+ *
  * @internal
  */
 trait HasPlainLocaleString
@@ -36,7 +39,8 @@ trait HasPlainLocaleString
      * @param array<array-key, mixed>|object|null $options
      * @psalm-api
      * @throws TypeError if a style option is not applicable to this type.
-     * @throws \Calendrics\Exception\RangeError if this value's calendar is incompatible with the formatter's.
+     * @throws \Calendrics\Exception\RangeError if an option carries a value outside its set,
+     *         or if this value's calendar is incompatible with the formatter's.
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
     {
@@ -49,6 +53,8 @@ trait HasPlainLocaleString
             $opts = Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES);
         }
         /** @psalm-var array<string, mixed> $opts */
+        IntlFormatter::validateOptionValues($opts);
+
         $hasTimeStyle = array_key_exists('timeStyle', $opts) && $opts['timeStyle'] !== null;
         $hasDateStyle = array_key_exists('dateStyle', $opts) && $opts['dateStyle'] !== null;
         $format = PlainLocaleFormat::from($this);
@@ -63,8 +69,8 @@ trait HasPlainLocaleString
         $locale = IntlFormatter::resolveLocale($locales);
         $timeZone = 'UTC';
 
-        IntlFormatter::validateCalendar($format->calendarId, $locale, $opts, $format->kind);
-        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, $format->kind);
+        IntlFormatter::validateCalendar($format->calendarId, $locale, $opts, $format->components);
+        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, $format->components);
         $result = IntlFormatter::formatEpoch($formatter, $format->epochSec, $format->subNs, $timeZone, $locale);
 
         return $result !== false ? $result : $this->toString();
