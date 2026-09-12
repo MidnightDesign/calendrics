@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $datetime = new \Calendrics\Spec\PlainDateTime(1976, 11, 18, 15, 23, 30, 123, 456, 789);
 $badOptions = [null, 1, 'hello', true, \Calendrics\Tests\Test262\JsSymbol::singleton(), 1];
 foreach ($badOptions as $bad) {
-if ($bad === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$datetime, &$bad) { return $datetime->with(['day' => 5], $bad); }, "bad options (" . (gettype($bad)) . ")");
 }

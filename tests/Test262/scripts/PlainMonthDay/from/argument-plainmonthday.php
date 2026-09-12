@@ -9,7 +9,7 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
-$orig = new \Calendrics\Spec\PlainMonthDay(5, 2, null, 2000);
+$orig = new \Calendrics\Spec\PlainMonthDay(5, 2, referenceISOYear: 2000);
 $result = \Calendrics\Spec\PlainMonthDay::from($orig);
 TemporalHelpers::assertPlainMonthDay($result, 'M05', 2, 'PlainMonthDay is copied', 2000);
 Assert::sameValue($result->calendarId, $orig->calendarId, 'Calendar is copied');

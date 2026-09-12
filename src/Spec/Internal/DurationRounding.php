@@ -133,14 +133,6 @@ final class DurationRounding
         $anchor = $relativeToProvided ? RelativeTo::resolveAnchor($rtRawForZdt) : null;
 
         if ($needsRelativeTo && !$relativeToProvided) {
-            // Distinguish "key absent" (= JS undefined → RangeError) from "key
-            // present with PHP null" (= JS null → TypeError per
-            // GetTemporalRelativeToOption "If value is not a String or an Object,
-            // throw a TypeError"). extractRelativeTo collapses both to false
-            // for the unneeded path; only re-inspect here when the option matters.
-            if (array_key_exists('relativeTo', $roundTo) && $roundTo['relativeTo'] === null) {
-                throw new TypeError('relativeTo must be a string, property bag, or Temporal date/datetime.');
-            }
             throw new RangeError(
                 'Duration::round() with calendar units (years, months, weeks) requires a relativeTo option.',
             );
@@ -222,6 +214,7 @@ final class DurationRounding
 
         // Compute total absolute nanoseconds, balancing all sub-day fields first.
         $sign = $d->sign;
+        $signedMode = $sign === -1 ? self::negateRoundingMode($roundingMode) : $roundingMode;
         $absNs = (int) abs((float) $d->nanoseconds);
         $absUs = (int) abs((float) $d->microseconds);
         $absMs = (int) abs((float) $d->milliseconds);
@@ -351,7 +344,7 @@ final class DurationRounding
         // largestUnit >= days, keep whole days intact and round only the sub-day portion.
         // This differs from PlainDate behavior (which rounds the total nanoseconds).
         if (($zdtRelativeTo || $zdtInfoRound !== null) && $suNormResolved !== 'days' && $luIdx >= 6) {
-            $roundedSubDayNs = EpochRounding::roundAsIfPositive($subDayNs, $nsIncrement, $roundingMode);
+            $roundedSubDayNs = EpochRounding::roundAsIfPositive($subDayNs, $nsIncrement, $signedMode);
             // If rounding carried the sub-day portion beyond one full day, add extra days.
             // Use DST-aware day length when available.
             if ($zdtInfoRound !== null) {
@@ -438,7 +431,7 @@ final class DurationRounding
             } else {
                 $totalAbsDaysF = (float) $absD + ((float) $subDayNs / 86_400_000_000_000.0);
             }
-            $roundedAbsDays = (int) self::roundNsFloat($totalAbsDaysF, (float) $increment, $roundingMode);
+            $roundedAbsDays = (int) self::roundNsFloat($totalAbsDaysF, (float) $increment, $signedMode);
             if (((float) $roundedAbsDays * 86_400.0) >= 9_007_199_254_740_992.0) {
                 throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
             }
@@ -476,7 +469,7 @@ final class DurationRounding
         }
         $totalSec = $daysSec + ($absH * 3_600) + ($absM * 60) + $absS;
 
-        [$roundedSec, $roundedSubNs] = EpochRounding::round($totalSec, $subSecNs, $nsIncrement, $roundingMode);
+        [$roundedSec, $roundedSubNs] = EpochRounding::round($totalSec, $subSecNs, $nsIncrement, $signedMode);
 
         // MaxTimeDuration = 2^53 × 10^9 − 1 ns, so any whole second at or above 2^53 is out.
         if ($roundedSec >= 9_007_199_254_740_992) {
@@ -679,6 +672,26 @@ final class DurationRounding
         return floatval(
             $sec . str_pad(string: (string) $add, length: $addDigits, pad_string: '0', pad_type: STR_PAD_LEFT),
         );
+    }
+
+    /**
+     * Mirrors a directed rounding mode (floor/ceil, halfFloor/halfCeil) across zero;
+     * symmetric modes pass through unchanged.
+     *
+     * TC39 RoundTimeDuration rounds the signed total, and every rounding helper here works
+     * on a magnitude with the sign reapplied afterwards, which reverses the two directions.
+     * That is not the AsIfPositive rule {@see EpochRounding} is named for: an epoch
+     * nanosecond count is a point in time, where `floor` means earlier whatever the sign.
+     */
+    private static function negateRoundingMode(string $mode): string
+    {
+        return match ($mode) {
+            'floor' => 'ceil',
+            'ceil' => 'floor',
+            'halfFloor' => 'halfCeil',
+            'halfCeil' => 'halfFloor',
+            default => $mode,
+        };
     }
 
     /**
@@ -1047,21 +1060,9 @@ final class DurationRounding
         }
 
         // Round the signed total nanoseconds.
-        // TC39 uses signed (ApplyUnsignedRoundingMode on signed fractional value), so for negative
-        // durations floor rounds toward -∞ (larger abs) and ceil rounds toward zero (smaller abs).
-        // Since EpochRounding::roundAsIfPositive works on absolute values, swap floor↔ceil and halfFloor↔halfCeil
-        // when the duration is negative so the absolute-value rounding matches signed semantics.
         $sign = $totalNs >= 0 ? 1 : -1;
         $absNs = abs($totalNs);
-        $signedMode = $sign < 0
-            ? match ($roundingMode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $roundingMode,
-            }
-            : $roundingMode;
+        $signedMode = $sign === -1 ? self::negateRoundingMode($roundingMode) : $roundingMode;
 
         // For 'days' smallest unit: work in day units to avoid int64 overflow when increment is large
         // (e.g. roundingIncrement=1e9 days → nsIncrement=8.64e22 would overflow PHP_INT_MAX=9.2e18).
