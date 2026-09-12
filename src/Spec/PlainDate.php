@@ -16,6 +16,7 @@ use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
@@ -869,21 +870,9 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
     }
 
     #[\Override]
-    protected function localeDefaultComponents(): string
+    protected function localeDefaultComponents(): LocaleComponentMode
     {
-        return 'date';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return true;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
+        return LocaleComponentMode::Date;
     }
 
     #[\Override]

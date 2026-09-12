@@ -7,6 +7,7 @@ namespace Calendrics\Tests\Test262;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Instant;
 use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Calendrics\Spec\ZonedDateTime;
 
@@ -158,12 +159,10 @@ final class IntlDateTimeFormat
         $locale = IntlFormatter::resolveLocale($this->locales);
 
         if ($value instanceof PlainLocaleFormattable) {
-            // Mago mis-resolves ReflectionMethod::invoke() once the receiver is typed as
-            // the interface, so the hooks' own declared return types are restated here.
-            /** @var string $components */
-            $components = new \ReflectionMethod($value, 'localeDefaultComponents')->invoke($value);
-            /** @var int|float $timestamp */
-            $timestamp = new \ReflectionMethod($value, 'toLocaleTimestamp')->invoke($value);
+            $components = self::readLocaleHook($value, 'localeDefaultComponents');
+            \assert($components instanceof LocaleComponentMode);
+            $timestamp = self::readLocaleHook($value, 'toLocaleTimestamp');
+            \assert(is_int($timestamp) || is_float($timestamp));
             // Plain types always format in UTC (see HasPlainLocaleString::toLocaleString).
             return [
                 IntlFormatter::buildIntlFormatter($locale, 'UTC', $this->options, $components),
@@ -184,6 +183,18 @@ final class IntlDateTimeFormat
             IntlFormatter::buildIntlFormatter($locale, $timeZone, $this->options),
             (float) $epochMs / 1000.0,
         ];
+    }
+
+    /**
+     * Reads one of the protected {@see \Calendrics\Spec\Internal\HasPlainLocaleString} hooks off $value.
+     *
+     * The receiver is typed `object` rather than {@see PlainLocaleFormattable} because
+     * Mago resolves `ReflectionMethod::invoke()` to the return type of the receiver
+     * interface's sole method, whatever method name was actually reflected.
+     */
+    private static function readLocaleHook(object $value, string $hook): mixed
+    {
+        return new \ReflectionMethod($value, $hook)->invoke($value);
     }
 
     /**
