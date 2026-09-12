@@ -1207,12 +1207,17 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
     /**
      * Returns a new PlainDateTime with the specified calendar.
      *
+     * Per TC39 ToTemporalCalendarIdentifier, $calendar may be a bare calendar ID,
+     * an ISO date string, or a Temporal date-bearing object whose `calendarId`
+     * slot is read directly.
+     *
+     * @throws TypeError if $calendar is neither a string nor a calendar-bearing Temporal object.
      * @throws RangeError if the calendar is unsupported.
      * @psalm-api
      */
-    public function withCalendar(string $calendar): self
+    public function withCalendar(mixed $calendar): self
     {
-        $calId = CalendarFactory::extractCalendarFromString($calendar);
+        $calId = CalendarFactory::resolveBagCalendar($calendar, 'PlainDateTime');
         return new self(
             $this->isoYear,
             $this->isoMonth,

@@ -65,4 +65,21 @@ enum Calendar: string
 
         return $result;
     }
+
+    /**
+     * Resolves a calendar-like value to a Calendar case.
+     *
+     * Mirrors TC39 ToTemporalCalendarIdentifier's object fast path: a Temporal
+     * date-bearing porcelain value (PlainDate, PlainDateTime, PlainMonthDay,
+     * PlainYearMonth, ZonedDateTime) contributes its own `calendar`; a Calendar
+     * case is returned as-is.
+     */
+    public static function resolve(self|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendarLike): self
+    {
+        if ($calendarLike instanceof self) {
+            return $calendarLike;
+        }
+
+        return $calendarLike->calendar;
+    }
 }

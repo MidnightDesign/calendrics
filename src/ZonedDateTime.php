@@ -625,10 +625,14 @@ final class ZonedDateTime implements
      * Returns a new ZonedDateTime with a different calendar system.
      *
      * The epoch nanoseconds and time zone remain the same; only the calendar projection changes.
+     *
+     * Accepts a {@see Calendar} case or any Temporal date-bearing value
+     * (PlainDate, PlainDateTime, PlainMonthDay, PlainYearMonth, ZonedDateTime),
+     * whose own calendar is used (mirrors TC39 ToTemporalCalendarIdentifier).
      */
-    public function withCalendar(Calendar $calendar): self
+    public function withCalendar(Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar): self
     {
-        return self::fromSpec($this->spec->withCalendar($calendar->value));
+        return self::fromSpec($this->spec->withCalendar(Calendar::resolve($calendar)->value));
     }
 
     /**
