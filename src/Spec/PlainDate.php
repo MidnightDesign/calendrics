@@ -867,38 +867,4 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
 
         return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId, $this->calendarId);
     }
-
-    #[\Override]
-    protected function localeDefaultComponents(): string
-    {
-        return 'date';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return true;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    #[\Override]
-    protected function toLocaleTimestamp(): int
-    {
-        $dt = new \DateTime(
-            sprintf('%04d-%02d-%02d 00:00:00', $this->isoYear, $this->isoMonth, $this->isoDay),
-            new \DateTimeZone('UTC'),
-        );
-        return $dt->getTimestamp();
-    }
 }

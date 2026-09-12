@@ -1439,40 +1439,4 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         }
         return true;
     }
-
-    #[\Override]
-    protected function localeDefaultComponents(): string
-    {
-        return 'yearmonth';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return true;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    #[\Override]
-    protected function toLocaleTimestamp(): int
-    {
-        // Use referenceISODay to ensure the timestamp falls within the correct
-        // calendar month for non-ISO calendars.
-        $dt = new \DateTime(
-            sprintf('%04d-%02d-%02d 00:00:00', $this->isoYear, $this->isoMonth, $this->referenceISODay),
-            new \DateTimeZone('UTC'),
-        );
-        return $dt->getTimestamp();
-    }
 }
