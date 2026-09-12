@@ -71,7 +71,7 @@ trait HasPlainLocaleString
 
         IntlFormatter::validateCalendar($format->calendarId, $locale, $opts, $format->components);
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, $format->components);
-        $result = IntlFormatter::formatEpoch($formatter, $format->epochSec, $format->subNs, $timeZone, $locale);
+        $result = IntlFormatter::formatEpoch($formatter, $format->epochSec, $format->subNs);
 
         return $result !== false ? $result : $this->toString();
     }

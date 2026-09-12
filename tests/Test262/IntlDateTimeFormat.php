@@ -96,8 +96,8 @@ final class IntlDateTimeFormat
      */
     public function format(mixed $value): string
     {
-        [$formatter, $epochSec, $subNs, $timeZone] = $this->resolveFor($value);
-        $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs, $timeZone, $this->locale());
+        [$formatter, $epochSec, $subNs] = $this->resolveFor($value);
+        $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs);
         if ($result === false) {
             throw new \RuntimeException('Intl.DateTimeFormat.format(): IntlDateFormatter::format() failed.');
         }
@@ -112,12 +112,12 @@ final class IntlDateTimeFormat
      */
     public function formatToParts(mixed $value): array
     {
-        [$formatter, $epochSec, $subNs, $timeZone] = $this->resolveFor($value);
+        [$formatter, $epochSec, $subNs] = $this->resolveFor($value);
         $pattern = $formatter->getPattern();
         if ($pattern === false) {
             throw new \RuntimeException('formatToParts(): formatter has no retrievable pattern.');
         }
-        return $this->patternToParts($formatter, $pattern, $epochSec, $subNs, $timeZone);
+        return $this->patternToParts($formatter, $pattern, $epochSec, $subNs);
     }
 
     /**
@@ -146,7 +146,7 @@ final class IntlDateTimeFormat
      * that values at the ±271821-year limits keep their milliseconds — see
      * {@see IntlFormatter::formatEpoch()}.
      *
-     * @return array{\IntlDateFormatter, int, int, string}
+     * @return array{\IntlDateFormatter, int, int}
      * @throws TypeError if $value cannot be formatted at all, or if the formatter asks
      *                   for nothing $value can express.
      */
@@ -162,7 +162,6 @@ final class IntlDateTimeFormat
                 IntlFormatter::buildIntlFormatter($locale, 'UTC', $options, $format->components),
                 $format->epochSec,
                 $format->subNs,
-                'UTC',
             ];
         }
 
@@ -173,7 +172,7 @@ final class IntlDateTimeFormat
 
         if ($value instanceof Instant) {
             [$epochSec, $subNs] = $value->epochParts();
-            return [$formatter, $epochSec, $subNs, $timeZone];
+            return [$formatter, $epochSec, $subNs];
         }
 
         $epochMs = match (true) {
@@ -183,7 +182,7 @@ final class IntlDateTimeFormat
         };
         $epochSec = (int) floor((float) $epochMs / 1_000.0);
         $subNs = (int) round(((float) $epochMs - ((float) $epochSec * 1_000.0)) * 1_000_000.0);
-        return [$formatter, $epochSec, $subNs, $timeZone];
+        return [$formatter, $epochSec, $subNs];
     }
 
     /**
@@ -220,13 +219,8 @@ final class IntlDateTimeFormat
      *
      * @return list<IntlFormatPart>
      */
-    private function patternToParts(
-        \IntlDateFormatter $formatter,
-        string $pattern,
-        int $epochSec,
-        int $subNs,
-        string $timeZone,
-    ): array {
+    private function patternToParts(\IntlDateFormatter $formatter, string $pattern, int $epochSec, int $subNs): array
+    {
         $parts = [];
         $literal = '';
 
@@ -267,7 +261,7 @@ final class IntlDateTimeFormat
                 }
                 $sub = clone $formatter;
                 $sub->setPattern($run);
-                $value = IntlFormatter::formatEpoch($sub, $epochSec, $subNs, $timeZone, $this->locale());
+                $value = IntlFormatter::formatEpoch($sub, $epochSec, $subNs);
                 if ($value === false || $value === '') {
                     continue;
                 }
