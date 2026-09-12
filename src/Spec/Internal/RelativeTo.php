@@ -314,6 +314,10 @@ final class RelativeTo
     {
         $calendarId = self::bagCalendarId($bag);
         if ($calendarId !== null && $calendarId !== 'iso8601') {
+            // DateFields expects an already-string calendar value. Reuse the
+            // canonical id resolved above so a Stringable calendar is not rejected
+            // (or coerced a second time) at the delegation boundary.
+            $bag['calendar'] = $calendarId;
             $date = DateFields::fromBag($bag);
             return [$date->isoYear, $date->isoMonth, $date->isoDay];
         }
