@@ -70,6 +70,10 @@ The reliable tell is the diff: if the source change is under `src/Spec/`, no tes
 
 2. **File for an upstream test.** Only after you have *actually checked* — read the candidate fixtures, confirmed the case is absent from a fresh upstream clone rather than from `tests/Test262/data/`, and confirmed the pre-fix code passes the whole suite — open an issue labeled `missing-upstream-test`. That issue tracks getting a new test contributed to tc39/test262, so it needs the input shape, the expected result, the TC39 algorithm step that mandates it, and a JS reproduction against the `Temporal` namespace. "I could not find one" is not a check; a search you can show is.
 
+   Before filing, search **open and closed** repository issues — including every issue labeled `missing-upstream-test` and focused searches for the behavior, API, and originating defect number. If an issue already tracks the same missing fixture, link or update it instead of creating a duplicate.
+
+   When the fresh-upstream check confirms a fixture is missing and no existing issue covers it, filing the `missing-upstream-test` issue is a required part of completing the spec-layer fix. Do it automatically, without waiting for a separate request, and link the tracker from the originating defect or pull request.
+
 ## test262 conformance suite
 
 `tests/Test262/data/` — verbatim copies of a subset of the upstream tc39/test262 JS files; `tools/sync-test262.sh` defines the subset. **Do not edit these.** If a test fails, fix the implementation. `tests/Test262/data/CLAUDE.md` has the rules.
