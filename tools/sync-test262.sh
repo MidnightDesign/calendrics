@@ -67,37 +67,61 @@ echo "==> Syncing test files..."
 
 total_added=0
 total_removed=0
+total_changed=0
 
-for class in "${CLASSES[@]}"; do
-    src="$CLONE_DIR/test/built-ins/Temporal/$class"
-    dst="$DATA_DIR/$class"
+sync_tree() {
+    local src=$1
+    local dst=$2
+    local label=$3
+    local missing=${4:-warn}
 
     if [[ ! -d "$src" ]]; then
-        echo "    WARN: $class not found in upstream repo, skipping"
-        continue
+        if [[ $missing == warn ]]; then
+            echo "    WARN: $label not found in upstream repo, skipping"
+        fi
+        return
     fi
 
-    # Count files before
-    before=$(find "$dst" -name '*.js' 2>/dev/null | wc -l)
+    local src_count
+    src_count=$(find "$src" -name '*.js' | wc -l)
+    if [[ $src_count -eq 0 ]]; then
+        return
+    fi
 
-    # Sync: add new files, update changed files, remove files deleted upstream
+    local before=0
+    if [[ -d "$dst" ]]; then
+        before=$(find "$dst" -name '*.js' | wc -l)
+    fi
+
     mkdir -p "$dst"
-    rsync -rl --no-group --no-owner --delete --include='*/' --include='*.js' --exclude='*' "$src/" "$dst/"
 
-    # Count files after
+    local changes
+    changes=$(rsync -rl --no-group --no-owner --delete --itemize-changes --out-format='%i %n%L' \
+        --include='*/' --include='*.js' --exclude='*' "$src/" "$dst/")
+
+    local after
     after=$(find "$dst" -name '*.js' | wc -l)
 
-    added=$((after - before))
-    if [[ $added -gt 0 ]]; then
-        echo "    $class: $before -> $after (+$added)"
-        total_added=$((total_added + added))
-    elif [[ $added -lt 0 ]]; then
-        removed=$((-added))
-        echo "    $class: $before -> $after (-$removed removed)"
-        total_removed=$((total_removed + removed))
-    else
-        echo "    $class: $after (up to date)"
+    if [[ -z "$changes" ]]; then
+        echo "    $label: $after (up to date)"
+        return
     fi
+
+    local added
+    local removed
+    local updated
+    added=$(awk '$1 == ">f+++++++++" { count++ } END { print count + 0 }' <<< "$changes")
+    removed=$(awk '$1 == "*deleting" { count++ } END { print count + 0 }' <<< "$changes")
+    updated=$(awk '$1 ~ /^>f/ && $1 != ">f+++++++++" { count++ } END { print count + 0 }' <<< "$changes")
+
+    echo "    $label: $before -> $after (+$added, -$removed, ~$updated updated)"
+    total_added=$((total_added + added))
+    total_removed=$((total_removed + removed))
+    total_changed=$((total_changed + 1))
+}
+
+for class in "${CLASSES[@]}"; do
+    sync_tree "$CLONE_DIR/test/built-ins/Temporal/$class" "$DATA_DIR/$class" "$class"
 done
 
 # Sync intl402 tests into a separate directory
@@ -106,51 +130,9 @@ INTL402_DIR="$DATA_DIR/intl402"
 echo ""
 echo "==> Syncing intl402 test files..."
 
-intl402_added=0
-intl402_removed=0
-
 for class in "${CLASSES[@]}"; do
-    src="$CLONE_DIR/test/intl402/Temporal/$class"
-    dst="$INTL402_DIR/$class"
-
-    if [[ ! -d "$src" ]]; then
-        # intl402 tests don't exist for all classes
-        continue
-    fi
-
-    # Skip if no .js files in source
-    src_count=$(find "$src" -name '*.js' 2>/dev/null | wc -l)
-    if [[ $src_count -eq 0 ]]; then
-        continue
-    fi
-
-    # Count files before
-    if [[ -d "$dst" ]]; then
-        before=$(find "$dst" -name '*.js' | wc -l)
-    else
-        before=0
-    fi
-
-    mkdir -p "$dst"
-    rsync -rl --no-group --no-owner --delete --include='*/' --include='*.js' --exclude='*' "$src/" "$dst/"
-
-    after=$(find "$dst" -name '*.js' | wc -l)
-
-    added=$((after - before))
-    if [[ $added -gt 0 ]]; then
-        echo "    intl402/$class: $before -> $after (+$added)"
-        intl402_added=$((intl402_added + added))
-    elif [[ $added -lt 0 ]]; then
-        removed=$((-added))
-        echo "    intl402/$class: $before -> $after (-$removed removed)"
-        intl402_removed=$((intl402_removed + removed))
-    else
-        echo "    intl402/$class: $after (up to date)"
-    fi
+    sync_tree "$CLONE_DIR/test/intl402/Temporal/$class" "$INTL402_DIR/$class" "intl402/$class" skip
 done
-
-total_added=$((total_added + intl402_added))
-total_removed=$((total_removed + intl402_removed))
 
 # ---------------------------------------------------------------------------
 # Upstream areas that are not organized per class
@@ -188,41 +170,13 @@ if [[ $SYNC_NON_CLASS_AREAS == true ]]; then
     echo ""
     echo "==> Syncing staging test files..."
 
-    src="$CLONE_DIR/test/staging/Temporal"
-    dst="$DATA_DIR/staging"
-
-    if [[ ! -d "$src" ]]; then
-        echo "    WARN: test/staging/Temporal not found in upstream repo, skipping"
-    else
-        if [[ -d "$dst" ]]; then
-            before=$(find "$dst" -name '*.js' | wc -l)
-        else
-            before=0
-        fi
-
-        mkdir -p "$dst"
-        rsync -rl --no-group --no-owner --delete --include='*/' --include='*.js' --exclude='*' "$src/" "$dst/"
-
-        after=$(find "$dst" -name '*.js' | wc -l)
-
-        added=$((after - before))
-        if [[ $added -gt 0 ]]; then
-            echo "    staging: $before -> $after (+$added)"
-            total_added=$((total_added + added))
-        elif [[ $added -lt 0 ]]; then
-            removed=$((-added))
-            echo "    staging: $before -> $after (-$removed removed)"
-            total_removed=$((total_removed + removed))
-        else
-            echo "    staging: $after (up to date)"
-        fi
-    fi
+    sync_tree "$CLONE_DIR/test/staging/Temporal" "$DATA_DIR/staging" staging
 fi
 
 echo ""
 echo "==> Done. Added: $total_added, Removed: $total_removed"
 
-if [[ $total_added -gt 0 || $total_removed -gt 0 ]]; then
+if [[ $total_changed -gt 0 ]]; then
     echo ""
     echo "Next steps:"
     echo "  1. Run: composer test262:build"
