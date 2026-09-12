@@ -12,7 +12,6 @@ $plainTime = new \Calendrics\Spec\PlainTime(12, 34, 56, 987, 654, 321);
 $tests = [[JsUndefined::singleton()], [null], [true], ['2019-05-17'], ['2019-05-17T12:34'], ['2019-05-17T12:34Z'], ['18:05:42.577'], ['42'], [\Calendrics\Tests\Test262\JsSymbol::singleton(), 'symbol'], [42, 'number'], [42, 'bigint'], [\Calendrics\Spec\PlainDate::from('2019-05-17'), 'PlainDate'], [\Calendrics\Spec\PlainDateTime::from('2019-05-17T12:34'), 'PlainDateTime'], [\Calendrics\Spec\PlainMonthDay::from('2019-05-17'), 'PlainMonthDay'], [\Calendrics\Spec\PlainTime::from('12:34'), 'PlainTime'], [\Calendrics\Spec\PlainYearMonth::from('2019-05-17'), 'PlainYearMonth'], [\Calendrics\Spec\ZonedDateTime::from('2019-05-17T12:34Z[UTC]'), 'ZonedDateTime'], [(object) ['hour' => 14, 'calendar' => 'iso8601'], 'calendar'], [(object) ['hour' => 14, 'timeZone' => 'UTC'], 'timeZone'], [(object) [], 'empty object'], [(object) ['hours' => 14], 'only plural property']];
 foreach ($tests as $__entry__) {
 [$value, $message] = array_pad($__entry__, 2, null);
-if ($value === null) { continue; }
 $message = $message ?? \Calendrics\Tests\Test262\Js::toString($value);
 Assert::throws(\TypeError::class, function () use (&$plainTime, &$value) { return $plainTime->with($value); }, $message);
 }

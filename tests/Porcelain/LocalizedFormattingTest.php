@@ -30,6 +30,11 @@ use PHPUnit\Framework\TestCase;
  * literal locale string. Instead each option is asserted to *change* the output
  * relative to the same value formatted with no options at all — which is what
  * the option is for, and which holds regardless of the CLDR data behind it.
+ *
+ * Every provider below yields closures rather than rendered strings. PHPUnit runs a
+ * data provider during collection, before coverage recording starts, so a provider
+ * that formatted eagerly would still assert correctly while recording no coverage at
+ * all for the formatter it exercises.
  */
 final class LocalizedFormattingTest extends TestCase
 {
@@ -406,6 +411,74 @@ final class LocalizedFormattingTest extends TestCase
 
         $this->expectException(RangeError::class);
         self::monthDay()->toLocaleString(self::BUDDHIST_LOCALE);
+    }
+
+    public function testGregorianCalendarOptionOverridesTheLocaleCalendarFields(): void
+    {
+        $date = new PlainDate(2000, 1, 1);
+        $fromOption = $date->toLocaleString(
+            self::BUDDHIST_LOCALE,
+            year: NumberWidth::Numeric,
+            month: MonthWidth::Long,
+            day: NumberWidth::Numeric,
+            calendar: Calendar::Gregory,
+        );
+        $fromLocale = $date->toLocaleString(
+            'th-TH-u-ca-gregory',
+            year: NumberWidth::Numeric,
+            month: MonthWidth::Long,
+            day: NumberWidth::Numeric,
+        );
+
+        static::assertSame($fromLocale, $fromOption);
+    }
+
+    /** @return iterable<string, array{int, int<1, 12>, int<1, 31>, string, string}> */
+    public static function prolepticGregorianDates(): iterable
+    {
+        yield 'before the ICU Gregorian cutover' => [1500, 1, 1, '01/01/1500 AD', 'AD'];
+        yield 'minimum Temporal date' => [-271_821, 4, 19, '04/19/271822 BC', 'BC'];
+        yield 'maximum Temporal date' => [275_760, 9, 13, '09/13/275760 AD', 'AD'];
+    }
+
+    /**
+     * @param int<1, 12> $month
+     * @param int<1, 31> $day
+     */
+    #[DataProvider('prolepticGregorianDates')]
+    public function testGregorianCalendarsFormatProleptically(
+        int $year,
+        int $month,
+        int $day,
+        string $gregorianExpected,
+        string $expectedEra,
+    ): void {
+        $date = new PlainDate($year, $month, $day);
+        $format = static fn(string $locale): string => $date->toLocaleString(
+            $locale,
+            era: TextWidth::Short,
+            year: NumberWidth::Numeric,
+            month: MonthWidth::TwoDigit,
+            day: NumberWidth::TwoDigit,
+        );
+
+        $gregorian = $format(self::LOCALE);
+        $iso = $format('en-US-u-ca-iso8601');
+
+        static::assertSame($gregorianExpected, $gregorian);
+        static::assertStringContainsString($expectedEra, $iso);
+        static::assertSame(self::sortedNumericComponents($gregorian), self::sortedNumericComponents($iso));
+    }
+
+    /** @return list<string> */
+    private static function sortedNumericComponents(string $value): array
+    {
+        $matches = [];
+        preg_match_all('/\d+/', $value, $matches);
+        $components = $matches[0];
+        sort($components, SORT_STRING);
+
+        return $components;
     }
 
     /** An ISO year-month has no calendar a locale can ever resolve to. */

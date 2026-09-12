@@ -105,9 +105,7 @@ final class CalendarFactory
      */
     public static function resolveConstructorCalendar(mixed $value, string $context): string
     {
-        if ($value === null) {
-            $value = 'iso8601';
-        } elseif (!is_string($value)) {
+        if (!is_string($value)) {
             throw new TypeError("{$context} calendar argument must be a string.");
         }
         return self::canonicalize($value);

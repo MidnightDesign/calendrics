@@ -1231,36 +1231,4 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
                 throw new RangeError("Invalid roundingMode \"{$mode}\".");
         }
     }
-
-    #[\Override]
-    protected function localeDefaultComponents(): string
-    {
-        return 'time';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return true;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): null
-    {
-        return null;
-    }
-
-    #[\Override]
-    protected function toLocaleEpochParts(): array
-    {
-        // Anchored on the Unix epoch date (1970-01-01), which no time-only pattern renders.
-        $epochSec = ($this->hour * 3_600) + ($this->minute * 60) + $this->second;
-        return [$epochSec, ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond];
-    }
 }

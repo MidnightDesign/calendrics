@@ -18,8 +18,8 @@ DATA_DIR="$(cd "$(dirname "$0")/../tests/Test262/data" && pwd)"
 
 # ECMA-402 formatter entry points that accept Temporal values directly. Their
 # Temporal-tagged fixtures live outside test/intl402/Temporal/ but exercise the
-# same toLocaleString code path, so they are always synced regardless of the
-# class filter.
+# same formatting paths, so they are always synced regardless of the class
+# filter.
 INTL_FORMATTERS=(
     DateTimeFormat
     DurationFormat
@@ -38,11 +38,16 @@ ALL_CLASSES=(
     ZonedDateTime
 )
 
+# Upstream areas that are not organized per class. They are synced only on a
+# full sync, so `sync-test262.sh PlainDate` keeps meaning "just that class".
+SYNC_NON_CLASS_AREAS=false
+
 # If args given, sync only those classes; otherwise sync all
 if [[ $# -gt 0 ]]; then
     CLASSES=("$@")
 else
     CLASSES=("${ALL_CLASSES[@]}")
+    SYNC_NON_CLASS_AREAS=true
 fi
 
 cleanup() {
@@ -66,43 +71,71 @@ for formatter in "${INTL_FORMATTERS[@]}"; do
     SPARSE_PATHS+=("test/intl402/$formatter")
 done
 
+if [[ $SYNC_NON_CLASS_AREAS == true ]]; then
+    SPARSE_PATHS+=("test/staging/Temporal")
+fi
+
 git sparse-checkout set "${SPARSE_PATHS[@]}" 2>/dev/null
 
 echo "==> Syncing test files..."
 
 total_added=0
 total_removed=0
+total_changed=0
 
-for class in "${CLASSES[@]}"; do
-    src="$CLONE_DIR/test/built-ins/Temporal/$class"
-    dst="$DATA_DIR/$class"
+sync_tree() {
+    local src=$1
+    local dst=$2
+    local label=$3
+    local missing=${4:-warn}
 
     if [[ ! -d "$src" ]]; then
-        echo "    WARN: $class not found in upstream repo, skipping"
-        continue
+        if [[ $missing == warn ]]; then
+            echo "    WARN: $label not found in upstream repo, skipping"
+        fi
+        return
     fi
 
-    # Count files before
-    before=$(find "$dst" -name '*.js' 2>/dev/null | wc -l)
+    local src_count
+    src_count=$(find "$src" -name '*.js' | wc -l)
+    if [[ $src_count -eq 0 ]]; then
+        return
+    fi
 
-    # Sync: add new files, update changed files, remove files deleted upstream
+    local before=0
+    if [[ -d "$dst" ]]; then
+        before=$(find "$dst" -name '*.js' | wc -l)
+    fi
+
     mkdir -p "$dst"
-    rsync -rl --no-group --no-owner --delete --include='*/' --include='*.js' --exclude='*' "$src/" "$dst/"
 
-    # Count files after
+    local changes
+    changes=$(rsync -rl --no-group --no-owner --delete --itemize-changes --out-format='%i %n%L' \
+        --include='*/' --include='*.js' --exclude='*' "$src/" "$dst/")
+
+    local after
     after=$(find "$dst" -name '*.js' | wc -l)
 
-    added=$((after - before))
-    if [[ $added -gt 0 ]]; then
-        echo "    $class: $before -> $after (+$added)"
-        total_added=$((total_added + added))
-    elif [[ $added -lt 0 ]]; then
-        removed=$((-added))
-        echo "    $class: $before -> $after (-$removed removed)"
-        total_removed=$((total_removed + removed))
-    else
-        echo "    $class: $after (up to date)"
+    if [[ -z "$changes" ]]; then
+        echo "    $label: $after (up to date)"
+        return
     fi
+
+    local added
+    local removed
+    local updated
+    added=$(awk '$1 == ">f+++++++++" { count++ } END { print count + 0 }' <<< "$changes")
+    removed=$(awk '$1 == "*deleting" { count++ } END { print count + 0 }' <<< "$changes")
+    updated=$(awk '$1 ~ /^>f/ && $1 != ">f+++++++++" { count++ } END { print count + 0 }' <<< "$changes")
+
+    echo "    $label: $before -> $after (+$added, -$removed, ~$updated updated)"
+    total_added=$((total_added + added))
+    total_removed=$((total_removed + removed))
+    total_changed=$((total_changed + 1))
+}
+
+for class in "${CLASSES[@]}"; do
+    sync_tree "$CLONE_DIR/test/built-ins/Temporal/$class" "$DATA_DIR/$class" "$class"
 done
 
 # Sync intl402 tests into a separate directory
@@ -111,101 +144,71 @@ INTL402_DIR="$DATA_DIR/intl402"
 echo ""
 echo "==> Syncing intl402 test files..."
 
-intl402_added=0
-intl402_removed=0
-
 for class in "${CLASSES[@]}"; do
-    src="$CLONE_DIR/test/intl402/Temporal/$class"
-    dst="$INTL402_DIR/$class"
-
-    if [[ ! -d "$src" ]]; then
-        # intl402 tests don't exist for all classes
-        continue
-    fi
-
-    # Skip if no .js files in source
-    src_count=$(find "$src" -name '*.js' 2>/dev/null | wc -l)
-    if [[ $src_count -eq 0 ]]; then
-        continue
-    fi
-
-    # Count files before
-    if [[ -d "$dst" ]]; then
-        before=$(find "$dst" -name '*.js' | wc -l)
-    else
-        before=0
-    fi
-
-    mkdir -p "$dst"
-    rsync -rl --no-group --no-owner --delete --include='*/' --include='*.js' --exclude='*' "$src/" "$dst/"
-
-    after=$(find "$dst" -name '*.js' | wc -l)
-
-    added=$((after - before))
-    if [[ $added -gt 0 ]]; then
-        echo "    intl402/$class: $before -> $after (+$added)"
-        intl402_added=$((intl402_added + added))
-    elif [[ $added -lt 0 ]]; then
-        removed=$((-added))
-        echo "    intl402/$class: $before -> $after (-$removed removed)"
-        intl402_removed=$((intl402_removed + removed))
-    else
-        echo "    intl402/$class: $after (up to date)"
-    fi
+    sync_tree "$CLONE_DIR/test/intl402/Temporal/$class" "$INTL402_DIR/$class" "intl402/$class" skip
 done
 
-total_added=$((total_added + intl402_added))
-total_removed=$((total_removed + intl402_removed))
+# ---------------------------------------------------------------------------
+# Upstream areas that are not organized per class
+# ---------------------------------------------------------------------------
+#
+# Synced:
+#
+#   test/staging/Temporal/ -> data/staging/
+#     A June-2024 API-removals guard plus V8's ported calendar-day-of-week
+#     suite. The redundant "Temporal" path segment is dropped, the same way the
+#     intl402 tree above drops it.
+#
+#   test/intl402/{DateTimeFormat,DurationFormat}/ ->
+#       data/intl402/{DateTimeFormat,DurationFormat}/
+#     Only fixtures tagged with the Temporal feature are synced. The remaining
+#     files exercise Intl surface that this project does not implement.
+#
+# Deliberately NOT synced:
+#
+#   test/built-ins/Temporal/*.js (top level: getOwnPropertyNames.js, keys.js,
+#     prop-desc.js)
+#     All three assert JS object-model facts about the `Temporal` namespace
+#     object: which own property names it has, that it exposes no enumerable
+#     properties, and the writable/enumerable/configurable attributes of the
+#     global `Temporal` property. A PHP namespace has no property table, so
+#     none of the three can ever run — they transpile to Assert::incomplete().
 
-# Sync the Temporal-tagged subset of the ECMA-402 formatter tests. The rest of
-# those directories tests Intl surface this project does not implement, so the
-# corpus takes only the files upstream tags with the Temporal feature.
+if [[ $SYNC_NON_CLASS_AREAS == true ]]; then
+    echo ""
+    echo "==> Syncing staging test files..."
+
+    sync_tree "$CLONE_DIR/test/staging/Temporal" "$DATA_DIR/staging" staging
+fi
+
+# Sync the Temporal-tagged subset of the ECMA-402 formatter tests. Build a
+# filtered source tree first so sync_tree can retain its update detection and
+# deletion behavior.
 echo ""
 echo "==> Syncing Temporal-tagged Intl formatter test files..."
 
 for formatter in "${INTL_FORMATTERS[@]}"; do
     src="$CLONE_DIR/test/intl402/$formatter"
-    dst="$INTL402_DIR/$formatter"
+    filtered="$CLONE_DIR/.temporal-tagged/$formatter"
+    tagged="$CLONE_DIR/.temporal-tagged-$formatter.txt"
 
     if [[ ! -d "$src" ]]; then
         echo "    WARN: $formatter not found in upstream repo, skipping"
         continue
     fi
 
-    if [[ -d "$dst" ]]; then
-        before=$(find "$dst" -name '*.js' | wc -l)
-    else
-        before=0
-    fi
-
     # Upstream tags these with `features: [Temporal]` in the YAML frontmatter.
-    tagged=$(mktemp)
     (cd "$src" && grep -rl --include='*.js' -E '^features:.*\bTemporal\b' . | sed 's|^\./||' | sort) > "$tagged"
 
-    rm -rf "$dst"
-    mkdir -p "$dst"
-    rsync -rl --no-group --no-owner --files-from="$tagged" "$src/" "$dst/"
-    rm -f "$tagged"
-
-    after=$(find "$dst" -name '*.js' | wc -l)
-
-    added=$((after - before))
-    if [[ $added -gt 0 ]]; then
-        echo "    intl402/$formatter: $before -> $after (+$added)"
-        total_added=$((total_added + added))
-    elif [[ $added -lt 0 ]]; then
-        removed=$((-added))
-        echo "    intl402/$formatter: $before -> $after (-$removed removed)"
-        total_removed=$((total_removed + removed))
-    else
-        echo "    intl402/$formatter: $after (up to date)"
-    fi
+    mkdir -p "$filtered"
+    rsync -rl --no-group --no-owner --files-from="$tagged" "$src/" "$filtered/"
+    sync_tree "$filtered" "$INTL402_DIR/$formatter" "intl402/$formatter"
 done
 
 echo ""
 echo "==> Done. Added: $total_added, Removed: $total_removed"
 
-if [[ $total_added -gt 0 || $total_removed -gt 0 ]]; then
+if [[ $total_changed -gt 0 ]]; then
     echo ""
     echo "Next steps:"
     echo "  1. Run: composer test262:build"

@@ -12,6 +12,5 @@ $feb20 = new \Calendrics\Spec\PlainDateTime(2020, 2, 1, 0, 0);
 $feb21 = new \Calendrics\Spec\PlainDateTime(2021, 2, 1, 0, 0);
 $badOptions = [null, 1, 'obviously invalid', true, \Calendrics\Tests\Test262\JsSymbol::singleton(), 1];
 foreach ($badOptions as $bad) {
-if ($bad === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$feb20, &$feb21, &$bad) { return $feb20->until($feb21, $bad); }, "unacceptable options (" . (gettype($bad)) . ")");
 }

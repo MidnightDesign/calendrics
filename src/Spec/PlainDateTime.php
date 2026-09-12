@@ -6,7 +6,6 @@ namespace Calendrics\Spec;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
-use Calendrics\Spec\Internal\AnchorMath;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\DateTimeArithmetic;
@@ -272,7 +271,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         mixed $millisecond = null,
         mixed $microsecond = null,
         mixed $nanosecond = null,
-        mixed $calendar = null,
+        mixed $calendar = 'iso8601',
     ) {
         // An omitted (or null — PHP cannot distinguish JS `undefined` positionally)
         // calendar defaults to ISO 8601; a non-string is a wrong-type TypeError; an
@@ -764,10 +763,10 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
      * Default largestUnit is 'day' (matches TC39 PlainDateTime spec).
      *
      * @param self|string|array<array-key, mixed>|object $other   PlainDateTime or ISO 8601 datetime string.
-     * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
+     * @param array<array-key, mixed>|object $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      * @psalm-api
      */
-    public function since(string|array|object $other, mixed $options = null): Duration
+    public function since(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -782,10 +781,10 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
      * Returns the Duration from this datetime to $other (other − this).
      *
      * @param self|string|array<array-key, mixed>|object $other   PlainDateTime or ISO 8601 datetime string.
-     * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
+     * @param array<array-key, mixed>|object $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      * @psalm-api
      */
-    public function until(string|array|object $other, mixed $options = null): Duration
+    public function until(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -940,7 +939,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
      *   - calendarName: 'auto' (default) | 'always' | 'never' | 'critical'
      *   - fractionalSecondDigits: 'auto' (default) | 0–9
      *
-     * @param array<array-key, mixed>|object|null $options null or array of options.
+     * @param array<array-key, mixed>|object $options null or array of options.
      * @throws RangeError for invalid option values.
      * @psalm-api
      */
@@ -950,7 +949,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         // GetOptionsObject: PHP null (the spec layer's representation of an omitted/
         // `undefined` options argument) resolves to the empty-array default; a Symbol
         // sentinel is rejected; a bag is normalized to an array.
-        $options = Options::requireObject($options ?? [], [
+        $options = Options::requireObject($options, [
             'calendarName',
             'fractionalSecondDigits',
             'roundingMode',
@@ -1161,7 +1160,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
     /**
      * Returns a ZonedDateTime by interpreting this date-time in the given timezone.
      *
-     * @param array<array-key, mixed>|object|null $options Options bag; supports 'disambiguation' key.
+     * @param array<array-key, mixed>|object $options Options bag; supports 'disambiguation' key.
      * @throws RangeError if the timezone or disambiguation option is invalid,
      *                                  or the resulting instant is out of range.
      * @psalm-api
@@ -1171,7 +1170,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         // GetOptionsObject: PHP null (the spec layer's representation of an omitted/
         // `undefined` options argument) resolves to the empty-array default; a Symbol
         // sentinel is rejected; a bag is normalized to an array.
-        $opts = Options::requireObject($options ?? [], ['disambiguation']);
+        $opts = Options::requireObject($options, ['disambiguation']);
 
         // Validate disambiguation option if present.
         $disambiguation = 'compatible';
@@ -1226,40 +1225,5 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
             $this->nanosecond,
             $calId,
         );
-    }
-
-    #[\Override]
-    protected function localeDefaultComponents(): string
-    {
-        return 'datetime';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    #[\Override]
-    protected function toLocaleEpochParts(): array
-    {
-        $epochSec =
-            (AnchorMath::isoDateToEpochDays($this->isoYear, $this->isoMonth, $this->isoDay) * 86_400)
-            + ($this->hour * 3_600)
-            + ($this->minute * 60)
-            + $this->second;
-        return [$epochSec, ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond];
     }
 }

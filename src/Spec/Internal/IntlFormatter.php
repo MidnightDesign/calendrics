@@ -7,15 +7,17 @@ namespace Calendrics\Spec\Internal;
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\Calendar\IntlCalendarFactory;
 
 /**
  * Owns the IntlDateFormatter construction and locale/pattern helpers used by
  * toLocaleString() across all Temporal spec classes.
  *
- * The public surface is: buildIntlFormatter() (central entry point), resolveLocale(),
- * resolveCalendar(), validateCalendar(), validateStyleConflicts(), and
- * stripPatternComponents(). The private helpers applyHourCycle() and
- * buildPatternFromComponents() support buildIntlFormatter() internally.
+ * The public surface is: buildIntlFormatter() (central entry point) and formatEpoch(),
+ * the locale and calendar resolvers resolveLocale() and resolveCalendar(), the checks
+ * each caller runs in its own spec order — validateOptionValues(), validateCalendar()
+ * and validateStyleConflicts() — plus requestsAnyComponent() and
+ * stripPatternComponents(). Everything else is a private helper.
  *
  * @internal
  */
@@ -63,15 +65,60 @@ final class IntlFormatter
     ];
 
     /**
-     * Map from ICU calendar type (as reported by IntlCalendar::getType()) to the
-     * TC39/BCP 47 calendar identifier. Types not listed here are already spelled
-     * the same in both vocabularies (hebrew, chinese, japanese, …).
+     * Values ECMA-402 accepts for `weekday`, `era` and `dayPeriod`.
      *
-     * @var array<string, string>
+     * @var non-empty-list<'narrow'|'short'|'long'>
      */
-    private const ICU_TO_CALENDAR = [
-        'gregorian' => 'gregory',
-        'ethiopic-amete-alem' => 'ethioaa',
+    private const array TEXT_WIDTHS = ['narrow', 'short', 'long'];
+
+    /**
+     * Values ECMA-402 accepts for `year`, `day`, `hour`, `minute` and `second`.
+     *
+     * @var non-empty-list<'numeric'|'2-digit'>
+     */
+    private const array NUMBER_WIDTHS = ['numeric', '2-digit'];
+
+    /**
+     * Values ECMA-402 accepts for `month`.
+     *
+     * @var non-empty-list<'numeric'|'2-digit'|'narrow'|'short'|'long'>
+     */
+    private const array MONTH_WIDTHS = ['numeric', '2-digit', 'narrow', 'short', 'long'];
+
+    /**
+     * Values ECMA-402 accepts for `timeZoneName`.
+     *
+     * @var non-empty-list<'short'|'long'|'shortOffset'|'longOffset'|'shortGeneric'|'longGeneric'>
+     */
+    private const array TIME_ZONE_NAME_STYLES = [
+        'short',
+        'long',
+        'shortOffset',
+        'longOffset',
+        'shortGeneric',
+        'longGeneric',
+    ];
+
+    /**
+     * Values ECMA-402 accepts for `dateStyle` and `timeStyle`.
+     *
+     * @var non-empty-list<'full'|'long'|'medium'|'short'>
+     */
+    private const array FORMAT_STYLES = ['full', 'long', 'medium', 'short'];
+
+    /**
+     * Values ECMA-402 accepts for `hourCycle`.
+     *
+     * @var non-empty-list<'h11'|'h12'|'h23'|'h24'>
+     */
+    private const array HOUR_CYCLES = ['h11', 'h12', 'h23', 'h24'];
+
+    /** The IntlDateFormatter constant each {@see self::FORMAT_STYLES} value selects. */
+    private const array FORMAT_STYLE_CONSTANTS = [
+        'full' => \IntlDateFormatter::FULL,
+        'long' => \IntlDateFormatter::LONG,
+        'medium' => \IntlDateFormatter::MEDIUM,
+        'short' => \IntlDateFormatter::SHORT,
     ];
 
     /**
@@ -118,12 +165,11 @@ final class IntlFormatter
             return CalendarFactory::canonicalize($calendarOpt);
         }
 
-        $calendar = self::intlCalendarFor(timeZone: null, locale: $locale);
-        // Every locale resolves to some calendar; ICU falls back to gregorian when the
-        // locale is unknown, and only fails outright if it cannot allocate one at all.
-        $icuType = $calendar?->getType() ?? 'gregorian';
+        $calendar = IntlCalendarFactory::forLocale(timeZone: null, locale: $locale);
+        // Every locale resolves to some calendar; ICU falls back to gregorian when the locale is unknown.
+        $icuType = $calendar->getType();
 
-        return self::ICU_TO_CALENDAR[$icuType] ?? $icuType;
+        return IntlCalendarFactory::calendarId($icuType);
     }
 
     /**
@@ -144,21 +190,20 @@ final class IntlFormatter
      * formatter can render.
      *
      * @param array<string, mixed> $opts
-     * @param string $defaultComponents The value's component mode, as passed to buildIntlFormatter().
+     * @param LocaleComponentMode $defaultComponents The value's component mode, as passed to buildIntlFormatter().
      * @throws RangeError if the value's calendar is incompatible with the formatter's.
      */
     public static function validateCalendar(
         ?string $calendarId,
         string $locale,
         array $opts,
-        string $defaultComponents,
+        LocaleComponentMode $defaultComponents,
     ): void {
         if ($calendarId === null) {
             return;
         }
 
-        $isoExempt = $defaultComponents !== 'yearmonth' && $defaultComponents !== 'monthday';
-        if ($isoExempt && $calendarId === 'iso8601') {
+        if (!$defaultComponents->isPartialDate() && $calendarId === 'iso8601') {
             return;
         }
 
@@ -171,6 +216,80 @@ final class IntlFormatter
             'toLocaleString(): cannot format a value in the "%s" calendar with a formatter resolved to the "%s" calendar.',
             $calendarId,
             $resolved,
+        ));
+    }
+
+    /**
+     * Applies ECMA-402 GetOption's value check to every `toLocaleString()` option that
+     * has a fixed value set, in the order CreateDateTimeFormat reads them.
+     *
+     * A value outside the set is a mistake, and ECMA-402 says so: `{weekday: 'wide'}`
+     * is a RangeError, not a request for the short weekday. Callers run this before
+     * the TypeErrors they raise for style conflicts and inapplicable styles, which
+     * CreateDateTimeFormat only reaches after reading every component option.
+     *
+     * Only options with a fixed value set are checked here. `calendar` and `timeZone`
+     * are identifiers, resolved by their own lookups; `hour12` is a boolean; and
+     * `fractionalSecondDigits` is a number, which ECMA-402 range-checks to 1-3 and
+     * this layer does not.
+     *
+     * @param array<string, mixed> $opts
+     * @throws RangeError if any option carries a value outside its set.
+     */
+    public static function validateOptionValues(array $opts): void
+    {
+        self::checkedKeyword($opts, 'hourCycle', self::HOUR_CYCLES);
+        self::checkedKeyword($opts, 'weekday', self::TEXT_WIDTHS);
+        self::checkedKeyword($opts, 'era', self::TEXT_WIDTHS);
+        self::checkedKeyword($opts, 'year', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, 'month', self::MONTH_WIDTHS);
+        self::checkedKeyword($opts, 'day', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, 'dayPeriod', self::TEXT_WIDTHS);
+        self::checkedKeyword($opts, 'hour', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, 'minute', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, 'second', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, 'timeZoneName', self::TIME_ZONE_NAME_STYLES);
+        self::checkedKeyword($opts, 'dateStyle', self::FORMAT_STYLES);
+        self::checkedKeyword($opts, 'timeStyle', self::FORMAT_STYLES);
+    }
+
+    /**
+     * Reads one keyword-valued option exactly as ECMA-402's
+     * GetOption(options, name, string, values, undefined) does.
+     *
+     * Returns the matching element of $allowed rather than the coerced string, so the
+     * return type is the value set itself. That is what lets every consumer below
+     * `match` over the set with no fallback arm to hide a value the set does not
+     * contain — {@see self::validateOptionValues()} has already rejected those.
+     *
+     * @template TValue of string
+     * @param array<string, mixed> $opts
+     * @param non-empty-list<TValue> $allowed
+     * @return TValue|null null when the option was not supplied; TC39's `undefined`
+     *                     reaches PHP as `null`, which every option bag here reads
+     *                     as "field not supplied".
+     * @throws RangeError if the value does not coerce to a string listed in $allowed.
+     */
+    private static function checkedKeyword(array $opts, string $name, array $allowed): ?string
+    {
+        /** @var mixed $raw */
+        $raw = $opts[$name] ?? null;
+        if ($raw === null) {
+            return null;
+        }
+
+        $value = Options::coerceEnumOption($raw, $name);
+        foreach ($allowed as $candidate) {
+            if ($value === $candidate) {
+                return $candidate;
+            }
+        }
+
+        throw new RangeError(sprintf(
+            'toLocaleString(): invalid %s value "%s"; must be one of %s.',
+            $name,
+            $value,
+            implode(', ', $allowed),
         ));
     }
 
@@ -212,15 +331,10 @@ final class IntlFormatter
      * whole representable range: a float timestamp — in seconds or in milliseconds —
      * has an ulp wider than a millisecond near the ±273790-year limits.
      */
-    public static function formatEpoch(
-        \IntlDateFormatter $formatter,
-        int $epochSec,
-        int $subNs,
-        string $timeZone,
-        string $locale,
-    ): string|false {
-        $calendar = self::formattingCalendarFor(self::icuTimeZoneId($timeZone), $locale);
-        if ($calendar === null) {
+    public static function formatEpoch(\IntlDateFormatter $formatter, int $epochSec, int $subNs): string|false
+    {
+        $calendar = $formatter->getCalendarObject();
+        if (!$calendar instanceof \IntlCalendar) {
             return $formatter->format($epochSec);
         }
         $calendar->setTime((float) $epochSec * 1_000.0);
@@ -257,27 +371,26 @@ final class IntlFormatter
      * Supports `hour12` and `hourCycle` options for hour format control.
      *
      * @param array<string, mixed> $opts
-     * @param string $defaultComponents Which components to include by default: 'datetime', 'date', or 'time'.
+     * @param LocaleComponentMode $defaultComponents Which components to include when the caller names none.
      */
     public static function buildIntlFormatter(
         string $locale,
         string $timeZone,
         array $opts,
-        string $defaultComponents = 'datetime',
+        LocaleComponentMode $defaultComponents = LocaleComponentMode::DateTime,
     ): \IntlDateFormatter {
         /** @var mixed $calendarOpt */
         $calendarOpt = $opts['calendar'] ?? null;
         if (is_string($calendarOpt)) {
-            $locale = sprintf('%s@calendar=%s', $locale, $calendarOpt);
+            $calendarId = CalendarFactory::canonicalize($calendarOpt);
+            $locale = sprintf('%s@calendar=%s', $locale, IntlCalendarFactory::icuType($calendarId));
         }
 
         $timeZone = self::icuTimeZoneId($timeZone);
 
-        // Apply hourCycle as a Unicode locale extension
-        /** @var mixed $hourCycleOpt */
-        $hourCycleOpt = $opts['hourCycle'] ?? null;
-        if (is_string($hourCycleOpt)) {
-            $locale = self::applyHourCycle($locale, $hourCycleOpt);
+        $hourCycle = self::checkedKeyword($opts, 'hourCycle', self::HOUR_CYCLES);
+        if ($hourCycle !== null) {
+            $locale = self::applyHourCycle($locale, $hourCycle);
         } elseif (($opts['hour12'] ?? null) !== null) {
             // hour12=false -> h23, hour12=true -> h12
             /** @var mixed $hour12Raw */
@@ -297,35 +410,21 @@ final class IntlFormatter
         // come from a keyword (en-u-ca-islamic-tbla, en@calendar=islamic-tbla — including
         // the one appended above for the `calendar` option) or from the locale's own
         // default, as with th-TH → buddhist, which carries no keyword at all.
-        $calendarObj = self::formattingCalendarFor($timeZone, $locale);
+        $calendarObj = IntlCalendarFactory::forFormatting($timeZone, $locale);
 
-        $styleMap = [
-            'full' => \IntlDateFormatter::FULL,
-            'long' => \IntlDateFormatter::LONG,
-            'medium' => \IntlDateFormatter::MEDIUM,
-            'short' => \IntlDateFormatter::SHORT,
-        ];
-
-        /** @var mixed $dateStyleOpt */
-        $dateStyleOpt = $opts['dateStyle'] ?? null;
-        /** @var mixed $timeStyleOpt */
-        $timeStyleOpt = $opts['timeStyle'] ?? null;
-        $dateStyle = is_string($dateStyleOpt) ? $dateStyleOpt : null;
-        $timeStyle = is_string($timeStyleOpt) ? $timeStyleOpt : null;
+        $dateStyle = self::checkedKeyword($opts, 'dateStyle', self::FORMAT_STYLES);
+        $timeStyle = self::checkedKeyword($opts, 'timeStyle', self::FORMAT_STYLES);
 
         if ($dateStyle !== null || $timeStyle !== null) {
             self::validateStyleConflicts($opts);
 
-            $dateType = $dateStyle !== null
-                ? $styleMap[$dateStyle] ?? \IntlDateFormatter::MEDIUM
-                : \IntlDateFormatter::NONE;
-            $timeType = $timeStyle !== null
-                ? $styleMap[$timeStyle] ?? \IntlDateFormatter::SHORT
-                : \IntlDateFormatter::NONE;
+            $dateType = $dateStyle !== null ? self::FORMAT_STYLE_CONSTANTS[$dateStyle] : \IntlDateFormatter::NONE;
+            $timeType = $timeStyle !== null ? self::FORMAT_STYLE_CONSTANTS[$timeStyle] : \IntlDateFormatter::NONE;
 
-            // For PlainYearMonth/PlainMonthDay, get the style pattern then strip
-            // year or day components to avoid displaying them.
-            if ($dateStyle !== null && ($defaultComponents === 'yearmonth' || $defaultComponents === 'monthday')) {
+            // PlainYearMonth and PlainMonthDay have no locale style of their own, so they
+            // take the date style's pattern and strip the field they do not carry.
+            $absentComponent = $defaultComponents->absentDateField();
+            if ($dateStyle !== null && $absentComponent !== null) {
                 $tmpFormatter = new \IntlDateFormatter(
                     $locale,
                     $dateType,
@@ -333,20 +432,12 @@ final class IntlFormatter
                     $timeZone,
                     $calendarObj,
                 );
-                if ($calendarObj !== null) {
-                    $tmpFormatter->setCalendar($calendarObj);
-                }
+                $tmpFormatter->setCalendar($calendarObj);
                 $pattern = $tmpFormatter->getPattern();
                 if ($pattern === false) {
                     $pattern = '';
                 }
-                if ($defaultComponents === 'monthday') {
-                    // Strip year-related patterns (y, G, U, r) and surrounding punctuation
-                    $pattern = self::stripPatternComponents($pattern, 'year');
-                } else {
-                    // yearmonth: strip day-related patterns (d)
-                    $pattern = self::stripPatternComponents($pattern, 'day');
-                }
+                $pattern = self::stripPatternComponents($pattern, $absentComponent);
                 $formatter = new \IntlDateFormatter(
                     $locale,
                     \IntlDateFormatter::NONE,
@@ -355,16 +446,12 @@ final class IntlFormatter
                     $calendarObj,
                     $pattern,
                 );
-                if ($calendarObj !== null) {
-                    $formatter->setCalendar($calendarObj);
-                }
+                $formatter->setCalendar($calendarObj);
                 return $formatter;
             }
 
             $formatter = new \IntlDateFormatter($locale, $dateType, $timeType, $timeZone, $calendarObj);
-            if ($calendarObj !== null) {
-                $formatter->setCalendar($calendarObj);
-            }
+            $formatter->setCalendar($calendarObj);
             return $formatter;
         }
 
@@ -389,25 +476,13 @@ final class IntlFormatter
                 $calendarObj,
                 $pattern,
             );
-            if ($calendarObj !== null) {
-                $formatter->setCalendar($calendarObj);
-            }
+            $formatter->setCalendar($calendarObj);
             return $formatter;
         }
 
         // Default: use skeleton-based patterns to match JS Intl.DateTimeFormat defaults
         $generator = new \IntlDatePatternGenerator($locale);
-        if ($defaultComponents === 'yearmonth') {
-            $pattern = $generator->getBestPattern('yM');
-        } elseif ($defaultComponents === 'monthday') {
-            $pattern = $generator->getBestPattern('Md');
-        } elseif ($defaultComponents === 'date') {
-            $pattern = $generator->getBestPattern('yMd');
-        } elseif ($defaultComponents === 'time') {
-            $pattern = $generator->getBestPattern('jms');
-        } else {
-            $pattern = $generator->getBestPattern('yMdjms');
-        }
+        $pattern = $generator->getBestPattern($defaultComponents->defaultSkeleton());
         if ($pattern === false) {
             $pattern = null;
         }
@@ -420,9 +495,7 @@ final class IntlFormatter
             $calendarObj,
             $pattern,
         );
-        if ($calendarObj !== null) {
-            $formatter->setCalendar($calendarObj);
-        }
+        $formatter->setCalendar($calendarObj);
         return $formatter;
     }
 
@@ -458,58 +531,6 @@ final class IntlFormatter
     }
 
     /**
-     * Returns the ICU calendar a locale resolves to, or null if ICU cannot create one.
-     *
-     * Wraps {@see \IntlCalendar::createInstance()} behind an explicit ?\IntlCalendar
-     * return type so callers' null handling type-checks consistently across analyzers
-     * (PHPStan's bundled stub types the factory as non-null; the runtime and the PHP
-     * manual declare it ?\IntlCalendar — hence the ignore below, which keeps the
-     * nullable contract callers rely on).
-     *
-     * @phpstan-ignore return.unusedType
-     */
-    private static function intlCalendarFor(?string $timeZone, string $locale): ?\IntlCalendar
-    {
-        return \IntlCalendar::createInstance($timeZone, $locale);
-    }
-
-    /**
-     * Returns the calendar a locale formats through, reckoned as proleptic Gregorian.
-     *
-     * ICU's Gregorian calendar switches to Julian reckoning before the 1582 cutover, so
-     * 1500-01-01 would render as 1499-12-23 and the earliest representable Temporal date
-     * as 271817-11-19 BC. Temporal counts proleptic Gregorian days across its whole
-     * ±271821-year range, so the cutover moves below ICU's minimum date, which is where
-     * ICU clamps -INF.
-     *
-     * ICU models the ISO 8601 calendar as a Gregorian one with ISO week rules but returns
-     * it as the base class, out of reach of setGregorianChange(). The plain Gregorian
-     * calendar stands in for it: the two differ only in the week numbering, which no
-     * date or time pattern reads, and the formatter keeps its own locale for the
-     * pattern and the names.
-     */
-    private static function formattingCalendarFor(?string $timeZone, string $locale): ?\IntlCalendar
-    {
-        $calendar = self::intlCalendarFor($timeZone, $locale);
-        if ($calendar === null) {
-            return null;
-        }
-
-        if (!$calendar instanceof \IntlGregorianCalendar) {
-            if ($calendar->getType() !== 'iso8601') {
-                return $calendar;
-            }
-            $calendar = self::intlCalendarFor($timeZone, '@calendar=gregorian');
-            if (!$calendar instanceof \IntlGregorianCalendar) {
-                return $calendar;
-            }
-        }
-
-        $calendar->setGregorianChange(-INF);
-        return $calendar;
-    }
-
-    /**
      * Renders a time zone identifier in the dialect ICU parses.
      *
      * A fixed offset reaches us as ISO 8601 (`+01:00`), which ICU does not recognize as
@@ -533,23 +554,22 @@ final class IntlFormatter
     }
 
     /**
-     * Appends a -u-hc-{hourCycle} extension to a BCP 47 locale string.
+     * Spells the hour cycle as a locale keyword, in the dialect $locale already uses.
+     *
+     * ICU reads a locale's keywords in one dialect at a time, so a BCP 47 `-u-`
+     * extension bolted onto a locale that carries a legacy `@keyword` section is
+     * dropped without complaint — `en-US-u-hc-h23@calendar=hebrew` formats in h12.
+     * The `@` case therefore has to extend the legacy keyword list instead, and it
+     * is reached whenever the `calendar` option is set, because that option is
+     * itself appended as `@calendar=`.
      */
     private static function applyHourCycle(string $locale, string $hourCycle): string
     {
-        // If there's already a -u- extension, append hc keyword
+        if (str_contains($locale, '@')) {
+            return sprintf('%s;hours=%s', $locale, $hourCycle);
+        }
         if (str_contains($locale, '-u-')) {
             return sprintf('%s-hc-%s', $locale, $hourCycle);
-        }
-        // If there's an @keyword section, insert before it
-        $atPos = strpos($locale, needle: '@');
-        if ($atPos !== false) {
-            return sprintf(
-                '%s-u-hc-%s%s',
-                substr($locale, offset: 0, length: $atPos),
-                $hourCycle,
-                substr($locale, $atPos),
-            );
         }
         return sprintf('%s-u-hc-%s', $locale, $hourCycle);
     }
@@ -561,63 +581,67 @@ final class IntlFormatter
      */
     private static function buildPatternFromComponents(
         array $opts,
-        string $defaultComponents,
+        LocaleComponentMode $defaultComponents,
         string $locale = 'en',
     ): string {
         $parts = [];
 
         // ECMA-402 CreateDateTimeFormat with required = "time" (PlainTime) only honors
         // the time-related option set; the date-component options (weekday, era, year,
-        // month, day) are not applicable to a time-only type and are dropped. The sole
-        // time-only mode is $defaultComponents === 'time'.
-        $allowsDateComponents = $defaultComponents !== 'time';
+        // month, day) are not applicable to a time-only type and are dropped.
+        $allowsDateComponents = !$defaultComponents->isTimeOnly();
 
         // Date components
         if ($allowsDateComponents) {
-            if (($opts['weekday'] ?? null) !== null) {
-                $parts[] = match ($opts['weekday']) {
+            $weekday = self::checkedKeyword($opts, 'weekday', self::TEXT_WIDTHS);
+            if ($weekday !== null) {
+                $parts[] = match ($weekday) {
                     'narrow' => 'EEEEE',
                     'short' => 'EEE',
                     'long' => 'EEEE',
-                    default => 'EEE',
                 };
             }
-            if (($opts['era'] ?? null) !== null) {
-                $parts[] = match ($opts['era']) {
+            $era = self::checkedKeyword($opts, 'era', self::TEXT_WIDTHS);
+            if ($era !== null) {
+                $parts[] = match ($era) {
                     'narrow' => 'GGGGG',
                     'short' => 'GGG',
                     'long' => 'GGGG',
-                    default => 'GGG',
                 };
             }
-            if (($opts['year'] ?? null) !== null) {
-                $parts[] = $opts['year'] === '2-digit' ? 'yy' : 'y';
+            $year = self::checkedKeyword($opts, 'year', self::NUMBER_WIDTHS);
+            if ($year !== null) {
+                $parts[] = $year === '2-digit' ? 'yy' : 'y';
             }
-            if (($opts['month'] ?? null) !== null) {
-                $parts[] = match ($opts['month']) {
+            $month = self::checkedKeyword($opts, 'month', self::MONTH_WIDTHS);
+            if ($month !== null) {
+                $parts[] = match ($month) {
                     'numeric' => 'M',
                     '2-digit' => 'MM',
                     'narrow' => 'MMMMM',
                     'short' => 'MMM',
                     'long' => 'MMMM',
-                    default => 'M',
                 };
             }
-            if (($opts['day'] ?? null) !== null) {
-                $parts[] = $opts['day'] === '2-digit' ? 'dd' : 'd';
+            $day = self::checkedKeyword($opts, 'day', self::NUMBER_WIDTHS);
+            if ($day !== null) {
+                $parts[] = $day === '2-digit' ? 'dd' : 'd';
             }
         }
 
         // Time components
-        if (($opts['hour'] ?? null) !== null) {
+        $hour = self::checkedKeyword($opts, 'hour', self::NUMBER_WIDTHS);
+        if ($hour !== null) {
             // Use 'j' skeleton symbol which picks locale-appropriate hour cycle
-            $parts[] = $opts['hour'] === '2-digit' ? 'jj' : 'j';
+            $parts[] = $hour === '2-digit' ? 'jj' : 'j';
         }
-        if (($opts['minute'] ?? null) !== null) {
-            $parts[] = $opts['minute'] === '2-digit' ? 'mm' : 'm';
+        $minute = self::checkedKeyword($opts, 'minute', self::NUMBER_WIDTHS);
+        if ($minute !== null) {
+            $parts[] = $minute === '2-digit' ? 'mm' : 'm';
         }
-        if (($opts['second'] ?? null) !== null) {
-            $parts[] = $opts['second'] === '2-digit' ? 'ss' : 's';
+        $second = self::checkedKeyword($opts, 'second', self::NUMBER_WIDTHS);
+        if ($second !== null) {
+            $parts[] = $second === '2-digit' ? 'ss' : 's';
         }
         if (($opts['fractionalSecondDigits'] ?? null) !== null) {
             /** @var mixed $fsd */
@@ -625,23 +649,23 @@ final class IntlFormatter
             $digits = is_int($fsd) ? $fsd : (int) (is_string($fsd) ? $fsd : 0);
             $parts[] = str_repeat('S', times: max(0, $digits));
         }
-        if (($opts['dayPeriod'] ?? null) !== null) {
-            $parts[] = match ($opts['dayPeriod']) {
+        $dayPeriod = self::checkedKeyword($opts, 'dayPeriod', self::TEXT_WIDTHS);
+        if ($dayPeriod !== null) {
+            $parts[] = match ($dayPeriod) {
                 'narrow' => 'BBBBB',
                 'short' => 'B',
                 'long' => 'BBBB',
-                default => 'B',
             };
         }
-        if (($opts['timeZoneName'] ?? null) !== null) {
-            $parts[] = match ($opts['timeZoneName']) {
+        $timeZoneName = self::checkedKeyword($opts, 'timeZoneName', self::TIME_ZONE_NAME_STYLES);
+        if ($timeZoneName !== null) {
+            $parts[] = match ($timeZoneName) {
                 'short' => 'z',
                 'long' => 'zzzz',
                 'shortOffset' => 'O',
                 'longOffset' => 'OOOO',
                 'shortGeneric' => 'v',
                 'longGeneric' => 'vvvv',
-                default => 'z',
             };
         }
 
@@ -665,24 +689,11 @@ final class IntlFormatter
             || ($opts['dayPeriod'] ?? null) !== null
             || ($opts['fractionalSecondDigits'] ?? null) !== null;
         if (!$hasDatePart && !$hasTimePart) {
-            // Add defaults based on mode
-            if (
-                $defaultComponents === 'date'
-                || $defaultComponents === 'datetime'
-                || $defaultComponents === 'yearmonth'
-                || $defaultComponents === 'monthday'
-            ) {
-                if ($defaultComponents === 'yearmonth') {
-                    $parts = array_merge(['y', 'M'], $parts);
-                } elseif ($defaultComponents === 'monthday') {
-                    $parts = array_merge(['M', 'd'], $parts);
-                } else {
-                    $parts = array_merge(['y', 'M', 'd'], $parts);
-                }
-            }
-            if ($defaultComponents === 'time' || $defaultComponents === 'datetime') {
-                $parts = array_merge($parts, ['j', 'm', 's']);
-            }
+            $parts = [
+                ...$defaultComponents->defaultDateFields(),
+                ...$parts,
+                ...$defaultComponents->defaultTimeFields(),
+            ];
         }
 
         $skeleton = implode('', $parts);
@@ -690,7 +701,35 @@ final class IntlFormatter
         // Use ICU's DateTimePatternGenerator to get a best-fit pattern
         $generator = new \IntlDatePatternGenerator($locale);
         $result = $generator->getBestPattern($skeleton);
+        $pattern = $result !== false ? $result : $skeleton;
 
-        return $result !== false ? $result : $skeleton;
+        return ($opts['hour'] ?? null) === '2-digit' ? self::widenHourField($pattern) : $pattern;
+    }
+
+    /**
+     * Widens the hour field of an ICU pattern to two characters.
+     *
+     * ECMA-402 has `hour: '2-digit'` pad a single-digit hour, but
+     * {@see \IntlDatePatternGenerator::getBestPattern()} is free to answer with the locale's
+     * own preferred hour width instead of the requested one: en-US returns `h a` for the
+     * skeletons `j`, `jj` and even the explicit `hh`. ICU honors the requested count when
+     * passed `UDATPG_MATCH_HOUR_FIELD_LENGTH`, for which PHP's binding takes no argument, so
+     * the width is reapplied to the returned pattern instead.
+     *
+     * The alternation matches a quoted literal first so its contents are copied through
+     * untouched: de-DE's `HH 'Uhr'` must not have the `h` of `Uhr` read as an hour field.
+     */
+    private static function widenHourField(string $pattern): string
+    {
+        $widened = preg_replace_callback(
+            "/'[^']*'|([hHKk])\\1*/",
+            /** @param array<array-key, string> $match */
+            static fn(array $match): string => array_key_exists(1, $match)
+                ? str_repeat($match[1], times: 2)
+                : $match[0],
+            subject: $pattern,
+        );
+
+        return $widened ?? $pattern;
     }
 }

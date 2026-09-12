@@ -6,7 +6,6 @@ namespace Calendrics\Spec;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
-use Calendrics\Spec\Internal\AnchorMath;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\FieldBag;
@@ -478,14 +477,14 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
      *   always     → "YYYY-MM-DD[u-ca=<id>]"
      *   critical   → "YYYY-MM-DD[!u-ca=<id>]"
      *
-     * @param array<array-key, mixed>|object|null $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
+     * @param array<array-key, mixed>|object $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
      * @throws RangeError for invalid calendarName values.
      * @psalm-api
      */
     #[\Override]
-    public function toString(mixed $options = null): string
+    public function toString(mixed $options = []): string
     {
-        $opts = Options::normalizeOptions($options, ['calendarName']);
+        $opts = Options::requireObject($options, ['calendarName']);
 
         $calendarName = 'auto';
         if (array_key_exists('calendarName', $opts)) {
@@ -1331,36 +1330,5 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
         $calYear = $calendar->year(1972, 7, 1);
         [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($calYear, $monthCode, $day, 'constrain');
         return new self($isoM, $isoD, $calendarId, $isoY);
-    }
-
-    #[\Override]
-    protected function localeDefaultComponents(): string
-    {
-        return 'monthday';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return true;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    #[\Override]
-    protected function toLocaleEpochParts(): array
-    {
-        $epochDays = AnchorMath::isoDateToEpochDays($this->referenceISOYear, $this->isoMonth, $this->isoDay);
-        return [$epochDays * 86_400, 0];
     }
 }
