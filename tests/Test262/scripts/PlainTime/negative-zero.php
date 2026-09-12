@@ -9,5 +9,5 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
-$plainTime = new \Calendrics\Spec\PlainTime(-0, -0, -0, -0, -0, -0);
+$plainTime = new \Calendrics\Spec\PlainTime(-0.0, -0.0, -0.0, -0.0, -0.0, -0.0);
 TemporalHelpers::assertPlainTime($plainTime, 0, 0, 0, 0, 0, 0);

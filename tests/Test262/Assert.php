@@ -79,12 +79,27 @@ final class Assert
                 PHPUnitAssert::assertNan($fa, $message !== null && $message !== '' ? $message : 'SameValue(NaN, NaN)');
                 return;
             }
+            // SameValue(-0, +0) is false in TC39, but PHP's === cannot see a zero's sign.
+            // fdiv() can: 1/-0.0 is -INF where 1/0.0 is INF.
+            if ($fa === 0.0 && $fe === 0.0 && fdiv(num1: 1.0, num2: $fa) !== fdiv(num1: 1.0, num2: $fe)) {
+                PHPUnitAssert::fail(sprintf(
+                    '%sSameValue(-0, +0) is false; expected %s but got %s.',
+                    $message !== null && $message !== '' ? "{$message}: " : '',
+                    self::describeZero($fe),
+                    self::describeZero($fa),
+                ));
+            }
             if ($fa === $fe) {
                 PHPUnitAssert::assertSame($fa, $fe, $message ?? '');
                 return;
             }
         }
         PHPUnitAssert::assertSame($expected, $actual, $message ?? '');
+    }
+
+    private static function describeZero(float $zero): string
+    {
+        return fdiv(num1: 1.0, num2: $zero) < 0.0 ? '-0' : '+0';
     }
 
     /**

@@ -3120,6 +3120,11 @@ class Emitter {
       this.emitIncomplete('untranslatable: typeof');
       return null;
     }
+    // PHP parses `-0` as the int 0, which has no sign bit, so a fixture written to check
+    // that -0 normalizes to +0 would assert nothing. The float literal carries the sign.
+    if (node.operator === '-' && node.argument.type === 'Literal' && node.argument.value === 0) {
+      return '-0.0';
+    }
     const arg = this.transpileExpr(node.argument);
     if (arg === null) return null;
     // Word operators (void) need a space; symbol operators (!, -, +, ~) do not.
