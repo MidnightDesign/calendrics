@@ -413,6 +413,59 @@ final class LocalizedFormattingTest extends TestCase
         self::monthDay()->toLocaleString(self::BUDDHIST_LOCALE);
     }
 
+    public function testGregorianCalendarOptionOverridesTheLocaleCalendarFields(): void
+    {
+        $date = new PlainDate(2000, 1, 1);
+        $fromOption = $date->toLocaleString(
+            self::BUDDHIST_LOCALE,
+            year: NumberWidth::Numeric,
+            month: MonthWidth::Long,
+            day: NumberWidth::Numeric,
+            calendar: Calendar::Gregory,
+        );
+        $fromLocale = $date->toLocaleString(
+            'th-TH-u-ca-gregory',
+            year: NumberWidth::Numeric,
+            month: MonthWidth::Long,
+            day: NumberWidth::Numeric,
+        );
+
+        static::assertSame($fromLocale, $fromOption);
+    }
+
+    /** @return iterable<string, array{int, int<1, 12>, int<1, 31>, string, string}> */
+    public static function prolepticGregorianDates(): iterable
+    {
+        yield 'before the ICU Gregorian cutover' => [1500, 1, 1, '01/01/1500 AD', 'AD 1500-01-01'];
+        yield 'minimum Temporal date' => [-271_821, 4, 19, '04/19/271822 BC', 'BC 271822-04-19'];
+        yield 'maximum Temporal date' => [275_760, 9, 13, '09/13/275760 AD', 'AD 275760-09-13'];
+    }
+
+    /**
+     * @param int<1, 12> $month
+     * @param int<1, 31> $day
+     */
+    #[DataProvider('prolepticGregorianDates')]
+    public function testGregorianCalendarsFormatProleptically(
+        int $year,
+        int $month,
+        int $day,
+        string $gregorianExpected,
+        string $isoExpected,
+    ): void {
+        $date = new PlainDate($year, $month, $day);
+        $format = static fn(string $locale): string => $date->toLocaleString(
+            $locale,
+            era: TextWidth::Short,
+            year: NumberWidth::Numeric,
+            month: MonthWidth::TwoDigit,
+            day: NumberWidth::TwoDigit,
+        );
+
+        static::assertSame($gregorianExpected, $format(self::LOCALE));
+        static::assertSame($isoExpected, $format('en-US-u-ca-iso8601'));
+    }
+
     /** An ISO year-month has no calendar a locale can ever resolve to. */
     public function testIsoYearMonthCannotBeLocalized(): void
     {

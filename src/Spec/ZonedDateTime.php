@@ -962,7 +962,7 @@ final class ZonedDateTime implements Stringable
         $timeZone = $this->timeZoneId;
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, LocaleComponentMode::DateTime);
         [$epochSec, $subNs] = $this->epochParts();
-        $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs, $timeZone, $locale);
+        $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs);
 
         return $result !== false ? $result : $this->toString();
     }
