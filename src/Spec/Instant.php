@@ -103,9 +103,6 @@ final class Instant implements Stringable
         $negative = $decimal[0] === '-';
         $digits = ltrim($decimal, characters: '+-');
         $digits = ltrim($digits, characters: '0');
-        if ($digits === '') {
-            return [0, 0];
-        }
         // Split off the last 9 digits as the sub-second nanosecond magnitude.
         if (strlen($digits) <= 9) {
             $secMagnitude = 0;

@@ -198,9 +198,6 @@ final class CalendarFactory
      */
     private static function looksLikeIsoDateOrTime(string $s): bool
     {
-        if ($s === '') {
-            return false;
-        }
         // Date / datetime.
         if (
             preg_match(pattern: '/^\d{2}-\d{2}|^\d{4}-\d{2}|^[+-]\d{6}-/', subject: $s) === 1

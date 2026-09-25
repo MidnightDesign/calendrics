@@ -1253,7 +1253,7 @@ final class IntlCalendarBridge implements CalendarProtocol
         // Day overflow is handled by resolveAndConstrain (for calendarToIso) or
         // is intentional (for dateAdd/dateUntil arithmetic).
         $isoYear = match ($this->calendarId) {
-            'gregory', 'japanese' => $calYear,
+            'japanese' => $calYear,
             'buddhist' => $calYear - 543,
             'roc' => $calYear + self::ROC_YEAR_OFFSET,
             default => null,

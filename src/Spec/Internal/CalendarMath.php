@@ -133,25 +133,14 @@ final class CalendarMath
         if (is_bool($value)) {
             return (int) $value;
         }
+        if ($value instanceof \Stringable) {
+            $value = (string) $value;
+        }
         if (is_string($value)) {
             if (!is_numeric($value)) {
                 throw new RangeError("{$errorContext} must be numeric.");
             }
             $floatVal = (float) $value;
-            if (!is_finite($floatVal)) {
-                throw new RangeError("{$errorContext} must be finite.");
-            }
-            return (int) $floatVal;
-        }
-        // Stringable: cast to string then re-run the numeric checks. The JsSymbol
-        // sentinel's __toString throws Calendrics\Exception\TypeError here, while a
-        // plain stdClass (not Stringable) falls through to RangeError below.
-        if ($value instanceof \Stringable) {
-            $str = (string) $value;
-            if (!is_numeric($str)) {
-                throw new RangeError("{$errorContext} must be numeric.");
-            }
-            $floatVal = (float) $str;
             if (!is_finite($floatVal)) {
                 throw new RangeError("{$errorContext} must be finite.");
             }
