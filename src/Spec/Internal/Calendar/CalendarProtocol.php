@@ -56,14 +56,14 @@ interface CalendarProtocol
     /**
      * Resolves calendar-specific year/month/day to ISO fields.
      *
-     * @return array{0: int, 1: int, 2: int} [isoYear, isoMonth, isoDay]
+     * @return array{int, int, int} [isoYear, isoMonth, isoDay]
      */
     public function calendarToIso(int $calYear, int $calMonth, int $calDay, string $overflow): array;
 
     /**
      * Resolves calendar-specific year/monthCode/day to ISO fields.
      *
-     * @return array{0: int, 1: int, 2: int} [isoYear, isoMonth, isoDay]
+     * @return array{int, int, int} [isoYear, isoMonth, isoDay]
      */
     public function calendarToIsoFromMonthCode(int $calYear, string $monthCode, int $calDay, string $overflow): array;
 
@@ -74,7 +74,7 @@ interface CalendarProtocol
     /**
      * Adds years, months, weeks, and days to an ISO date using calendar-specific rules.
      *
-     * @return array{0: int, 1: int, 2: int} [isoYear, isoMonth, isoDay]
+     * @return array{int, int, int} [isoYear, isoMonth, isoDay]
      */
     public function dateAdd(
         int $isoYear,
@@ -99,7 +99,7 @@ interface CalendarProtocol
      * day count anyway to round it into a Duration.
      *
      * @param 'month'|'year' $largestUnit
-     * @return array{0: int, 1: int, 2: int, 3: int} [years, months, weeks, days]
+     * @return array{int, int, int, int} [years, months, weeks, days]
      */
     public function dateUntil(
         int $isoY1,

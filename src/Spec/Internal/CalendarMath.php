@@ -595,7 +595,7 @@ final class CalendarMath
     /** @var array<int, int> Memoized toJulianDay results, keyed by encoded (year, month, day). */
     private static array $toJulianDayCache = [];
 
-    /** @var array<int, array{0: int, 1: int<1, 12>, 2: int<1, 31>}> Memoized fromJulianDay results, keyed by JDN. */
+    /** @var array<int, array{int, int<1, 12>, int<1, 31>}> Memoized fromJulianDay results, keyed by JDN. */
     private static array $fromJulianDayCache = [];
 
     /**
@@ -635,7 +635,7 @@ final class CalendarMath
     /**
      * Converts a Julian Day Number to a proleptic Gregorian calendar date.
      *
-     * @return array{0: int, 1: int<1, 12>, 2: int<1, 31>} [year, month, day]
+     * @return array{int, int<1, 12>, int<1, 31>} [year, month, day]
      */
     public static function fromJulianDay(int $jdn): array
     {
