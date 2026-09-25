@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Calendrics;
 
+use Calendrics\Internal\CalendarResolver;
 use Calendrics\Spec\PlainDateTime as SpecPlainDateTime;
 use Calendrics\Trait\HasDayOfMonthProperties;
 use Calendrics\Trait\HasDayOfMonthSpec;
@@ -311,7 +312,7 @@ final class PlainDateTime implements
      */
     public function withCalendar(Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar): self
     {
-        return self::fromSpec($this->spec->withCalendar(Calendar::resolve($calendar)->value));
+        return self::fromSpec($this->spec->withCalendar(CalendarResolver::resolve($calendar)->value));
     }
 
     /**
