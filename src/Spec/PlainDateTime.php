@@ -17,8 +17,8 @@ use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
-use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PartialDateFields;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Calendrics\Spec\Internal\TimeZoneHelper;
 use Stringable;
@@ -500,71 +500,19 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
             throw new TypeError('PlainDateTime::with() requires at least one recognized temporal property.');
         }
 
-        $calendar = $this->calendarId !== 'iso8601' ? CalendarFactory::get($this->calendarId) : null;
-
-        // --- Non-ISO calendar path --- (withNonIso resolves the overflow option after
-        // reading its own fields, per TC39 PrepareCalendarFields-before-GetOptionsObject.)
-        if ($calendar !== null) {
-            return $this->withNonIso($fields, $options, $calendar);
-        }
-
-        // --- ISO calendar path --- TC39 PrepareCalendarFields/ToTemporalTimeRecord read
-        // and coerce the partial fields BEFORE GetOptionsObject validates the options
-        // argument's type, so a bad field value's RangeError precedes a primitive options
-        // TypeError. The overflow keyword (which only drives regulation) is resolved after.
-        $year = $this->isoYear;
-        if (array_key_exists('year', $fields)) {
-            $year = CalendarMath::toFiniteInt($fields['year'], 'PlainDateTime::with() year');
-        }
-
-        $hasMonth = array_key_exists('month', $fields);
-        $hasMonthCode = array_key_exists('monthCode', $fields);
-        // MonthCode::validate is field preparation: TYPE (non-stringifiable => TypeError)
-        // then SYNTAX (ill-formed => RangeError). Whether the code names a month this
-        // calendar has is CalendarDateFromFields, resolved after the options are read.
-        $monthCode = $hasMonthCode ? MonthCode::validate($fields['monthCode']) : null;
-        $newMonth = $hasMonth ? CalendarMath::toFiniteInt($fields['month'], 'PlainDateTime::with() month') : null;
-
-        $day = $this->isoDay;
-        if (array_key_exists('day', $fields)) {
-            $day = CalendarMath::toFiniteInt($fields['day'], 'PlainDateTime::with() day');
-        }
-
-        // Merge time fields.
+        $date = PartialDateFields::prepare(
+            $fields,
+            $this->calendarId,
+            $this->year,
+            $this->monthCode,
+            $this->day,
+            'PlainDateTime::with()',
+        );
         [$h, $min, $sec, $ms, $us, $ns] = $this->mergeTimeFields($fields);
-
-        // `month` and `day` are read with ToPositiveIntegerWithTruncation, so a
-        // non-positive value is rejected during field preparation — before the options
-        // are read. (Below the minimum there is nothing to constrain to, either.)
-        if ($newMonth !== null && $newMonth < 1) {
-            throw new RangeError("Invalid month {$newMonth}: must be at least 1.");
-        }
-        if ($day < 1) {
-            throw new RangeError("Invalid day {$day}: must be at least 1.");
-        }
-
-        // GetOptionsObject + GetTemporalOverflowOption: explicit null / primitive /
-        // Symbol => TypeError; omitted ([]) defaults to 'constrain'.
         $overflow = Options::overflowFromValue($options);
-
-        $month = $this->isoMonth;
-        if ($monthCode !== null) {
-            $month = CalendarMath::monthCodeToMonth($monthCode);
-        }
-        if ($newMonth !== null) {
-            if ($monthCode !== null && $newMonth !== $month) {
-                throw new RangeError('Conflicting month and monthCode fields.');
-            }
-            $month = $newMonth;
-        }
+        [$year, $month, $day] = $date->resolve($overflow);
 
         if ($overflow === 'constrain') {
-            /**
-             * @psalm-suppress UnnecessaryVarAnnotation — Mago can't narrow min()
-             */
-            $month = min(12, $month);
-            $maxDay = CalendarMath::calcDaysInMonth($year, $month);
-            $day = min($maxDay, $day);
             $h = max(0, min(23, $h));
             $min = max(0, min(59, $min));
             $sec = max(0, min(59, $sec));
@@ -574,124 +522,6 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         }
 
         return new self($year, $month, $day, $h, $min, $sec, $ms, $us, $ns, $this->calendarId);
-    }
-
-    /**
-     * Implements with() for non-ISO calendars following TC39 CalendarDateMergeFields.
-     *
-     * Handles era/eraYear, monthCode defaults, and month/monthCode conflict
-     * resolution, then carries through unchanged time fields. Resolves the overflow
-     * option AFTER reading its own fields, matching TC39's PrepareCalendarFields-
-     * before-GetOptionsObject ordering.
-     *
-     * @param array<array-key,mixed> $fields
-     * @param Internal\Calendar\CalendarProtocol $calendar
-     */
-    private function withNonIso(array $fields, mixed $options, Internal\Calendar\CalendarProtocol $calendar): self
-    {
-        $hasYear = array_key_exists('year', $fields);
-        $hasEra = array_key_exists('era', $fields);
-        $hasEraYear = array_key_exists('eraYear', $fields);
-        $hasMonth = array_key_exists('month', $fields);
-        $hasMonthCode = array_key_exists('monthCode', $fields);
-
-        // Chinese/Dangi have no eras — providing era or eraYear is always a TypeError.
-        if (($hasEra || $hasEraYear) && in_array($this->calendarId, ['chinese', 'dangi'], strict: true)) {
-            throw new TypeError('eraYear and era are invalid for this calendar.');
-        }
-
-        // TC39: era without eraYear (or vice versa) is TypeError when year is not also provided.
-        if ($hasEra && !$hasEraYear && !$hasYear) {
-            throw new TypeError('era provided without eraYear in with() fields.');
-        }
-        if ($hasEraYear && !$hasEra && !$hasYear) {
-            throw new TypeError('eraYear provided without era in with() fields.');
-        }
-
-        // Resolve year: era+eraYear takes precedence over the current year if both provided.
-        // When $hasYear is false, $hasEra implies $hasEraYear (and vice versa) due to checks above.
-        $year = $this->year;
-        if ($hasYear) {
-            $year = CalendarMath::toFiniteInt($fields['year'], 'PlainDateTime::with() year');
-        } elseif ($hasEra) {
-            $resolved = CalendarMath::resolveYearFromEra(
-                $calendar,
-                $fields['era'],
-                $fields['eraYear'],
-                'PlainDateTime::with()',
-            );
-            if ($resolved !== null) {
-                $year = $resolved;
-            }
-        }
-
-        // Resolve monthCode/month with mutual exclusion.
-        // When neither is provided, default to current monthCode (not ordinal month).
-        $monthCode = null;
-        $month = null;
-        $useMonthCode = false;
-
-        if ($hasMonthCode) {
-            // MonthCode::validate: non-string TYPE => TypeError, ill-formed STRING => RangeError.
-            $monthCode = MonthCode::validate($fields['monthCode']);
-            $useMonthCode = true;
-        }
-        if ($hasMonth) {
-            $month = CalendarMath::toFiniteInt($fields['month'], 'PlainDateTime::with() month');
-            // Validate month/monthCode conflict.
-            if ($hasMonthCode) {
-                /** @var string $monthCode */
-                $monthFromCode = $calendar->monthCodeToMonth($monthCode, $year);
-                if ($month !== $monthFromCode) {
-                    throw new RangeError('Conflicting month and monthCode fields.');
-                }
-            }
-            $useMonthCode = false; // explicit month takes precedence
-        }
-        if (!$hasMonth && !$hasMonthCode) {
-            // Default: preserve current monthCode.
-            $monthCode = $this->monthCode;
-            $useMonthCode = true;
-        }
-
-        $day = $this->day;
-        if (array_key_exists('day', $fields)) {
-            $day = CalendarMath::toFiniteInt($fields['day'], 'PlainDateTime::with() day');
-        }
-
-        if ($day < 1) {
-            throw new RangeError("Invalid day {$day}: must be at least 1.");
-        }
-
-        // Merge (read/coerce) time fields before resolving options, so a bad time field's
-        // RangeError precedes a primitive options TypeError (ToTemporalTimeRecord first).
-        [$h, $min, $sec, $ms, $us, $ns] = $this->mergeTimeFields($fields);
-
-        // GetOptionsObject + GetTemporalOverflowOption: resolved after the fields have
-        // been read/coerced (PrepareCalendarFields precedes GetOptionsObject in TC39).
-        $overflow = Options::overflowFromValue($options);
-
-        if ($useMonthCode && $monthCode !== null) {
-            [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($year, $monthCode, $day, $overflow);
-        } else {
-            /** @var int $month */
-            if ($month < 1) {
-                throw new RangeError("Invalid month {$month}: must be at least 1.");
-            }
-            [$isoY, $isoM, $isoD] = $calendar->calendarToIso($year, $month, $day, $overflow);
-        }
-
-        // Constrain time fields if needed.
-        if ($overflow === 'constrain') {
-            $h = max(0, min(23, $h));
-            $min = max(0, min(59, $min));
-            $sec = max(0, min(59, $sec));
-            $ms = max(0, min(999, $ms));
-            $us = max(0, min(999, $us));
-            $ns = max(0, min(999, $ns));
-        }
-
-        return new self($isoY, $isoM, $isoD, $h, $min, $sec, $ms, $us, $ns, $this->calendarId);
     }
 
     /**
