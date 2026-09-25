@@ -1162,7 +1162,6 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
      *
      * Returns a signed result (may be negative).
      *
-     * @throws RangeError for unknown rounding modes.
      */
     private static function roundSignedNs(int $ns, int $increment, string $mode): int
     {
@@ -1210,7 +1209,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
                 }
                 // tie: toward +∞
                 return $ns >= 0 ? $trunc + $increment : $trunc;
-            case 'halfEven':
+            default:
                 $cmp = $absRem * 2;
                 if ($cmp < $increment) {
                     return $trunc;
@@ -1219,8 +1218,6 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
                     return $expand;
                 }
                 return ($q % 2) === 0 ? $trunc : $expand;
-            default:
-                throw new RangeError("Invalid roundingMode \"{$mode}\".");
         }
     }
 }

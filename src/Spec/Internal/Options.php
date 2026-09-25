@@ -35,8 +35,6 @@ final class Options
      *
      * This is the strict keyword set only — no legacy ECMA-402 aliases ("truncate"/
      * "ceiling") are accepted anywhere; they were never part of TC39 Temporal.
-     *
-     * @var list<string>
      */
     public const array ROUNDING_MODES = [
         'ceil',
@@ -172,6 +170,7 @@ final class Options
      * This validates the STRICT keyword set only; no legacy "truncate"/"ceiling"
      * aliases are recognized — they are not part of TC39 Temporal.
      *
+     * @return 'ceil'|'floor'|'expand'|'trunc'|'halfCeil'|'halfFloor'|'halfExpand'|'halfTrunc'|'halfEven'
      * @throws RangeError if $mode is not one of {@see self::ROUNDING_MODES}.
      */
     public static function roundingMode(string $mode): string

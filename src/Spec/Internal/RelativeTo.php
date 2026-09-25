@@ -184,10 +184,6 @@ final class RelativeTo
         if (array_key_exists('timeZone', $rt)) {
             return self::zonedBagAnchor($rt, $epochDays);
         }
-        // CreateTemporalDate's range check, which the string spelling gets in parseString().
-        if ($epochDays < -100_000_001 || $epochDays > 100_000_000) {
-            throw new RangeError('relativeTo property bag is outside the representable date range.');
-        }
         return RelativeAnchor::onDate($epochDays);
     }
 
