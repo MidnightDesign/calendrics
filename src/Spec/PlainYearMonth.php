@@ -486,16 +486,17 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
 
         $day = CalendarMath::toFiniteInt($bag['day'], 'toPlainDate() day');
 
-        // Constrain day to valid range for this year-month.
-        $maxDay = CalendarMath::calcDaysInMonth($this->isoYear, $this->isoMonth);
         if ($day < 1) {
             throw new RangeError("Invalid day {$day}: must be at least 1.");
         }
-        if ($day > $maxDay) {
-            $day = $maxDay; // constrain (default overflow behaviour per spec)
-        }
+        [$year, $month, $day] = CalendarFactory::get($this->calendarId)->calendarToIsoFromMonthCode(
+            $this->year,
+            $this->monthCode,
+            $day,
+            'constrain',
+        );
 
-        return new PlainDate($this->isoYear, $this->isoMonth, $day);
+        return new PlainDate($year, $month, $day, $this->calendarId);
     }
 
     // -------------------------------------------------------------------------
@@ -1258,16 +1259,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
      */
     private static function addSignedMonthsYM(int $year, int $month, int $signedMonths): array
     {
-        $m = $month + $signedMonths;
-        $y = $year;
-
-        if ($m > 12) {
-            $y += intdiv(num1: $m - 1, num2: 12);
-            $m = (($m - 1) % 12) + 1;
-        } elseif ($m < 1) {
-            $y += intdiv(num1: $m - 12, num2: 12);
-            $m = (((($m - 1) % 12) + 12) % 12) + 1;
-        }
+        [$y, $m] = CalendarFactory::get('iso8601')->dateAdd($year, $month, 1, 0, $signedMonths, 0, 0, 'constrain');
 
         return [$y, $m];
     }

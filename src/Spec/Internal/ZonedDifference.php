@@ -918,16 +918,7 @@ final class ZonedDifference
      */
     private static function addYearsMonthsToDate(int $year, int $month, int $day, int $addYears, int $addMonths): array
     {
-        $newYear = $year + $addYears;
-        $newMonth = $month + $addMonths;
-        if ($newMonth > 12) {
-            $newYear += intdiv(num1: $newMonth - 1, num2: 12);
-            $newMonth = (($newMonth - 1) % 12) + 1;
-        } elseif ($newMonth < 1) {
-            $newYear += intdiv(num1: $newMonth - 12, num2: 12);
-            $newMonth = (((($newMonth - 1) % 12) + 12) % 12) + 1;
-        }
-        return [$newYear, $newMonth, min($day, CalendarMath::calcDaysInMonth($newYear, $newMonth))];
+        return CalendarFactory::get('iso8601')->dateAdd($year, $month, $day, $addYears, $addMonths, 0, 0, 'constrain');
     }
 
     /**
