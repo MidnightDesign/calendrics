@@ -196,29 +196,13 @@ final class DurationRounding
             }
         }
 
-        // Prevent undefined behavior from (int) cast on float Duration fields > PHP int64.
-        // This can occur with very large float microseconds/nanoseconds values.
-        foreach ([
-            $d->days,
-            $d->hours,
-            $d->minutes,
-            $d->seconds,
-            $d->milliseconds,
-            $d->microseconds,
-            $d->nanoseconds,
-        ] as $_field) {
-            if (is_float($_field) && abs($_field) >= 9.223_372_036_854_776e18) {
-                throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
-            }
-        }
-
         // Compute total absolute nanoseconds, balancing all sub-day fields first.
         $sign = $d->sign;
         $signedMode = $sign === -1 ? self::negateRoundingMode($roundingMode) : $roundingMode;
-        $absNs = (int) abs((float) $d->nanoseconds);
-        $absUs = (int) abs((float) $d->microseconds);
+        [$nsSeconds, $absNs] = DurationTotal::splitSubsecondField(abs((float) $d->nanoseconds), 9);
+        [$usSeconds, $absUs] = DurationTotal::splitSubsecondField(abs((float) $d->microseconds), 6);
         $absMs = (int) abs((float) $d->milliseconds);
-        $absS = (int) abs((float) $d->seconds);
+        $absS = (int) abs((float) $d->seconds) + $nsSeconds + $usSeconds;
         $absM = (int) abs((float) $d->minutes);
         $absH = (int) abs((float) $d->hours);
         $absD = (int) abs((float) $d->days);
@@ -281,20 +265,6 @@ final class DurationRounding
             + ($absMs * 1_000_000)
             + ($absUs * 1_000)
             + $absNs;
-
-        // Validate: total seconds must not exceed MaxTimeDuration (MAX_SAFE_INT seconds).
-        // Use float arithmetic to avoid int64 overflow in the check.
-        $totalAbsSec =
-            ((float) $absD * 86_400.0)
-            + ((float) $absH * 3_600.0)
-            + ((float) $absM * 60.0)
-            + (float) $absS
-            + ((float) $absMs / 1_000.0)
-            + ((float) $absUs / 1_000_000.0)
-            + ((float) $absNs / 1_000_000_000.0);
-        if ($totalAbsSec > 9_007_199_254_740_992.0) {
-            throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
-        }
 
         // Nanoseconds per unit (time units only; days and above handled separately).
         /** @var array<string,int> */
@@ -432,9 +402,6 @@ final class DurationRounding
                 $totalAbsDaysF = (float) $absD + ((float) $subDayNs / 86_400_000_000_000.0);
             }
             $roundedAbsDays = (int) self::roundNsFloat($totalAbsDaysF, (float) $increment, $signedMode);
-            if (((float) $roundedAbsDays * 86_400.0) >= 9_007_199_254_740_992.0) {
-                throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
-            }
             /** @psalm-suppress InvalidOperand */
             return new Duration(0, 0, 0, $sign * $roundedAbsDays, 0, 0, 0, 0, 0, 0);
         }
@@ -463,8 +430,8 @@ final class DurationRounding
                 $zdtInfoRound['epochSec'],
             ));
         } else {
-            // The $totalAbsSec guard above already capped the total at 2^53 seconds, which
-            // bounds $absD at ~1.04e11 — well clear of int64 once multiplied out.
+            // Duration's constructor bounds the total at 2^53 seconds, so days fit int64
+            // after conversion to seconds.
             $daysSec = $absD * 86_400;
         }
         $totalSec = $daysSec + ($absH * 3_600) + ($absM * 60) + $absS;
@@ -682,6 +649,9 @@ final class DurationRounding
      * on a magnitude with the sign reapplied afterwards, which reverses the two directions.
      * That is not the AsIfPositive rule {@see EpochRounding} is named for: an epoch
      * nanosecond count is a point in time, where `floor` means earlier whatever the sign.
+     *
+     * @param 'ceil'|'floor'|'expand'|'trunc'|'halfCeil'|'halfFloor'|'halfExpand'|'halfTrunc'|'halfEven' $mode
+     * @return 'ceil'|'floor'|'expand'|'trunc'|'halfCeil'|'halfFloor'|'halfExpand'|'halfTrunc'|'halfEven'
      */
     private static function negateRoundingMode(string $mode): string
     {
@@ -700,7 +670,7 @@ final class DurationRounding
      *
      * @param float  $ns        Non-negative nanoseconds as float.
      * @param float  $increment Rounding increment (nanoseconds).
-     * @param string $mode      TC39 rounding mode name.
+     * @param 'ceil'|'floor'|'expand'|'trunc'|'halfCeil'|'halfFloor'|'halfExpand'|'halfTrunc'|'halfEven' $mode
      */
     private static function roundNsFloat(float $ns, float $increment, string $mode): float
     {
@@ -722,7 +692,6 @@ final class DurationRounding
                 'ceil', 'expand' => $d1 === 0.0 ? $q : $r2,
                 'halfExpand', 'halfCeil' => ($d1 * 2.0) >= $increment ? $r2 : $q,
                 'halfTrunc', 'halfFloor' => ($d1 * 2.0) > $increment ? $r2 : $q,
-                default => throw new RangeError("Invalid roundingMode \"{$mode}\"."),
             };
         }
         return $rounded * $increment;
@@ -911,7 +880,7 @@ final class DurationRounding
      * @param bool $luIsAuto Whether largestUnit is 'auto'.
      * @param ?string $luNorm Normalized largestUnit or null.
      * @param int $increment Rounding increment.
-     * @param string $roundingMode TC39 rounding mode.
+     * @param 'ceil'|'floor'|'expand'|'trunc'|'halfCeil'|'halfFloor'|'halfExpand'|'halfTrunc'|'halfEven' $roundingMode
      * @param array<string,int> $UNIT_IDX Unit name → index mapping.
      */
     private static function roundWithRelativeTo(
@@ -1147,8 +1116,8 @@ final class DurationRounding
                     $awDays = $applySign * abs((int) $d->weeks) * 7;
                     $calDateEnd = $calDateEnd->modify(sprintf('%+d days', $awDays));
                 }
-                // Get the raw time-only nanoseconds (H/M/S/ms/us/ns + day field converted).
-                $absTimeOnlyNs = abs($timeNs) + (abs((int) $d->days) * $nsPerDay);
+                $absRawDays = abs((int) $d->days);
+                $absTimeOnlyNs = abs($timeNs);
                 $calEndY = (int) $calDateEnd->format('Y');
                 $calEndM = (int) $calDateEnd->format('n');
                 $calEndD = (int) $calDateEnd->format('j');
@@ -1162,7 +1131,7 @@ final class DurationRounding
                     $zdtInfoRWR['second'],
                     $zdtInfoRWR['tzId'],
                     $absTimeOnlyNs,
-                    0,
+                    $absRawDays,
                     $sign,
                 );
                 // Round only the sub-day remainder.
@@ -1207,9 +1176,9 @@ final class DurationRounding
                     $roundedAbsDays += $moreDays;
                 }
                 // For the luIdx < 6 path (largestUnit < days), compute total rounded ns.
-                $roundedAbsNs = (($roundedAbsDays + abs($calendarDays)) * $nsPerDay) + $absSubDayNs;
+                $roundedAbsNs = (($roundedAbsDays + abs($calendarDays) - $absRawDays) * $nsPerDay) + $absSubDayNs;
                 // Re-add the calendar days to get the total day count for balanceDateDuration.
-                $roundedDays = $sign * ($roundedAbsDays + abs($calendarDays));
+                $roundedDays = $sign * ($roundedAbsDays + abs($calendarDays) - $absRawDays);
                 $subDayNs = $sign * $absSubDayNs;
             } else {
                 $roundedAbsNs = EpochRounding::roundAsIfPositive($absNs, $nsIncrement, $signedMode);

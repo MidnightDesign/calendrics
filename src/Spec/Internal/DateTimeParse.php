@@ -124,16 +124,6 @@ final class DateTimeParse
             if ($secNum === 60) {
                 $secNum = 59;
             }
-            // Validate time ranges.
-            if ($hourNum > 23) {
-                throw new RangeError("PlainDateTime::from() cannot parse \"{$s}\": hour {$hourNum} out of range.");
-            }
-            if ($minNum > 59) {
-                throw new RangeError("PlainDateTime::from() cannot parse \"{$s}\": minute {$minNum} out of range.");
-            }
-            if ($secNum > 59) {
-                throw new RangeError("PlainDateTime::from() cannot parse \"{$s}\": second {$secNum} out of range.");
-            }
         } elseif (preg_match($dateOnlyPattern, $s, $m) === 1) {
             // Date-only string: time defaults to midnight (all zeros).
             $yearRaw = $m[1];

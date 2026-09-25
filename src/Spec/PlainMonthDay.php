@@ -570,7 +570,7 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
      *   MM-DD (compact form without -- prefix → referenceISOYear=1972)
      *   YYYY-MM-DD, ±YYYYYY-MM-DD (full date strings → referenceISOYear=1972, year from string dropped)
      *   YYYYMMDD, ±YYYYYYMMDD (compact date strings → referenceISOYear=1972)
-     * Optional trailing time, offset (only when time is present), and bracket annotations.
+     * Full dates allow a trailing time and offset; all forms allow bracket annotations.
      * Z (UTC designator) is never valid for PlainMonthDay.
      * UTC offsets without a time component are not valid.
      *
@@ -592,15 +592,9 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
             );
         }
 
-        // Try the --MM-DD or MM-DD format (canonical PlainMonthDay forms).
-        // Both --MM-DD and MM-DD are accepted; optional time/offset/brackets may follow.
-        // UTC offsets/Z without time are NOT valid.
-        // Pattern captures: (1) month, (2) day, (3) hour, (4) min, (5) sec, (6) frac, (7) brackets
-        // The double-dash prefix (--) is optional.
-        // optional '--' prefix + MM-DD, optional T+time, optional offset, bracket annotations
         // Per DateSpecMonthDay (TwoDashes[opt] DateMonth -[opt] DateDay), the hyphen
         // between month and day is optional: MM-DD, MMDD, --MM-DD and --MMDD are all valid.
-        $monthDayPattern = '/^(?:--)?(\d{2})-?(\d{2})(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:[Zz]|[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)?)?((?:\[[^\]]*\])*)$/';
+        $monthDayPattern = '/^(?:--)?(\d{2})-?(\d{2})((?:\[[^\]]*\])*)$/';
 
         /** @var list<string> $m */
         $m = [];
@@ -608,62 +602,7 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
             $month = (int) $m[1];
             $day = (int) $m[2];
 
-            // Validate time portion if present.
-            if ($m[3] !== '') {
-                $hour = (int) $m[3];
-                if ($hour > 23) {
-                    throw new RangeError("PlainMonthDay::from() cannot parse \"{$s}\": hour {$hour} out of range.");
-                }
-                if ($m[4] !== '') {
-                    $minute = (int) $m[4];
-                    if ($minute > 59) {
-                        throw new RangeError(
-                            "PlainMonthDay::from() cannot parse \"{$s}\": minute {$minute} out of range.",
-                        );
-                    }
-                    if ($m[5] !== '') {
-                        $second = (int) $m[5];
-                        if ($second > 60) {
-                            throw new RangeError(
-                                "PlainMonthDay::from() cannot parse \"{$s}\": second {$second} out of range.",
-                            );
-                        }
-                    }
-                }
-                // Z is not valid for PlainMonthDay.
-                // Determine the offset of the date part from the actual match:
-                // TwoDashes (0 or 2) + 2 month digits + separator (0 or 1) + 2 day digits.
-                $dashPrefix = str_starts_with($s, '--') ? 2 : 0;
-                // A separator dash is present iff the month-day span exceeds MMDD (4 digits).
-                $hasSeparator = $s[$dashPrefix + 2] === '-';
-                $dateLen = $dashPrefix + 2 + ($hasSeparator ? 1 : 0) + 2;
-                $afterDate = substr(string: $s, offset: $dateLen);
-                $bracketPos = strpos(haystack: $afterDate, needle: '[');
-                $timeOffset = $bracketPos !== false
-                    ? substr(string: $afterDate, offset: 0, length: $bracketPos)
-                    : $afterDate;
-                if (preg_match('/[Zz]/', $timeOffset) === 1) {
-                    throw new RangeError(
-                        "PlainMonthDay::from() cannot parse \"{$s}\": Z (UTC) designator is not valid.",
-                    );
-                }
-            }
-
-            $calendarId = CalendarMath::validateAnnotations($m[7], $s);
-
-            // Validate month and day.
-            if ($month < 1 || $month > 12) {
-                throw new RangeError("PlainMonthDay::from() cannot parse \"{$s}\": month {$month} out of range 1–12.");
-            }
-            if ($day < 1) {
-                throw new RangeError("PlainMonthDay::from() cannot parse \"{$s}\": day {$day} must be at least 1.");
-            }
-            $maxDay = CalendarMath::calcDaysInMonth(1972, $month);
-            if ($day > $maxDay) {
-                throw new RangeError(
-                    "PlainMonthDay::from() cannot parse \"{$s}\": day {$day} exceeds {$maxDay} for month {$month}.",
-                );
-            }
+            $calendarId = CalendarMath::validateAnnotations($m[3], $s);
 
             // Per TC39 spec: month-day form (no year) with non-ISO calendar is invalid,
             // because a year is required to resolve the reference ISO year.
@@ -1278,14 +1217,6 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
             return self::resolveNonIsoReferenceYear($calendar, $calendarId, $monthCode, $maxConstrainedDay, 'reject');
         }
 
-        // With 'reject' overflow, if no exact match was found, throw.
-        if ($overflow === 'reject') {
-            throw new RangeError("monthCode \"{$monthCode}\" with day {$day} does not exist in this calendar.");
-        }
-
-        // Fallback: should not normally be reached for supported calendars.
-        $calYear = $calendar->year(1972, 7, 1);
-        [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($calYear, $monthCode, $day, 'constrain');
-        return new self($isoM, $isoD, $calendarId, $isoY);
+        throw new RangeError("monthCode \"{$monthCode}\" with day {$day} does not exist in this calendar.");
     }
 }

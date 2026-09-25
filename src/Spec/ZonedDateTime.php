@@ -1167,10 +1167,6 @@ final class ZonedDateTime implements Stringable
         // Compute the rounded result as epoch seconds + sub-ns.
         $roundedEpochSec = $midnightEpochSec + intdiv(num1: $roundedOffsetNs, num2: EpochLimits::NS_PER_SECOND);
         $roundedSubNs = $roundedOffsetNs % EpochLimits::NS_PER_SECOND;
-        if ($roundedSubNs < 0) {
-            $roundedEpochSec--;
-            $roundedSubNs += EpochLimits::NS_PER_SECOND;
-        }
 
         return self::fromEpochParts($roundedEpochSec, $roundedSubNs, $this->timeZoneId, $this->calendarId);
     }
@@ -1647,8 +1643,8 @@ final class ZonedDateTime implements Stringable
      * Named to match {@see Instant::fromEpochParts()}: it is the same operation on the
      * other class that carries an instant, and it used to answer to three names.
      *
-     * $epochSec/$subNs accept int|float and are narrowed by
-     * {@see EpochValue::narrowParts()}, which documents where float parts come from.
+     * Float seconds represent overflowing transpiler literals and are rejected by
+     * {@see EpochValue::narrowParts()}. Sub-second nanoseconds are always integers.
      *
      * @internal
      * @psalm-internal Calendrics\Spec
@@ -1656,7 +1652,7 @@ final class ZonedDateTime implements Stringable
      */
     public static function fromEpochParts(
         int|float $epochSec,
-        int|float $subNs,
+        int $subNs,
         string $tzId,
         string $calendarId = 'iso8601',
     ): self {

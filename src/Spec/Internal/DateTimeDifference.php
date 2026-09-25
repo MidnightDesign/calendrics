@@ -657,9 +657,7 @@ final class DateTimeDifference
 
         // Total fractional progress: remaining days + remaining time as fraction of a day.
         $totalRemNs = ($remainingDays * EpochLimits::NS_PER_DAY) + $remainingTimeNs;
-        $progress = $intervalDays > 0
-            ? (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY)
-            : 0.0;
+        $progress = (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY);
 
         $roundUp = CalendarMath::applyCalendarRoundingProgress($totalMonths, $progress, $increment, $mode, $sign);
 
@@ -702,9 +700,7 @@ final class DateTimeDifference
         $monthsJdn = self::addSignedMonths($receiver, $dir * (($floorCount * 12) + $remMonths));
         $remDaysFromMonths = abs($monthsJdn - $anchorJdn);
         $totalRemNs = (($remDaysFromMonths + $remainingDays) * EpochLimits::NS_PER_DAY) + $remainingTimeNs;
-        $progress = $intervalDays > 0
-            ? (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY)
-            : 0.0;
+        $progress = (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY);
 
         $roundUp = CalendarMath::applyCalendarRoundingProgress($years, $progress, $increment, $mode, $sign);
 

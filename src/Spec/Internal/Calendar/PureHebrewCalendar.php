@@ -151,11 +151,6 @@ final class PureHebrewCalendar implements CalendarProtocol
         }
         $type = self::yearType($year);
         $isLeap = self::isLeapYear($year);
-        $totalMonths = $isLeap ? 13 : 12;
-
-        if ($ordinalMonth < 1 || $ordinalMonth > $totalMonths) {
-            throw new RangeError("Month ordinal {$ordinalMonth} out of range for Hebrew year {$year}.");
-        }
 
         // Map ordinal to logical month identity
         if ($isLeap) {

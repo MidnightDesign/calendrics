@@ -107,6 +107,31 @@ final class RelativeTo
         return array_key_exists('relativeTo', $options);
     }
 
+    /** Converts an already-validated anchor without discarding its calendar or time zone. */
+    public static function toTemporalObject(mixed $relativeTo): PlainDate|ZonedDateTime
+    {
+        if ($relativeTo instanceof PlainDate || $relativeTo instanceof ZonedDateTime) {
+            return $relativeTo;
+        }
+        if (is_string($relativeTo)) {
+            return preg_match('/\[[^\]=]+\]/', $relativeTo) === 1
+                ? ZonedDateTime::from($relativeTo)
+                : PlainDate::from($relativeTo);
+        }
+        if (is_object($relativeTo)) {
+            $relativeTo = self::normalizeBag($relativeTo);
+        }
+        assert(is_array($relativeTo));
+        if (array_key_exists('offset', $relativeTo)) {
+            /** @var string $offset Validation permits only zero seconds and fractional seconds. */
+            $offset = $relativeTo['offset'];
+            $relativeTo['offset'] = substr($offset, offset: 0, length: 6);
+        }
+        return array_key_exists('timeZone', $relativeTo)
+            ? ZonedDateTime::from($relativeTo)
+            : PlainDate::from($relativeTo);
+    }
+
     /**
      * Snapshots a `relativeTo` property bag, reading the anchor fields TC39 prescribes.
      *
@@ -183,10 +208,6 @@ final class RelativeTo
         $epochDays = self::bagEpochDays($rt);
         if (array_key_exists('timeZone', $rt)) {
             return self::zonedBagAnchor($rt, $epochDays);
-        }
-        // CreateTemporalDate's range check, which the string spelling gets in parseString().
-        if ($epochDays < -100_000_001 || $epochDays > 100_000_000) {
-            throw new RangeError('relativeTo property bag is outside the representable date range.');
         }
         return RelativeAnchor::onDate($epochDays);
     }
@@ -362,7 +383,7 @@ final class RelativeTo
             if (!is_string($tzVal)) {
                 throw new TypeError('relativeTo timeZone must be a string.');
             }
-            self::validateTimeZoneString($tzVal);
+            TimeZoneHelper::normalizeTimezoneId($tzVal);
         }
         // offset: if present must be a string in ±HH:MM[[:SS[.nnnnnnnnn]]] format
         // where optional seconds and sub-seconds must be zero.
@@ -642,32 +663,14 @@ final class RelativeTo
             return null;
         }
         if (is_array($rt) && array_key_exists('timeZone', $rt)) {
-            /** @var mixed $tzVal */
+            /** @var string $tzVal Validated by readOption() before resolving the anchor. */
             $tzVal = $rt['timeZone'];
-            // Only treat as IANA timezone if it looks like one (contains '/' or is a known single-word zone).
-            // Datetime strings passed as timeZone (e.g. "2021-08-19T17:30-0700") are not IANA.
-            $isIanaTz = false;
-            if (
-                is_string($tzVal)
-                && $tzVal !== ''
-                && $tzVal !== 'UTC'
-                && preg_match('/^[+\-]\d{2}:\d{2}$/', $tzVal) !== 1
-                && !str_contains($tzVal, 'T')
-                && preg_match('/^\d{4}-/', $tzVal) !== 1
-            ) {
-                try {
-                    $isIanaTz = new \DateTimeZone($tzVal)->getName() === $tzVal;
-                } catch (\Exception) {
-                    $isIanaTz = false;
-                }
+            $tzId = TimeZoneHelper::normalizeTimezoneId($tzVal);
+            if ($tzId === 'UTC' || preg_match('/^[+\-]\d{2}:\d{2}$/', $tzId) === 1) {
+                return null;
             }
-            if ($isIanaTz) {
-                // Property bag with IANA timezone. Use ZonedDateTime::from() so offset
-                // validation (including sub-minute mismatch rejection) is handled.
-                $zdt = ZonedDateTime::from($rt);
-                return self::resolveZdt($zdt);
-            }
-            return null;
+            $rt['timeZone'] = $tzId;
+            return self::resolveZdt(ZonedDateTime::from($rt));
         }
         return null;
     }
@@ -765,53 +768,5 @@ final class RelativeTo
     {
         /** @phpstan-ignore cast.int */
         return is_int($value) ? $value : (int) $value;
-    }
-
-    /**
-     * Validates a timezone identifier string (used for the timeZone property-bag field).
-     *
-     * Rules (from TC39 Temporal spec):
-     *   - Minus-zero extended year (-000000) → reject.
-     *   - Bracket annotation with a seconds offset (e.g. [+23:59:60]) → reject.
-     *   - Pure UTC-offset strings (start with ±HH, no T): must be ±HH:MM or ±HHMM (no seconds).
-     *   - Datetime strings (contain T): must have Z, an inline offset, or a bracket annotation;
-     *     inline offsets must not include a seconds component (e.g. -07:00:01 is invalid).
-     *
-     * @throws RangeError for invalid timezone strings.
-     */
-    private static function validateTimeZoneString(string $tz): void
-    {
-        // Reject empty string.
-        if ($tz === '') {
-            throw new RangeError('Invalid timeZone "": empty string is not a valid timezone identifier.');
-        }
-        // Reject minus-zero extended year.
-        if (preg_match('/^-0{6}(?:[^0-9]|$)/', $tz) === 1) {
-            throw new RangeError("Invalid timeZone \"{$tz}\": minus-zero year.");
-        }
-        // Reject bracket annotation with a seconds component (e.g. [+23:59:60]).
-        $bm = null;
-        if (preg_match('/\[([^\]]+)\]/', $tz, $bm) === 1) {
-            if (preg_match('/^[+\-]\d{2}:\d{2}:\d{2}/', $bm[1]) === 1) {
-                throw new RangeError("Invalid timeZone \"{$tz}\": sub-minute seconds in bracket annotation.");
-            }
-        }
-        // Pure UTC-offset strings (no T date/time part): must be ±HH:MM or ±HHMM.
-        if (preg_match('/^[+\-]\d{2}/', $tz) === 1 && !str_contains($tz, 'T') && !str_contains($tz, 't')) {
-            if (preg_match('/^[+\-]\d{2}:\d{2}(?:$|[^:\d])/', $tz) !== 1 && preg_match('/^[+\-]\d{4}$/', $tz) !== 1) {
-                throw new RangeError("Invalid timeZone \"{$tz}\": offset contains seconds or is in an invalid format.");
-            }
-            return;
-        }
-        // Datetime strings: must have Z, an inline offset, or a bracket annotation.
-        if (preg_match('/\d{4,}-\d{2}-\d{2}[Tt]|\d{8}[Tt]/', $tz) === 1) {
-            if (preg_match('/T\d{2}:?\d{2}(?::?\d{2})?(?:\.\d+)?(?:Z|[+\-]|\[)/i', $tz) !== 1) {
-                throw new RangeError("Invalid timeZone \"{$tz}\": bare datetime without Z, offset, or bracket.");
-            }
-            // Inline offset must not include a seconds component (e.g. -07:00:01).
-            if (preg_match('/[+\-]\d{2}:\d{2}:\d{2}(?!\])/i', $tz) === 1) {
-                throw new RangeError("Invalid timeZone \"{$tz}\": inline offset contains a seconds component.");
-            }
-        }
     }
 }

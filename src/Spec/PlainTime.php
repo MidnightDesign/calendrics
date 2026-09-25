@@ -556,17 +556,9 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         // digits=-1 ('minute'): minute precision.
         // digits=0..9: second or sub-second precision.
         $nsIncrement = match ($digits) {
-            -2, 9 => 1, // nanosecond precision; rounding=trunc is a no-op when -2
+            -2 => 1,
             -1 => self::NS_PER_MINUTE,
-            0 => 1_000_000_000,
-            1 => 100_000_000,
-            2 => 10_000_000,
-            3 => 1_000_000,
-            4 => 100_000,
-            5 => 10_000,
-            6 => 1_000,
-            7 => 100,
-            default => 10, // only remaining case is 8
+            default => 10 ** (9 - $digits),
         };
 
         // Round the nanoseconds (always non-negative).
@@ -1170,7 +1162,6 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
      *
      * Returns a signed result (may be negative).
      *
-     * @throws RangeError for unknown rounding modes.
      */
     private static function roundSignedNs(int $ns, int $increment, string $mode): int
     {
@@ -1218,7 +1209,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
                 }
                 // tie: toward +∞
                 return $ns >= 0 ? $trunc + $increment : $trunc;
-            case 'halfEven':
+            default:
                 $cmp = $absRem * 2;
                 if ($cmp < $increment) {
                     return $trunc;
@@ -1227,8 +1218,6 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
                     return $expand;
                 }
                 return ($q % 2) === 0 ? $trunc : $expand;
-            default:
-                throw new RangeError("Invalid roundingMode \"{$mode}\".");
         }
     }
 }
