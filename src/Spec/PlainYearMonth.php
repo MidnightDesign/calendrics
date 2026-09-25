@@ -1258,7 +1258,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
      * is done within the bucket of size `increment` months from that anchor.
      * If rounding up would push months to >= 12, the carry propagates into years.
      *
-     * @return array{0: int, 1: int} [roundedYears, roundedMonths]
+     * @return array{int, int} [roundedYears, roundedMonths]
      * @throws RangeError if the rounded result is outside the valid range.
      */
     private static function roundCalendarMonthsWithinYear(
@@ -1386,7 +1386,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
     /**
      * Adds $signedMonths months to [year, month] and returns [$newYear, $newMonth].
      *
-     * @return array{0: int, 1: int}
+     * @return array{int, int}
      */
     private static function addSignedMonthsYM(int $year, int $month, int $signedMonths): array
     {
