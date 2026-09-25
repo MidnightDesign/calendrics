@@ -13,6 +13,7 @@ use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PartialDateFields;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
 
@@ -335,151 +336,18 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             );
         }
 
-        // Non-ISO calendar: delegate to dedicated handler. (withNonIso resolves the
-        // overflow option after reading its own fields.)
-        if ($this->calendarId !== 'iso8601') {
-            return $this->withNonIso($fields, $options, CalendarFactory::get($this->calendarId));
-        }
+        unset($fields['day']);
+        $date = PartialDateFields::prepare(
+            $fields,
+            $this->calendarId,
+            $this->year,
+            $this->monthCode,
+            1,
+            'PlainYearMonth::with()',
+        );
+        [$year, $month, $day] = $date->resolve(Options::overflowFromValue($options));
 
-        // ISO path. TC39 PrepareCalendarFields reads and coerces the partial fields
-        // BEFORE GetOptionsObject validates the options argument's type, so a bad field
-        // value's RangeError precedes a primitive options argument's TypeError. The
-        // overflow keyword (which only drives regulation) is resolved afterward.
-        $year = $this->isoYear;
-        if (array_key_exists('year', $fields)) {
-            $year = CalendarMath::toFiniteInt($fields['year'], 'PlainYearMonth::with() year');
-        }
-
-        $hasMonth = array_key_exists('month', $fields);
-        $hasMonthCode = array_key_exists('monthCode', $fields);
-
-        // MonthCode::validate is field preparation: TYPE (non-stringifiable => TypeError)
-        // then SYNTAX (ill-formed => RangeError). Whether the code names a month this
-        // calendar has is CalendarDateFromFields, resolved after the options are read.
-        $monthCode = $hasMonthCode ? MonthCode::validate($fields['monthCode']) : null;
-        $newMonth = $hasMonth ? CalendarMath::toFiniteInt($fields['month'], 'PlainYearMonth::with() month') : null;
-
-        // `month` is read with ToPositiveIntegerWithTruncation, so a non-positive value
-        // is rejected during field preparation — before the options are read.
-        if ($newMonth !== null && $newMonth < 1) {
-            throw new RangeError("Invalid month {$newMonth}: must be at least 1.");
-        }
-
-        // GetOptionsObject + GetTemporalOverflowOption: explicit null / primitive /
-        // Symbol => TypeError; omitted ([]) and a bag without 'overflow' default to
-        // 'constrain'; an 'overflow' value is coerced/validated.
-        $overflow = Options::overflowFromValue($options);
-
-        $month = $this->isoMonth;
-        if ($monthCode !== null) {
-            $month = CalendarMath::monthCodeToMonth($monthCode);
-        }
-        if ($newMonth !== null) {
-            if ($monthCode !== null && $newMonth !== $month) {
-                throw new RangeError('Conflicting month and monthCode fields.');
-            }
-            $month = $newMonth;
-        }
-
-        if ($overflow === 'constrain') {
-            $month = min(12, $month);
-        }
-
-        // referenceISODay stays 1 after with() — TC39 spec §9.5.6 RegulateISOYearMonth.
-        return new self($year, $month, $this->calendarId, 1);
-    }
-
-    /**
-     * Non-ISO calendar path for with(), mirroring PlainDate::withNonIso().
-     *
-     * Resolves the overflow option AFTER reading its own fields, matching TC39's
-     * PrepareCalendarFields-before-GetOptionsObject ordering.
-     *
-     * @param array<array-key,mixed> $fields
-     * @param Internal\Calendar\CalendarProtocol $calendar
-     */
-    private function withNonIso(array $fields, mixed $options, Internal\Calendar\CalendarProtocol $calendar): self
-    {
-        $hasYear = array_key_exists('year', $fields);
-        $hasEra = array_key_exists('era', $fields);
-        $hasEraYear = array_key_exists('eraYear', $fields);
-        $hasMonth = array_key_exists('month', $fields);
-        $hasMonthCode = array_key_exists('monthCode', $fields);
-
-        // Chinese/Dangi have no eras — providing era or eraYear is always a TypeError.
-        if (($hasEra || $hasEraYear) && in_array($this->calendarId, ['chinese', 'dangi'], strict: true)) {
-            throw new TypeError('eraYear and era are invalid for this calendar.');
-        }
-
-        // TC39: era without eraYear (or vice versa) is TypeError when year is not also provided.
-        if ($hasEra && !$hasEraYear && !$hasYear) {
-            throw new TypeError('era provided without eraYear in with() fields.');
-        }
-        if ($hasEraYear && !$hasEra && !$hasYear) {
-            throw new TypeError('eraYear provided without era in with() fields.');
-        }
-
-        // Resolve year: era+eraYear takes precedence over the current year if both provided.
-        // When $hasYear is false, $hasEra implies $hasEraYear (and vice versa) due to checks above.
-        $year = $this->year;
-        if ($hasYear) {
-            $year = CalendarMath::toFiniteInt($fields['year'], 'PlainYearMonth::with() year');
-        } elseif ($hasEra) {
-            $resolved = CalendarMath::resolveYearFromEra(
-                $calendar,
-                $fields['era'],
-                $fields['eraYear'],
-                'PlainYearMonth::with()',
-            );
-            if ($resolved !== null) {
-                $year = $resolved;
-            }
-        }
-
-        // Resolve monthCode/month with mutual exclusion.
-        // When neither is provided, default to current monthCode (not ordinal month).
-        $monthCode = null;
-        $month = null;
-        $useMonthCode = false;
-
-        if ($hasMonthCode) {
-            // MonthCode::validate: non-string TYPE => TypeError, ill-formed STRING => RangeError.
-            $monthCode = MonthCode::validate($fields['monthCode']);
-            $useMonthCode = true;
-        }
-        if ($hasMonth) {
-            $month = CalendarMath::toFiniteInt($fields['month'], 'PlainYearMonth::with() month');
-            // Validate month/monthCode conflict.
-            if ($hasMonthCode) {
-                /** @var string $monthCode */
-                $monthFromCode = $calendar->monthCodeToMonth($monthCode, $year);
-                if ($month !== $monthFromCode) {
-                    throw new RangeError('Conflicting month and monthCode fields.');
-                }
-            }
-            $useMonthCode = false; // explicit month takes precedence
-        }
-        if (!$hasMonth && !$hasMonthCode) {
-            // Default: preserve current monthCode.
-            $monthCode = $this->monthCode;
-            $useMonthCode = true;
-        }
-
-        // GetOptionsObject + GetTemporalOverflowOption: resolved after the fields have
-        // been read/coerced (PrepareCalendarFields precedes GetOptionsObject in TC39).
-        $overflow = Options::overflowFromValue($options);
-
-        if ($useMonthCode && $monthCode !== null) {
-            [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($year, $monthCode, 1, $overflow);
-        } else {
-            /** @var int $month */
-            if ($month < 1) {
-                throw new RangeError("Invalid month {$month}: must be at least 1.");
-            }
-            [$isoY, $isoM, $isoD] = $calendar->calendarToIso($year, $month, 1, $overflow);
-        }
-
-        return new self($isoY, $isoM, $this->calendarId, $isoD);
+        return new self($year, $month, $this->calendarId, $day);
     }
 
     /**
@@ -1259,7 +1127,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
      * is done within the bucket of size `increment` months from that anchor.
      * If rounding up would push months to >= 12, the carry propagates into years.
      *
-     * @return array{0: int, 1: int} [roundedYears, roundedMonths]
+     * @return array{int, int} [roundedYears, roundedMonths]
      * @throws RangeError if the rounded result is outside the valid range.
      */
     private static function roundCalendarMonthsWithinYear(
@@ -1387,7 +1255,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
     /**
      * Adds $signedMonths months to [year, month] and returns [$newYear, $newMonth].
      *
-     * @return array{0: int, 1: int}
+     * @return array{int, int}
      */
     private static function addSignedMonthsYM(int $year, int $month, int $signedMonths): array
     {

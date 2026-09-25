@@ -331,7 +331,7 @@ final class AnchorMath
      * day-count between start and end.
      *
      * @param \DateTimeImmutable $startDate UTC midnight on the start date.
-     * @return array{0: \DateTimeImmutable, 1: int}
+     * @return array{\DateTimeImmutable, int}
      * @throws RangeError if the resulting date falls outside the representable range.
      */
     public static function applyCalendarToDate(Duration $d, \DateTimeImmutable $startDate): array

@@ -83,7 +83,7 @@ final class IntlCalendarBridge implements CalendarProtocol
      * "calYear:monthCode:calDay:overflow". Only successful returns are cached;
      * exception paths re-run the computation.
      *
-     * @var array<string, array{0: int, 1: int<1, 12>, 2: int<1, 31>}>
+     * @var array<string, array{int, int<1, 12>, int<1, 31>}>
      */
     private array $calendarToIsoFromMonthCodeCache = [];
 
@@ -497,7 +497,7 @@ final class IntlCalendarBridge implements CalendarProtocol
     }
 
     /**
-     * @return array{0: int, 1: int<1, 12>, 2: int<1, 31>}
+     * @return array{int, int<1, 12>, int<1, 31>}
      */
     private function calendarToIsoFromMonthCodeUncached(
         int $calYear,
@@ -1376,7 +1376,7 @@ final class IntlCalendarBridge implements CalendarProtocol
     /**
      * Reads back epoch ms from IntlCalendar, converts to ISO, and applies overflow handling.
      *
-     * @return array{0: int, 1: int<1, 12>, 2: int<1, 31>} [isoYear, isoMonth, isoDay]
+     * @return array{int, int<1, 12>, int<1, 31>} [isoYear, isoMonth, isoDay]
      */
     private function resolveAndConstrain(int $calDay, string $overflow): array
     {
@@ -1501,7 +1501,7 @@ final class IntlCalendarBridge implements CalendarProtocol
      * should be after month 6 (ICU 5). This means ICU's "regular M07" is
      * actually "leap M06", and ICU's "leap M07" is actually "regular M07".
      *
-     * @return array{0: int, 1: int} [icuMonth, isLeap]
+     * @return array{int, int} [icuMonth, isLeap]
      */
     private function correctedChineseMonthFields(): array
     {

@@ -1064,7 +1064,7 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
         // month code and day match. The calendar year overlapping that ISO year
         // can start in the prior ISO year, so try both boundary calendar years
         // and keep the latest ISO date that lands within the reference ISO year.
-        /** @var array{0: int, 1: int, 2: int}|null $best */
+        /** @var array{int, int, int}|null $best */
         $best = null;
         $calYearCandidates = array_unique([
             $calendar->year($referenceYear, 12, 31),
@@ -1204,7 +1204,7 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
         }
 
         // Phase 1: Try to find an exact match (the day fits without constraining).
-        /** @var array{0: int, 1: int, 2: int}|null $bestMatch */
+        /** @var array{int, int, int}|null $bestMatch */
         $bestMatch = null;
         /** @var array<int, true> $triedCalYears */
         $triedCalYears = [];
