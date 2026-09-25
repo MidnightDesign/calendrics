@@ -927,7 +927,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         if ($normLargest === 'month') {
             // $normSmallest is 'month' too: a 'year' smallestUnit under a 'month'
             // largestUnit is rejected above.
-            if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
+            if ($roundingIncrement === 1) {
                 return new Duration(months: $sinceSign * $totalMonths);
             }
             $rounded = self::roundCalendarYearMonths(
@@ -957,7 +957,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         }
 
         // normSmallest === 'month', normLargest === 'year'
-        if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
+        if ($roundingIncrement === 1) {
             return new Duration(years: $sinceSign * $rawYears, months: $sinceSign * $rawMonths);
         }
         [$ry, $rm] = self::roundCalendarMonthsWithinYear(
@@ -991,18 +991,6 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
 
         $floorCount = intdiv(num1: $absMonths, num2: $increment) * $increment;
         $remainingMonths = $absMonths - $floorCount;
-
-        // No rounding needed when mode is trunc/floor (always rounds down).
-        if ($increment === 1) {
-            $sign2 = $totalMonths >= 0 ? 1 : -1;
-            // Validate range.
-            $dir2 = $receiverIsLater ? -$sign2 : $sign2;
-            [$ry, $rm] = self::addSignedMonthsYM($receiver->isoYear, $receiver->isoMonth, $dir2 * $absMonths);
-            if (!self::isoYearMonthWithinLimits($ry, $rm)) {
-                throw new RangeError('PlainYearMonth arithmetic result is outside the representable range.');
-            }
-            return $totalMonths;
-        }
 
         // Anchor: receiver going toward "other" by floorCount months.
         $dir = $receiverIsLater ? -$sign : $sign;

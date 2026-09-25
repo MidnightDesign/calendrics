@@ -107,6 +107,31 @@ final class RelativeTo
         return array_key_exists('relativeTo', $options);
     }
 
+    /** Converts an already-validated anchor without discarding its calendar or time zone. */
+    public static function toTemporalObject(mixed $relativeTo): PlainDate|ZonedDateTime
+    {
+        if ($relativeTo instanceof PlainDate || $relativeTo instanceof ZonedDateTime) {
+            return $relativeTo;
+        }
+        if (is_string($relativeTo)) {
+            return preg_match('/\[[^\]=]+\]/', $relativeTo) === 1
+                ? ZonedDateTime::from($relativeTo)
+                : PlainDate::from($relativeTo);
+        }
+        if (is_object($relativeTo)) {
+            $relativeTo = self::normalizeBag($relativeTo);
+        }
+        assert(is_array($relativeTo));
+        if (array_key_exists('offset', $relativeTo)) {
+            /** @var string $offset Validation permits only zero seconds and fractional seconds. */
+            $offset = $relativeTo['offset'];
+            $relativeTo['offset'] = substr($offset, offset: 0, length: 6);
+        }
+        return array_key_exists('timeZone', $relativeTo)
+            ? ZonedDateTime::from($relativeTo)
+            : PlainDate::from($relativeTo);
+    }
+
     /**
      * Snapshots a `relativeTo` property bag, reading the anchor fields TC39 prescribes.
      *

@@ -6,9 +6,9 @@ namespace Calendrics\Spec;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
-use Calendrics\Spec\Internal\AnchorMath;
 use Calendrics\Spec\Internal\DurationRounding;
 use Calendrics\Spec\Internal\DurationTotal;
+use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\RelativeTo;
@@ -621,7 +621,7 @@ final class Duration implements Stringable
             $frac = $subNs !== 0 ? sprintf('.%s', rtrim(sprintf('%09d', $subNs), characters: '0')) : '';
         } else {
             // Exact digit count with rounding.
-            [$roundedFrac, $carrySecond] = self::roundSubSecond($subNs, $digits, $roundingMode, $sign);
+            [$roundedFrac, $carrySecond] = self::roundSubSecond($totalSeconds, $subNs, $digits, $roundingMode, $sign);
             $totalSeconds += $carrySecond;
 
             // Range check: rounding might push totalSeconds beyond TC39's limit (2^53).
@@ -927,12 +927,9 @@ final class Duration implements Stringable
         foreach (self::PLURAL_FIELDS as $field) {
             /** @var mixed $v */
             $v = $item[$field] ?? 0;
-            // Coerce per the universal numeric contract: a numeric value (int /
-            // float / numeric string) is accepted; a Stringable is cast first
-            // (a Symbol-like sentinel's __toString throws Calendrics\Exception\TypeError);
-            // any other value — null, bool, array, plain object, non-numeric
-            // string — is out of range and yields a RangeError. (Previously such
-            // values were silently (int)-cast to 0 / kept the prior field value.)
+            if (is_bool($v)) {
+                $v = (int) $v;
+            }
             if ($v instanceof Stringable) {
                 $v = (string) $v;
             }
@@ -1007,9 +1004,8 @@ final class Duration implements Stringable
             }
             return [$sign * $q, $sign * $rem];
         }
-        $q = (int) $fq;
-        $r = (int) round($n - ((float) $q * (float) $divisor));
-        return [$q, $r];
+        $integer = (int) $n;
+        return [intdiv($integer, $divisor), $integer % $divisor];
     }
 
     /**
@@ -1158,108 +1154,23 @@ final class Duration implements Stringable
         return new self(0, 0, 0, (int) $d, (int) $h, (int) $min, (int) $s, (int) $ms, (int) $us, (int) $ns);
     }
 
-    /**
-     * Rounds/truncates sub-second nanoseconds to the given number of decimal digits.
-     *
-     * For negative durations the rounding direction is inverted (floor ↔ expand).
-     *
-     * @param int    $subNs       Sub-second nanoseconds (0–999_999_999).
-     * @param int    $digits      Number of fractional seconds digits (0–9).
-     * @param string $roundingMode TC39 rounding mode name.
-     * @param int    $sign        Duration sign (1 or -1; 0 treated as 1).
-     * @return array{0: int, 1: int} [roundedFrac, carrySecond]
-     *   $roundedFrac: the integer to format as $digits decimal digits (0 when $digits=0).
-     *   $carrySecond: 0 or 1, to add to the whole-seconds total.
-     */
-    private static function roundSubSecond(int $subNs, int $digits, string $roundingMode, int $sign): array
+    /** @return array{int, int} Formatted fractional digits and carry into whole seconds. */
+    private static function roundSubSecond(int $seconds, int $subNs, int $digits, string $mode, int $sign): array
     {
-        if ($digits === 0) {
-            $carry = self::applyRounding($subNs, 1_000_000_000, $roundingMode, 0, $sign);
-            return [0, $carry];
+        if ($sign < 0) {
+            $mode = match ($mode) {
+                'ceil' => 'floor',
+                'floor' => 'ceil',
+                'halfCeil' => 'halfFloor',
+                'halfFloor' => 'halfCeil',
+                default => $mode,
+            };
         }
-
-        $unitNs = (int) round(10 ** (9 - $digits));
-        $quotient = intdiv(num1: $subNs, num2: $unitNs);
-        $remainder = $subNs % $unitNs;
-        $carry = self::applyRounding($remainder, $unitNs, $roundingMode, $quotient, $sign);
-        $rounded = $quotient + $carry;
-
-        $maxFrac = (int) round(10 ** $digits);
-        if ($rounded >= $maxFrac) {
-            return [0, 1]; // overflow into next second
-        }
-        return [$rounded, 0];
-    }
-
-    /**
-     * Determines the increment (0 or 1) to add to the quotient when rounding.
-     *
-     * @param int    $remainder   Fractional part (0 ≤ remainder < $unitNs).
-     * @param int    $unitNs      Size of the rounding unit in nanoseconds.
-     * @param string $mode        TC39 rounding mode.
-     * @param int    $quotient    Truncated quotient (used by halfEven).
-     * @param int    $sign        Duration sign (1 or -1).
-     * @return int<0, 1>
-     */
-    private static function applyRounding(int $remainder, int $unitNs, string $mode, int $quotient, int $sign): int
-    {
-        if ($remainder === 0) {
-            return 0;
-        }
-        $positive = $sign >= 0;
-        $doubled = $remainder * 2;
-        // Half toward -∞: tie rounds up only for the negative branch.
-        if ($mode === 'halfFloor') {
-            if ($positive) {
-                return $doubled > $unitNs ? 1 : 0;
-            }
-            return $doubled >= $unitNs ? 1 : 0;
-        }
-        // Half toward +∞: tie rounds up only for the positive branch.
-        if ($mode === 'halfCeil') {
-            if ($positive) {
-                return $doubled >= $unitNs ? 1 : 0;
-            }
-            return $doubled > $unitNs ? 1 : 0;
-        }
-        return match ($mode) {
-            // Toward zero
-            'trunc' => 0,
-            // Floor = toward -∞: expand for negative, trunc for positive.
-            'floor' => $positive ? 0 : 1,
-            // Ceil = toward +∞: expand for positive, trunc for negative.
-            'ceil' => $positive ? 1 : 0,
-            // Always away from zero.
-            'expand' => 1,
-            // Half away from zero (standard rounding).
-            'halfExpand' => $doubled >= $unitNs ? 1 : 0,
-            // Half toward zero.
-            'halfTrunc' => $doubled > $unitNs ? 1 : 0,
-            // Half to even.
-            'halfEven' => self::halfEvenRound($remainder, $unitNs, $quotient),
-            default => throw new RangeError("Unknown rounding mode \"{$mode}\"."),
-        };
-    }
-
-    /**
-     * Half-to-even (banker's rounding) helper.
-     *
-     * @param int $remainder 0 ≤ remainder < $unitNs.
-     * @param int $unitNs    Size of the rounding unit.
-     * @param int $quotient  Truncated quotient (to check parity).
-     * @return int<0, 1>
-     */
-    private static function halfEvenRound(int $remainder, int $unitNs, int $quotient): int
-    {
-        $double = $remainder * 2;
-        if ($double < $unitNs) {
-            return 0;
-        }
-        if ($double > $unitNs) {
-            return 1;
-        }
-        // Exactly half — round to even.
-        return ($quotient % 2) !== 0 ? 1 : 0;
+        $unitNs = (int) 10 ** (9 - $digits);
+        // Whole-second parity is needed for half-even ties at zero fractional digits.
+        $parity = $seconds % 2;
+        [$roundedSeconds, $roundedSubNs] = EpochRounding::round($parity, $subNs, $unitNs, $mode);
+        return [intdiv($roundedSubNs, $unitNs), $roundedSeconds - $parity];
     }
 
     // -------------------------------------------------------------------------
@@ -1269,7 +1180,7 @@ final class Duration implements Stringable
     /**
      * Compares two durations by total elapsed time.
      *
-     * For time-only durations (no calendar fields): convert to nanoseconds and compare.
+     * For time-only durations: compare whole seconds and nanosecond remainders exactly.
      * For calendar fields without relativeTo: throws RangeError.
      * For calendar fields with valid relativeTo: normalizes both sides via the relative
      * anchor (DST-aware when relativeTo is a ZonedDateTime with an IANA timezone).
@@ -1311,97 +1222,88 @@ final class Duration implements Stringable
                 'Duration::compare() with calendar units (years, months, or weeks) requires a relativeTo option.',
             );
         }
+        $anchor = $relativeToProvided ? RelativeTo::toTemporalObject($opts['relativeTo']) : null;
+        if ($anchor instanceof ZonedDateTime && ($hasCalendar || $d1->days !== 0 || $d2->days !== 0)) {
+            return ZonedDateTime::compare(
+                self::zonedEndForComparison($d1, $anchor),
+                self::zonedEndForComparison($d2, $anchor),
+            );
+        }
+
+        $days1 = (int) $d1->days;
+        $days2 = (int) $d2->days;
         if ($hasCalendar) {
-            /** @var mixed $rt */
-            $rt = $opts['relativeTo'] ?? null;
-            $ns1 = AnchorMath::totalNsFromRelativeTo($d1, $rt);
-            $ns2 = AnchorMath::totalNsFromRelativeTo($d2, $rt);
-            return $ns1 <=> $ns2;
+            assert($anchor instanceof PlainDate);
+            $days1 = self::calendarDaysForComparison($d1, $anchor);
+            $days2 = self::calendarDaysForComparison($d2, $anchor);
         }
-
-        // When relativeTo is a ZDT with IANA timezone, compare using actual epoch offsets.
-        /** @var mixed $rtForCompare */
-        $rtForCompare = $opts['relativeTo'] ?? null;
-        $zdtInfoCompare = $rtForCompare !== null ? RelativeTo::resolveZdt($rtForCompare) : null;
-
-        if ($zdtInfoCompare !== null) {
-            $epoch1 = AnchorMath::durationToEpochOffsetSec($d1, $zdtInfoCompare);
-            $epoch2 = AnchorMath::durationToEpochOffsetSec($d2, $zdtInfoCompare);
-            return $epoch1 <=> $epoch2;
-        }
-
-        // For a ZonedDateTime anchor in a UTC/fixed-offset zone (RelativeTo::resolveZdt() returns
-        // null for those, so we never reach the DST-aware branch above), TC39 still anchors each
-        // date-category duration to the ZDT epoch via AddZonedDateTime. When either operand has a
-        // date-category largestUnit (non-zero days/weeks/months/years — calendar units are handled
-        // earlier, so days is the live case here), the resulting target instant must stay within
-        // the representable Temporal range (±8.64e12 s). Check both operands independently so the
-        // call carrying the out-of-range duration throws regardless of argument order.
-        if ($rtForCompare instanceof \Calendrics\Spec\ZonedDateTime) {
-            // years/months/weeks are known zero here ($hasCalendar was false above), so the only
-            // live date-category field is days.
-            $d1IsDateCategory = $d1->days !== 0;
-            $d2IsDateCategory = $d2->days !== 0;
-            if ($d1IsDateCategory || $d2IsDateCategory) {
-                [$rtTrueSec, $rtSubNs] = $rtForCompare->epochParts();
-                foreach ([$d1, $d2] as $dCheck) {
-                    if (RelativeTo::zdtTargetOutOfRange($rtTrueSec, $rtSubNs, $dCheck)) {
-                        throw new RangeError(
-                            'relativeTo ZonedDateTime is outside the representable range after applying duration.',
-                        );
-                    }
-                }
-            }
-        }
-
-        $s1 = $d1->sign;
-        $s2 = $d2->sign;
-        if ($s1 !== $s2) {
-            return $s1 <=> $s2;
-        }
-        [$days1, $subNs1] = self::balanceToDayNs($d1);
-        [$days2, $subNs2] = self::balanceToDayNs($d2);
-        $cmp = ($days1 <=> $days2) !== 0 ? $days1 <=> $days2 : $subNs1 <=> $subNs2;
-        return $s1 * $cmp;
+        [$seconds1, $subNs1] = self::timePartsForComparison($d1, $days1);
+        [$seconds2, $subNs2] = self::timePartsForComparison($d2, $days2);
+        return $seconds1 !== $seconds2 ? $seconds1 <=> $seconds2 : $subNs1 <=> $subNs2;
     }
 
-    /**
-     * Returns absolute [days, subDayNs] for comparison purposes.
-     * Works with absolute values of the time fields.
-     *
-     * @return array{0: int, 1: int}
-     */
-    private static function balanceToDayNs(self $d): array
+    private static function calendarDaysForComparison(self $duration, PlainDate $anchor): int
     {
-        $h = (int) abs((float) $d->hours);
-        $m = (int) abs((float) $d->minutes);
-        $s = (int) abs((float) $d->seconds);
-        $ms = (int) abs((float) $d->milliseconds);
-        $us = (int) abs((float) $d->microseconds);
-        $ns = (int) abs((float) $d->nanoseconds);
+        $end = $anchor->add(
+            new self(
+                years: $duration->years,
+                months: $duration->months,
+                weeks: $duration->weeks,
+                days: $duration->days,
+            ),
+        );
+        return (int) $anchor->until($end, ['largestUnit' => 'day'])->days;
+    }
 
-        $us += intdiv(num1: $ns, num2: 1_000);
-        $ns %= 1_000;
-        $ms += intdiv(num1: $us, num2: 1_000);
-        $us %= 1_000;
-        $s += intdiv(num1: $ms, num2: 1_000);
-        $ms %= 1_000;
-        $m += intdiv(num1: $s, num2: 60);
-        $s %= 60;
-        $h += intdiv(num1: $m, num2: 60);
-        $m %= 60;
-        $days = (int) abs((float) $d->days) + intdiv(num1: $h, num2: 24);
-        $h %= 24;
+    private static function zonedEndForComparison(self $duration, ZonedDateTime $anchor): ZonedDateTime
+    {
+        $dateEnd = $anchor->add(
+            new self(
+                years: $duration->years,
+                months: $duration->months,
+                weeks: $duration->weeks,
+                days: $duration->days,
+            ),
+        );
+        [$epochSeconds, $epochSubNs] = $dateEnd->epochParts();
+        [$seconds, $subNs] = self::timePartsForComparison($duration, days: 0);
+        $subNs += $epochSubNs;
+        return ZonedDateTime::fromEpochParts(
+            $epochSeconds + $seconds + intdiv($subNs, num2: 1_000_000_000),
+            $subNs % 1_000_000_000,
+            $anchor->timeZoneId,
+            $anchor->calendarId,
+        );
+    }
 
-        $subNs =
-            ($h * 3_600_000_000_000)
-            + ($m * 60_000_000_000)
-            + ($s * 1_000_000_000)
-            + ($ms * 1_000_000)
-            + ($us * 1_000)
-            + $ns;
-
-        return [$days, $subNs];
+    /** @return array{int, int} Whole seconds and a nonnegative nanosecond remainder. */
+    private static function timePartsForComparison(self $duration, int $days): array
+    {
+        $seconds =
+            ($days * 86_400)
+            + ((int) $duration->hours * 3_600)
+            + ((int) $duration->minutes * 60)
+            + (int) $duration->seconds;
+        $subNs = 0;
+        foreach ([
+            [$duration->milliseconds, 1_000, 1_000_000],
+            [$duration->microseconds, 1_000_000, 1_000],
+            [$duration->nanoseconds, 1_000_000_000, 1],
+        ] as [$field, $divisor, $scale]) {
+            [$whole, $remainder] = self::tdivmod($field, $divisor);
+            $seconds += (int) $whole;
+            $subNs += $remainder * $scale;
+        }
+        $seconds += intdiv($subNs, num2: 1_000_000_000);
+        $subNs %= 1_000_000_000;
+        if (abs($seconds) >= 9_007_199_254_740_992) {
+            throw new RangeError('Duration time fields exceed the maximum representable range.');
+        }
+        if ($subNs < 0) {
+            $seconds--;
+            $subNs += 1_000_000_000;
+        }
+        return [$seconds, $subNs];
     }
 
     /**

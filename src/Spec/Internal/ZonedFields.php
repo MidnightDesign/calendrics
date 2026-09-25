@@ -209,7 +209,7 @@ final class ZonedFields
         // years past ~9999 or negative years reliably.
         $epochDays = CalendarMath::toJulianDay($year, $month, $day) - 2_440_588;
         $wallSec = ($epochDays * 86_400) + ($hour * 3600) + ($minute * 60) + $second;
-        if ($wallSec > EpochLimits::MAX_EPOCH_SECONDS || $wallSec < -EpochLimits::MAX_EPOCH_SECONDS) {
+        if ($epochDays < -100_000_001 || $epochDays > 100_000_000) {
             throw new RangeError('ZonedDateTime property bag: local date-time is outside the representable range.');
         }
 

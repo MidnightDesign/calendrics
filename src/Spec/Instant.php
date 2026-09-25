@@ -104,13 +104,8 @@ final class Instant implements Stringable
         $digits = ltrim($decimal, characters: '+-');
         $digits = ltrim($digits, characters: '0');
         // Split off the last 9 digits as the sub-second nanosecond magnitude.
-        if (strlen($digits) <= 9) {
-            $secMagnitude = 0;
-            $subMagnitude = (int) $digits;
-        } else {
-            $secMagnitude = (int) substr($digits, offset: 0, length: -9);
-            $subMagnitude = (int) substr($digits, offset: -9);
-        }
+        $secMagnitude = (int) substr($digits, offset: 0, length: -9);
+        $subMagnitude = (int) substr($digits, offset: -9);
         if (!$negative) {
             return [$secMagnitude, $subMagnitude];
         }
@@ -390,12 +385,12 @@ final class Instant implements Stringable
             if (!is_finite($epochMilliseconds) || floor($epochMilliseconds) !== $epochMilliseconds) {
                 throw new RangeError("epochMilliseconds must be a finite integer value, got {$epochMilliseconds}.");
             }
-            $epochMilliseconds = (int) $epochMilliseconds;
         }
         $limit = EpochLimits::MAX_EPOCH_MILLISECONDS;
         if ($epochMilliseconds < -$limit || $epochMilliseconds > $limit) {
             throw new RangeError("epochMilliseconds {$epochMilliseconds} is outside the valid range of ±{$limit}.");
         }
+        $epochMilliseconds = (int) $epochMilliseconds;
         // Guard against int64 overflow when multiplying ms × 10^6 to get nanoseconds.
         // Threshold: floor(PHP_INT_MAX / NS_PER_MILLISECOND) = 9_223_372_036_854.
         // Beyond it, decompose into (epochSec, subNs) and let fromEpochParts()

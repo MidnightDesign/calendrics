@@ -250,7 +250,7 @@ final class DurationTotal
      *
      * @return array{int, int}
      */
-    private static function splitSubsecondField(float $value, int $decimalPlaces): array
+    public static function splitSubsecondField(float $value, int $decimalPlaces): array
     {
         $digits = str_pad(
             string: sprintf('%.0F', $value),
