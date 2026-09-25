@@ -6,6 +6,7 @@ namespace Calendrics\Spec\Internal;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Spec\Duration;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 
 /**
  * Date arithmetic performed once a `relativeTo` anchor has been resolved.
@@ -54,21 +55,7 @@ final class AnchorMath
         $m = (int) $date->format('n');
         $d = (int) $date->format('j');
 
-        $m += $months;
-        // Normalize month into 1-12 range, carrying into years.
-        if ($m > 12) {
-            $y += intdiv(num1: $m - 1, num2: 12);
-            $m = (($m - 1) % 12) + 1;
-        } elseif ($m < 1) {
-            // For negative: m-1 makes the -1 offset work for intdiv.
-            $y += CalendarMath::floorDiv($m - 1, 12);
-            $m = (((($m - 1) % 12) + 12) % 12) + 1;
-        }
-        // Days in the target month (handles leap years). Computed via CalendarMath
-        // rather than a string-built DateTimeImmutable so extended (5-/6-digit) years
-        // do not trip "Double timezone specification" parse errors.
-        $daysInMonth = CalendarMath::calcDaysInMonth($y, $m);
-        $clampedDay = min($d, $daysInMonth);
+        [$y, $m, $clampedDay] = CalendarFactory::get('iso8601')->dateAdd($y, $m, $d, 0, $months, 0, 0, 'constrain');
         return new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
             ->setDate($y, $m, $clampedDay)
             ->setTime(0, 0, 0);
@@ -85,13 +72,16 @@ final class AnchorMath
         if ($years === 0) {
             return $date;
         }
-        $y = (int) $date->format('Y') + $years;
-        $m = (int) $date->format('n');
-        $d = (int) $date->format('j');
-        // Computed via CalendarMath (not a string-built DateTimeImmutable) so extended
-        // (5-/6-digit) years do not trip "Double timezone specification" parse errors.
-        $daysInMonth = CalendarMath::calcDaysInMonth($y, $m);
-        $clampedDay = min($d, $daysInMonth);
+        [$y, $m, $clampedDay] = CalendarFactory::get('iso8601')->dateAdd(
+            (int) $date->format('Y'),
+            (int) $date->format('n'),
+            (int) $date->format('j'),
+            $years,
+            0,
+            0,
+            0,
+            'constrain',
+        );
         return new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
             ->setDate($y, $m, $clampedDay)
             ->setTime(0, 0, 0);
@@ -341,7 +331,7 @@ final class AnchorMath
      * day-count between start and end.
      *
      * @param \DateTimeImmutable $startDate UTC midnight on the start date.
-     * @return array{0: \DateTimeImmutable, 1: int}
+     * @return array{\DateTimeImmutable, int}
      * @throws RangeError if the resulting date falls outside the representable range.
      */
     public static function applyCalendarToDate(Duration $d, \DateTimeImmutable $startDate): array

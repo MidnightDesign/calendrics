@@ -17,6 +17,7 @@ use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\IntlFormatter;
 use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PartialDateFields;
 use Calendrics\Spec\Internal\TimeZoneHelper;
 use Calendrics\Spec\Internal\ZonedArithmetic;
 use Calendrics\Spec\Internal\ZonedDifference;
@@ -1321,168 +1322,15 @@ final class ZonedDateTime implements Stringable
             }
         }
 
-        $calendar = $this->calendarId !== 'iso8601' ? CalendarFactory::get($this->calendarId) : null;
-
-        // --- Non-ISO calendar date resolution ---
-        if ($calendar !== null) {
-            $hasYear = array_key_exists('year', $fields);
-            $hasEra = array_key_exists('era', $fields);
-            $hasEraYear = array_key_exists('eraYear', $fields);
-            $hasMonth = array_key_exists('month', $fields);
-            $hasMonthCode = array_key_exists('monthCode', $fields);
-
-            // Chinese/Dangi have no eras — providing era or eraYear is always a TypeError.
-            if (($hasEra || $hasEraYear) && in_array($this->calendarId, ['chinese', 'dangi'], strict: true)) {
-                throw new TypeError('eraYear and era are invalid for this calendar.');
-            }
-
-            // TC39: era without eraYear (or vice versa) is TypeError when year is not also provided.
-            if ($hasEra && !$hasEraYear && !$hasYear) {
-                throw new TypeError('era provided without eraYear in with() fields.');
-            }
-            if ($hasEraYear && !$hasEra && !$hasYear) {
-                throw new TypeError('eraYear provided without era in with() fields.');
-            }
-
-            // Resolve year: era+eraYear takes precedence over the current year if both provided.
-            // When $hasYear is false, $hasEra implies $hasEraYear (and vice versa) due to checks above.
-            $year = $this->year;
-            if ($hasYear) {
-                $year = CalendarMath::toFiniteInt($fields['year'], 'ZonedDateTime::with() year');
-            } elseif ($hasEra) {
-                $resolved = CalendarMath::resolveYearFromEra(
-                    $calendar,
-                    $fields['era'],
-                    $fields['eraYear'],
-                    'ZonedDateTime::with()',
-                );
-                if ($resolved !== null) {
-                    $year = $resolved;
-                }
-            }
-
-            // Resolve monthCode/month with mutual exclusion.
-            // When neither is provided, default to current monthCode (not ordinal month).
-            $monthCode = null;
-            $month = null;
-            $useMonthCode = false;
-
-            if ($hasMonthCode) {
-                /** @var mixed $mc */
-                $mc = $fields['monthCode'];
-                if (!is_string($mc)) {
-                    throw new RangeError('ZonedDateTime::with() monthCode must be a string.');
-                }
-                $monthCode = $mc;
-                $useMonthCode = true;
-            }
-            if ($hasMonth) {
-                $month = CalendarMath::toFiniteInt($fields['month'], 'ZonedDateTime::with() month');
-                // Validate month/monthCode conflict.
-                if ($monthCode !== null) {
-                    $monthFromCode = $calendar->monthCodeToMonth($monthCode, $year);
-                    if ($month !== $monthFromCode) {
-                        throw new RangeError('Conflicting month and monthCode fields.');
-                    }
-                }
-                $useMonthCode = false; // explicit month takes precedence
-            }
-            if (!$hasMonth && !$hasMonthCode) {
-                // Default: preserve current monthCode.
-                $monthCode = $this->monthCode;
-                $useMonthCode = true;
-            }
-
-            $day = $this->day;
-            if (array_key_exists('day', $fields)) {
-                $day = CalendarMath::toFiniteInt($fields['day'], 'ZonedDateTime::with() day');
-            }
-
-            if ($day < 1) {
-                throw new RangeError("Invalid day {$day}: must be at least 1.");
-            }
-
-            if ($useMonthCode && $monthCode !== null) {
-                [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($year, $monthCode, $day, $overflow);
-            } else {
-                /** @var int $month */
-                if ($month < 1) {
-                    throw new RangeError("Invalid month {$month}: must be at least 1.");
-                }
-                [$isoY, $isoM, $isoD] = $calendar->calendarToIso($year, $month, $day, $overflow);
-            }
-
-            return ZonedFields::fromLocal(
-                $isoY,
-                $isoM,
-                $isoD,
-                $h,
-                $min,
-                $sec,
-                $ms,
-                $us,
-                $ns,
-                $this->timeZoneId,
-                $this->calendarId,
-                $disambiguation,
-            );
-        }
-
-        // --- ISO calendar date resolution ---
-        $year = $lc['year'];
-        $month = $lc['month'];
-        $day = $lc['day'];
-
-        if (array_key_exists('year', $fields)) {
-            $year = CalendarMath::toFiniteInt($fields['year'], 'ZonedDateTime::with() year');
-        }
-
-        $hasMonth = array_key_exists('month', $fields);
-        $hasMonthCode = array_key_exists('monthCode', $fields);
-        if ($hasMonthCode) {
-            /** @var mixed $mc */
-            $mc = $fields['monthCode'];
-            if (!is_string($mc)) {
-                throw new RangeError('ZonedDateTime::with() monthCode must be a string.');
-            }
-            $month = CalendarMath::monthCodeToMonth($mc);
-        }
-        if ($hasMonth) {
-            $newMonth = CalendarMath::toFiniteInt($fields['month'], 'ZonedDateTime::with() month');
-            if ($hasMonthCode && $newMonth !== $month) {
-                throw new RangeError('Conflicting month and monthCode fields.');
-            }
-            $month = $newMonth;
-        }
-
-        if (array_key_exists('day', $fields)) {
-            $day = CalendarMath::toFiniteInt($fields['day'], 'ZonedDateTime::with() day');
-        }
-
-        if ($month < 1) {
-            throw new RangeError("Invalid month {$month}: must be at least 1.");
-        }
-        if ($day < 1) {
-            throw new RangeError("Invalid day {$day}: must be at least 1.");
-        }
-
-        if ($overflow === 'constrain') {
-            /**
-             * @psalm-suppress UnnecessaryVarAnnotation — Mago can't narrow min()
-             */
-            $month = min(12, $month);
-            $maxDay = CalendarMath::calcDaysInMonth($year, $month);
-            $day = min($maxDay, $day);
-        } else {
-            // overflow === 'reject'
-            if ($month > 12) {
-                throw new RangeError("Invalid month {$month}: must be 1–12.");
-            }
-            $maxDay = CalendarMath::calcDaysInMonth($year, $month);
-            if ($day > $maxDay) {
-                throw new RangeError("Day {$day} is out of range for {$year}-{$month} (max {$maxDay}).");
-            }
-        }
+        $date = PartialDateFields::prepare(
+            $fields,
+            $this->calendarId,
+            $this->year,
+            $this->monthCode,
+            $this->day,
+            'ZonedDateTime::with()',
+        );
+        [$year, $month, $day] = $date->resolve($overflow);
 
         // If no offset field was provided but offset option requires preserving,
         // use the ZDT's current offset for wall-to-epoch conversion. Per TC39,
