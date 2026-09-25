@@ -604,20 +604,6 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
 
             $calendarId = CalendarMath::validateAnnotations($m[3], $s);
 
-            // Validate month and day.
-            if ($month < 1 || $month > 12) {
-                throw new RangeError("PlainMonthDay::from() cannot parse \"{$s}\": month {$month} out of range 1–12.");
-            }
-            if ($day < 1) {
-                throw new RangeError("PlainMonthDay::from() cannot parse \"{$s}\": day {$day} must be at least 1.");
-            }
-            $maxDay = CalendarMath::calcDaysInMonth(1972, $month);
-            if ($day > $maxDay) {
-                throw new RangeError(
-                    "PlainMonthDay::from() cannot parse \"{$s}\": day {$day} exceeds {$maxDay} for month {$month}.",
-                );
-            }
-
             // Per TC39 spec: month-day form (no year) with non-ISO calendar is invalid,
             // because a year is required to resolve the reference ISO year.
             if ($calendarId !== null && $calendarId !== 'iso8601') {

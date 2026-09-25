@@ -28,9 +28,6 @@ final class CalendarMath
         }
         /** @var mixed $raw */
         $raw = $bag[$field];
-        if ($raw === null) {
-            throw new RangeError("{$className} property bag {$field} field must not be undefined.");
-        }
         return self::toFiniteInt($raw, "{$className} {$field}");
     }
 

@@ -496,20 +496,6 @@ final class Duration implements Stringable
      */
     public function with(array|object $fields): self
     {
-        // Reject Temporal objects (IsPartialTemporalObject step 2).
-        if (
-            $fields instanceof self
-            || $fields instanceof PlainDate
-            || $fields instanceof PlainDateTime
-            || $fields instanceof PlainTime
-            || $fields instanceof PlainYearMonth
-            || $fields instanceof PlainMonthDay
-            || $fields instanceof ZonedDateTime
-            || $fields instanceof Instant
-        ) {
-            throw new TypeError('Duration::with() argument must not be a Temporal object.');
-        }
-
         $fields = FieldBag::forFields($fields, self::PLURAL_FIELDS);
 
         // TC39 ToTemporalPartialDurationRecord: at least one recognized plural field required.

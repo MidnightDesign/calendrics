@@ -418,9 +418,6 @@ final class DurationRounding
                 $totalAbsDaysF = (float) $absD + ((float) $subDayNs / 86_400_000_000_000.0);
             }
             $roundedAbsDays = (int) self::roundNsFloat($totalAbsDaysF, (float) $increment, $signedMode);
-            if (((float) $roundedAbsDays * 86_400.0) >= 9_007_199_254_740_992.0) {
-                throw new RangeError('Duration time fields exceed the maximum representable range after rounding.');
-            }
             /** @psalm-suppress InvalidOperand */
             return new Duration(0, 0, 0, $sign * $roundedAbsDays, 0, 0, 0, 0, 0, 0);
         }
