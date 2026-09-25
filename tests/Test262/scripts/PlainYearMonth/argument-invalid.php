@@ -11,5 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $tests = [[2020, 0, 24], [2020, 13, 24], [2020, -3, 24], [2020, 12, 32], [2020, 2, 30], [2019, 2, 29], [2019, 2, 0], [2019, 2, -20]];
 foreach ($tests as $__entry__) {
 [$year, $month, $day] = array_pad($__entry__, 3, null);
-Assert::throws(\RangeException::class, function () use (&$year, &$month, &$day) { return new \Calendrics\Spec\PlainYearMonth($year, $month, null, $day); }, "year={$year}, month={$month}, day={$day}");
+Assert::throws(\RangeException::class, function () use (&$year, &$month, &$day) { return new \Calendrics\Spec\PlainYearMonth($year, $month, referenceISODay: $day); }, "year={$year}, month={$month}, day={$day}");
 }

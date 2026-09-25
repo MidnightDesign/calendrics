@@ -7,6 +7,7 @@ namespace Calendrics\Tests\Test262;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Instant;
 use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\PlainLocaleFormat;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Calendrics\Spec\ZonedDateTime;
 
@@ -16,12 +17,15 @@ use Calendrics\Spec\ZonedDateTime;
  * `formatToParts()`, and `resolvedOptions()` over Temporal spec values and the
  * legacy {@see JsDate} shim.
  *
- * `format()` delegates to the receiver type's own `toLocaleString()` — the exact
- * relationship ECMA-402 defines (`Temporal.X.prototype.toLocaleString` is
- * specified as `new Intl.DateTimeFormat(locales, options).format(this)`), so
- * fixture equalities compare the same code path a JS engine would share, while
- * cross-checks against {@see JsDate} and the parts-based assertions exercise the
- * option handling independently.
+ * This is a second entry point into the same formatting code, not a wrapper around
+ * `Temporal.X.prototype.toLocaleString`, and ECMA-402 keeps the two apart. A
+ * formatter resolves one component set in its constructor, for every value it will
+ * later be handed, so `{ dateStyle, timeStyle }` is legal here and narrows to the
+ * date half when a `PlainDate` arrives; the same options passed to
+ * `PlainDate.prototype.toLocaleString` throw, because that entry point resolves
+ * against the receiver's own data model. {@see IntlDateTimeFormatOptions} resolves
+ * the constructor's option set once and narrows it to each value's data model,
+ * throwing a TypeError when nothing survives.
  *
  * `formatToParts()` has no ext-intl equivalent, so it is reconstructed from the
  * resolved ICU pattern: field runs in the pattern are formatted one at a time and
@@ -36,7 +40,7 @@ final class IntlDateTimeFormat
     /** @var string|array<array-key, mixed>|null */
     private readonly string|array|null $locales;
 
-    /** @var array<string, mixed> */
+    /** @var array<string, mixed> The options bag with the constructor's defaults resolved in. */
     private readonly array $options;
 
     /** Maps an ICU pattern field character to its ECMA-402 part type. */
@@ -80,32 +84,24 @@ final class IntlDateTimeFormat
         $this->locales = is_string($locales) || is_array($locales) ? $locales : null;
         /** @var array<string, mixed> $opts */
         $opts = is_object($options) ? get_object_vars($options) : (is_array($options) ? $options : []);
-        $this->options = $opts;
+        $this->options = IntlDateTimeFormatOptions::withConstructorDefaults($opts);
     }
 
     /**
      * ECMA-402 DateTimeFormat.prototype.format ( date ).
      *
-     * Temporal values format exactly as their `toLocaleString(locales, options)`
-     * would — the identity the fixtures assert. ZonedDateTime is rejected with
-     * TypeError per ECMA-402 (it must be converted before formatting). Numbers
-     * are epoch milliseconds, matching legacy-Date formatting.
+     * ZonedDateTime is rejected with TypeError per ECMA-402 (it must be converted
+     * before formatting). Numbers are epoch milliseconds, matching legacy-Date
+     * formatting.
      */
     public function format(mixed $value): string
     {
-        if ($value instanceof ZonedDateTime) {
-            throw new TypeError('Intl.DateTimeFormat cannot format a Temporal.ZonedDateTime; convert it first.');
+        [$formatter, $epochSec, $subNs] = $this->resolveFor($value);
+        $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs);
+        if ($result === false) {
+            throw new \RuntimeException('Intl.DateTimeFormat.format(): IntlDateFormatter::format() failed.');
         }
-        if ($value instanceof Instant || $value instanceof PlainLocaleFormattable) {
-            return $value->toLocaleString($this->locales, $this->options);
-        }
-        if ($value instanceof JsDate) {
-            return $value->toLocaleString($this->locales, $this->options);
-        }
-        if (is_int($value) || is_float($value)) {
-            return new JsDate($value)->toLocaleString($this->locales, $this->options);
-        }
-        throw new TypeError('Intl.DateTimeFormat.format(): unsupported value.');
+        return $result;
     }
 
     /**
@@ -116,12 +112,12 @@ final class IntlDateTimeFormat
      */
     public function formatToParts(mixed $value): array
     {
-        [$formatter, $timestamp] = $this->formatterFor($value);
+        [$formatter, $epochSec, $subNs] = $this->resolveFor($value);
         $pattern = $formatter->getPattern();
         if ($pattern === false) {
             throw new \RuntimeException('formatToParts(): formatter has no retrievable pattern.');
         }
-        return self::patternToParts($formatter, $pattern, $timestamp);
+        return $this->patternToParts($formatter, $pattern, $epochSec, $subNs);
     }
 
     /**
@@ -131,59 +127,90 @@ final class IntlDateTimeFormat
      */
     public function resolvedOptions(): object
     {
-        $locale = IntlFormatter::resolveLocale($this->locales);
+        $locale = $this->locale();
         $calendar = IntlFormatter::resolveCalendar($locale, $this->options);
-        /** @var mixed $tzOpt */
-        $tzOpt = $this->options['timeZone'] ?? null;
         return (object) [
             'locale' => $locale,
             'calendar' => $calendar,
             'calendarId' => $calendar,
-            'timeZone' => is_string($tzOpt) ? $tzOpt : 'UTC',
+            'timeZone' => $this->timeZone(),
             'numberingSystem' => 'latn',
         ];
     }
 
     /**
-     * Builds the IntlDateFormatter and timestamp for a value, mirroring exactly
-     * what that value's toLocaleString() builds: same default components, same
-     * forced-UTC rule for {@see PlainLocaleFormattable} types, same timestamp
-     * derivation (the protected trait hooks are read via reflection to guarantee
-     * the mirror can't drift).
+     * ECMA-402 HandleDateTimeValue: narrows this formatter's options to what $value's
+     * data model can express, then builds the formatter and the epoch instant to render.
      *
-     * @return array{\IntlDateFormatter, float}
+     * The epoch instant stays split into whole seconds and sub-second nanoseconds so
+     * that values at the ±271821-year limits keep their milliseconds — see
+     * {@see IntlFormatter::formatEpoch()}.
+     *
+     * @return array{\IntlDateFormatter, int, int}
+     * @throws TypeError if $value cannot be formatted at all, or if the formatter asks
+     *                   for nothing $value can express.
      */
-    private function formatterFor(mixed $value): array
+    private function resolveFor(mixed $value): array
     {
-        $locale = IntlFormatter::resolveLocale($this->locales);
+        $locale = $this->locale();
 
         if ($value instanceof PlainLocaleFormattable) {
-            // Mago mis-resolves ReflectionMethod::invoke() once the receiver is typed as
-            // the interface, so the hooks' own declared return types are restated here.
-            /** @var string $components */
-            $components = new \ReflectionMethod($value, 'localeDefaultComponents')->invoke($value);
-            /** @var int|float $timestamp */
-            $timestamp = new \ReflectionMethod($value, 'toLocaleTimestamp')->invoke($value);
-            // Plain types always format in UTC (see HasPlainLocaleString::toLocaleString).
+            $format = PlainLocaleFormat::from($value);
+            $options = IntlDateTimeFormatOptions::forKind($this->options, $format->components);
+            IntlFormatter::validateCalendar($format->calendarId, $locale, $options, $format->components);
             return [
-                IntlFormatter::buildIntlFormatter($locale, 'UTC', $this->options, $components),
-                (float) $timestamp,
+                IntlFormatter::buildIntlFormatter($locale, 'UTC', $options, $format->components),
+                $format->epochSec,
+                $format->subNs,
             ];
         }
 
+        self::assertExactValue($value);
+        $options = IntlDateTimeFormatOptions::forKind($this->options, 'exact');
+        $timeZone = $this->timeZone();
+        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $options);
+
+        if ($value instanceof Instant) {
+            [$epochSec, $subNs] = $value->epochParts();
+            return [$formatter, $epochSec, $subNs];
+        }
+
         $epochMs = match (true) {
-            $value instanceof Instant => $value->epochMilliseconds,
             $value instanceof JsDate => $value->epochMilliseconds,
             is_int($value), is_float($value) => $value,
-            default => throw new TypeError('Intl.DateTimeFormat.formatToParts(): unsupported value.'),
+            default => throw new \LogicException('Exact value validation and conversion are inconsistent.'),
         };
+        $epochSec = (int) floor((float) $epochMs / 1_000.0);
+        $subNs = (int) round(((float) $epochMs - ((float) $epochSec * 1_000.0)) * 1_000_000.0);
+        return [$formatter, $epochSec, $subNs];
+    }
+
+    /**
+     * @throws TypeError for values ECMA-402 refuses to format: a ZonedDateTime, which
+     *                   must be converted first, and anything that is neither a
+     *                   Temporal value nor an epoch-millisecond number.
+     */
+    private static function assertExactValue(mixed $value): void
+    {
+        if ($value instanceof ZonedDateTime) {
+            throw new TypeError('Intl.DateTimeFormat cannot format a Temporal.ZonedDateTime; convert it first.');
+        }
+        if ($value instanceof Instant || $value instanceof JsDate || is_int($value) || is_float($value)) {
+            return;
+        }
+        throw new TypeError('Intl.DateTimeFormat: unsupported value.');
+    }
+
+    private function locale(): string
+    {
+        return IntlFormatter::resolveLocale($this->locales);
+    }
+
+    private function timeZone(): string
+    {
         /** @var mixed $tzOpt */
         $tzOpt = $this->options['timeZone'] ?? null;
-        $timeZone = is_string($tzOpt) ? $tzOpt : 'UTC';
-        return [
-            IntlFormatter::buildIntlFormatter($locale, $timeZone, $this->options),
-            (float) $epochMs / 1000.0,
-        ];
+        return is_string($tzOpt) ? $tzOpt : 'UTC';
     }
 
     /**
@@ -192,7 +219,7 @@ final class IntlDateTimeFormat
      *
      * @return list<IntlFormatPart>
      */
-    private static function patternToParts(\IntlDateFormatter $formatter, string $pattern, float $timestamp): array
+    private function patternToParts(\IntlDateFormatter $formatter, string $pattern, int $epochSec, int $subNs): array
     {
         $parts = [];
         $literal = '';
@@ -234,7 +261,7 @@ final class IntlDateTimeFormat
                 }
                 $sub = clone $formatter;
                 $sub->setPattern($run);
-                $value = $sub->format($timestamp);
+                $value = IntlFormatter::formatEpoch($sub, $epochSec, $subNs);
                 if ($value === false || $value === '') {
                     continue;
                 }

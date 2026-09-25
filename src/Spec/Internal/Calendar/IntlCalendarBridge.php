@@ -27,27 +27,6 @@ final class IntlCalendarBridge implements CalendarProtocol
     /** ICU field ID for IS_LEAP_MONTH. */
     private const int FIELD_IS_LEAP_MONTH = 22;
 
-    /**
-     * Map from TC39 calendar ID to ICU calendar type.
-     *
-     * @var array<string, string>
-     */
-    private const CALENDAR_TO_ICU = [
-        'buddhist' => 'buddhist',
-        'chinese' => 'chinese',
-        'coptic' => 'coptic',
-        'dangi' => 'dangi',
-        'ethioaa' => 'ethiopic-amete-alem',
-        'ethiopic' => 'ethiopic',
-        'gregory' => 'gregorian',
-        'islamic-civil' => 'islamic-civil',
-        'islamic-tbla' => 'islamic-tbla',
-        'islamic-umalqura' => 'islamic-umalqura',
-        'japanese' => 'japanese',
-        'persian' => 'persian',
-        'roc' => 'roc',
-    ];
-
     private readonly \IntlCalendar $intlCal;
 
     /** Calendars whose year/month/day share the ISO 8601 proleptic Gregorian structure. */
@@ -104,7 +83,7 @@ final class IntlCalendarBridge implements CalendarProtocol
      * "calYear:monthCode:calDay:overflow". Only successful returns are cached;
      * exception paths re-run the computation.
      *
-     * @var array<string, array{0: int, 1: int<1, 12>, 2: int<1, 31>}>
+     * @var array<string, array{int, int<1, 12>, int<1, 31>}>
      */
     private array $calendarToIsoFromMonthCodeCache = [];
 
@@ -121,23 +100,7 @@ final class IntlCalendarBridge implements CalendarProtocol
     public function __construct(
         private readonly string $calendarId,
     ) {
-        $icuType = self::CALENDAR_TO_ICU[$calendarId] ?? throw new RangeError(
-            "No ICU mapping for calendar \"{$calendarId}\".",
-        );
-        $cal = \IntlCalendar::createInstance('UTC', sprintf('@calendar=%s', $icuType));
-        // TC39 requires proleptic Gregorian (no Julian cutover). ICU's Gregorian
-        // calendar defaults to a 1582-10-15 cutover; setting the change date to
-        // the minimum float value makes it fully proleptic.
-        if ($cal instanceof \IntlGregorianCalendar) {
-            $cal->setGregorianChange(PHP_FLOAT_MIN);
-        }
-        // IntlCalendar::createInstance is signature-nullable, but per
-        // ext/intl/calendar/calendar_methods.cpp it can only return null when
-        // (a) the timezone arg is invalid (we pass the literal 'UTC') or
-        // (b) ICU fails under OOM. No analyzer narrows by argument literal,
-        // so suppress the ones that flag this assignment.
-        // @mago-ignore analysis:invalid-property-assignment-value
-        /** @psalm-suppress PossiblyNullPropertyAssignmentValue */
+        $cal = IntlCalendarFactory::forCalendarId('UTC', $calendarId);
         $this->intlCal = $cal;
         $this->isGregorianBased = match ($calendarId) {
             'gregory', 'japanese', 'buddhist', 'roc' => true,
@@ -534,7 +497,7 @@ final class IntlCalendarBridge implements CalendarProtocol
     }
 
     /**
-     * @return array{0: int, 1: int<1, 12>, 2: int<1, 31>}
+     * @return array{int, int<1, 12>, int<1, 31>}
      */
     private function calendarToIsoFromMonthCodeUncached(
         int $calYear,
@@ -1413,7 +1376,7 @@ final class IntlCalendarBridge implements CalendarProtocol
     /**
      * Reads back epoch ms from IntlCalendar, converts to ISO, and applies overflow handling.
      *
-     * @return array{0: int, 1: int<1, 12>, 2: int<1, 31>} [isoYear, isoMonth, isoDay]
+     * @return array{int, int<1, 12>, int<1, 31>} [isoYear, isoMonth, isoDay]
      */
     private function resolveAndConstrain(int $calDay, string $overflow): array
     {
@@ -1538,7 +1501,7 @@ final class IntlCalendarBridge implements CalendarProtocol
      * should be after month 6 (ICU 5). This means ICU's "regular M07" is
      * actually "leap M06", and ICU's "leap M07" is actually "regular M07".
      *
-     * @return array{0: int, 1: int} [icuMonth, isLeap]
+     * @return array{int, int} [icuMonth, isLeap]
      */
     private function correctedChineseMonthFields(): array
     {

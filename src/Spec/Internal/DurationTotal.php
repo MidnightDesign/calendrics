@@ -39,7 +39,9 @@ final class DurationTotal
      * options bag, still needed here because the `relativeTo` anchor is read from it.
      *
      * @param 'years'|'months'|'weeks'|'days'|'hours'|'minutes'|'seconds'|'milliseconds'|'microseconds'|'nanoseconds' $unit
-     * @param string|array<array-key, mixed>|object $totalOf
+     * @param string|array<array-key, mixed>|object $totalOf The caller has already put
+     *     any `relativeTo` through {@see RelativeTo::readOption()}, so what is checked
+     *     here are only the range rules that depend on $d and $unit.
      * @throws RangeError if the unit is unavailable without relativeTo.
      * @throws TypeError if relativeTo is present but not a valid anchor.
      */
@@ -61,7 +63,7 @@ final class DurationTotal
             return self::calendar($d, $unit, $rt, $zdtInfoCal);
         }
 
-        // Validate relativeTo if provided (even for pure-time unit computations).
+        // Only the string and ZonedDateTime spellings can break a range rule.
         if (is_array($totalOf) && array_key_exists('relativeTo', $totalOf)) {
             /** @var mixed $rtRaw */
             $rtRaw = $totalOf['relativeTo'];
@@ -119,8 +121,6 @@ final class DurationTotal
                         }
                     }
                 }
-            } elseif ($rtRaw instanceof PlainDate) {
-                // PlainDate objects are always valid for pure-time computations; no extra validation needed.
             } elseif ($rtRaw instanceof ZonedDateTime) {
                 // ZonedDateTime objects are valid relativeTo values for pure-time computations.
                 // For a non-blank duration, the target instant (anchor epoch + duration) must
@@ -135,15 +135,6 @@ final class DurationTotal
                         );
                     }
                 }
-            } elseif ($rtRaw !== null) {
-                if (is_object($rtRaw)) {
-                    $rtForVal = RelativeTo::normalizeBag($rtRaw);
-                } elseif (is_array($rtRaw)) {
-                    $rtForVal = $rtRaw;
-                } else {
-                    throw new TypeError('relativeTo must be a string or property bag array.');
-                }
-                RelativeTo::validatePropertyBag($rtForVal);
             }
         }
 
@@ -224,11 +215,12 @@ final class DurationTotal
         // pair the way DurationRounding does. The combined nanosecond count passes int64
         // long before MaxTimeDuration, and float64's ulp up there is milliseconds wide,
         // so summing into a float first and scaling afterwards drops digits the spec
-        // keeps — 8692288669465520513 ms came back a whole ulp out. Both halves of the
-        // pair stay inside int64, and the single conversion at the end is the one
-        // rounding TC39 allows.
-        $absNs = (int) abs((float) $d->nanoseconds);
-        $absUs = (int) abs((float) $d->microseconds);
+        // keeps — 8692288669465520513 ms came back a whole ulp out. Split nanoseconds
+        // and microseconds before casting because either field can itself exceed int64.
+        // The resulting whole-second and remainder parts stay inside int64, and the
+        // single conversion at the end is the one rounding TC39 allows.
+        $absNsField = abs((float) $d->nanoseconds);
+        $absUsField = abs((float) $d->microseconds);
         $absMs = (int) abs((float) $d->milliseconds);
         $absSec =
             ((int) abs((float) $d->days) * 86_400)
@@ -236,10 +228,10 @@ final class DurationTotal
             + ((int) abs((float) $d->minutes) * 60)
             + (int) abs((float) $d->seconds);
 
-        // Carry each sub-second field up separately: a single milliseconds field may hold
-        // enough to overflow int64 once multiplied out to nanoseconds.
-        $absUs += intdiv(num1: $absNs, num2: 1_000_000_000) * 1_000_000;
-        $absMs += intdiv(num1: $absUs, num2: 1_000_000) * 1_000;
+        [$nsSeconds, $absNs] = self::splitSubsecondField($absNsField, 9);
+        $absSec += $nsSeconds;
+        [$usSeconds, $absUs] = self::splitSubsecondField($absUsField, 6);
+        $absSec += $usSeconds;
         $absSec += intdiv(num1: $absMs, num2: 1_000);
         $subNs = (($absMs % 1_000) * 1_000_000) + (($absUs % 1_000_000) * 1_000) + ($absNs % 1_000_000_000);
         $absSec += intdiv(num1: $subNs, num2: 1_000_000_000);
@@ -253,6 +245,28 @@ final class DurationTotal
     }
 
     /**
+     * Splits a non-negative float64-representable integer into whole seconds and
+     * the remaining field units without rounding the quotient up at large magnitudes.
+     *
+     * @return array{int, int}
+     */
+    private static function splitSubsecondField(float $value, int $decimalPlaces): array
+    {
+        $digits = str_pad(
+            string: sprintf('%.0F', $value),
+            length: $decimalPlaces + 1,
+            pad_string: '0',
+            pad_type: STR_PAD_LEFT,
+        );
+        $splitAt = strlen($digits) - $decimalPlaces;
+
+        return [
+            (int) substr(string: $digits, offset: 0, length: $splitAt),
+            (int) substr(string: $digits, offset: $splitAt),
+        ];
+    }
+
+    /**
      * Validates and resolves the `relativeTo` option for `Duration::total()`'s
      * calendar paths. Returns the property-bag form of the anchor — one
      * {@see RelativeTo::anchorYmd()} can read a year, month and day out of —
@@ -261,28 +275,16 @@ final class DurationTotal
      * @param mixed  $totalOf  the options bag passed to `total()` (string-form
      *     totalOf is invalid here — calendar units require an options object,
      *     never a bare smallestUnit string).
-     * @param string $missingMsg  message for RangeError when the
-     *     `relativeTo` key is absent. The TypeError thrown for an explicit null
-     *     and the field-shape errors are spec-mandated and identical across
-     *     calling sites.
+     * @param string $missingMsg  message for RangeError when the `relativeTo` key is
+     *     absent — the one error this raises that is specific to the calling site.
      * @return array{0: array<array-key, mixed>, 1: array{epochSec: int, subNs: int, tzId: string, year: int, month: int, day: int, hour: int, minute: int, second: int}|null}
      *     [resolvedBag, zdtInfo].
      * @throws RangeError if relativeTo is absent.
-     * @throws \TypeError if relativeTo is null, not String/Object, or the
-     *     resolved bag names no year, month/monthCode, or day.
      */
     private static function resolveRelativeTo(mixed $totalOf, string $missingMsg): array
     {
         if (!is_array($totalOf) || !array_key_exists('relativeTo', $totalOf)) {
             throw new RangeError($missingMsg);
-        }
-        // Per TC39 GetTemporalRelativeToOption: present-but-null relativeTo is
-        // not a String or Object → TypeError. (Distinct from the absent case,
-        // which is RangeError above.) test262
-        // Duration/prototype/total/does-not-accept-non-string-primitives-for-relativeTo
-        // pins this distinction.
-        if ($totalOf['relativeTo'] === null) {
-            throw new TypeError('relativeTo must be a string, property bag, or Temporal date/datetime.');
         }
         /** @var mixed $rt */
         $rt = $totalOf['relativeTo'];
@@ -297,11 +299,7 @@ final class DurationTotal
             if (is_object($rt)) {
                 $rt = RelativeTo::normalizeBag($rt);
             }
-            if (is_array($rt)) {
-                RelativeTo::validatePropertyBag($rt);
-            } else {
-                throw new TypeError('relativeTo must be a string or property bag.');
-            }
+            assert(is_array($rt), description: 'readOption() rejected every other spelling before this');
         }
         return [$rt, RelativeTo::resolveZdt($totalOf['relativeTo'])];
     }

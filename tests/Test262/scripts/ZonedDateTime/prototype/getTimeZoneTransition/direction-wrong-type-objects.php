@@ -11,7 +11,6 @@ use Calendrics\Tests\Test262\JsUndefined;
 $zdt = new \Calendrics\Spec\ZonedDateTime(0, 'UTC');
 $rangeErrorValues = [false, 42, 55, null];
 foreach ($rangeErrorValues as $badValue) {
-if ($badValue === null) { continue; }
 Assert::throws(\RangeException::class, function () use (&$zdt, &$badValue) { return $zdt->getTimeZoneTransition((object) JsUndefined::strip(['direction' => $badValue])); }, 'Non-Symbol throws a RangeError');
 }
 Assert::throws(\TypeError::class, function () use (&$zdt) { return $zdt->getTimeZoneTransition((object) JsUndefined::strip(['direction' => \Calendrics\Tests\Test262\JsSymbol::singleton()])); }, 'Symbol throws a TypeError');

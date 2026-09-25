@@ -53,8 +53,8 @@
         }
     },
     "scripts": {
-        "test": "phpunit tests/",
-        "test-coverage": "phpunit tests/ --coverage-xml build/coverage/coverage-xml --log-junit build/coverage/junit.xml",
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-xml build/coverage/coverage-xml --log-junit build/coverage/junit.xml",
         "test262:transpile": [
             "node tools/transpile-test262.mjs tests/Test262/data",
             "mago format tests/Test262/scripts"

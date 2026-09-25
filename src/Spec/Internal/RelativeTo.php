@@ -53,8 +53,49 @@ final class RelativeTo
     ];
 
     /**
-     * Reports whether a valid, non-null `relativeTo` is present in the options,
-     * throwing if one is present but malformed.
+     * TC39 GetTemporalRelativeToOption. Every entry point that reads `relativeTo` calls
+     * this before it knows whether it will need the anchor, so an unusable one is
+     * rejected here rather than at the point of use.
+     *
+     * Only an absent key gets through untouched — the PHP spelling of JS `undefined`,
+     * the sole value the operation treats as "no anchor".
+     *
+     * @param array<array-key, mixed> $options An options bag already normalized by {@see Options}.
+     * @throws RangeError for invalid relativeTo strings or property bags.
+     * @throws TypeError for invalid relativeTo types.
+     */
+    public static function readOption(array $options): void
+    {
+        if (!array_key_exists('relativeTo', $options)) {
+            return;
+        }
+        /** @var mixed $rt */
+        $rt = $options['relativeTo'];
+        // Step 5.a: a value that is neither an Object nor a String is a TypeError, and
+        // PHP null is JS null, not JS undefined.
+        if ($rt === null) {
+            throw new TypeError('relativeTo must be a string, property bag, or Temporal date/datetime.');
+        }
+        if ($rt instanceof PlainDate || $rt instanceof ZonedDateTime) {
+            return; // PlainDate and ZonedDateTime objects are valid relativeTo values
+        }
+        if (is_string($rt)) {
+            self::parseString($rt); // throws on invalid
+            return;
+        }
+        if (is_object($rt)) {
+            $rt = self::normalizeBag($rt);
+        }
+        if (is_array($rt)) {
+            self::validatePropertyBag($rt);
+            return;
+        }
+        throw new TypeError('relativeTo must be a string or property bag array.');
+    }
+
+    /**
+     * Reads the option as {@see self::readOption()} does, and reports whether it named
+     * an anchor — for the callers that go on to ask whether they needed one.
      *
      * @param array<array-key, mixed> $options An options bag already normalized by {@see Options}.
      * @throws RangeError for invalid relativeTo strings or property bags.
@@ -62,36 +103,8 @@ final class RelativeTo
      */
     public static function isPresent(array $options): bool
     {
-        if (!array_key_exists('relativeTo', $options)) {
-            return false;
-        }
-        /** @var mixed $rt */
-        $rt = $options['relativeTo'];
-        // PHP null is treated as the option being absent. test262 fixtures pass `null`
-        // in `[null, plainRelativeTo, zonedRelativeTo]` parametric tables (for
-        // non-calendar Durations) and expect the round to succeed — collapsing
-        // PHP null to "absent" matches that. Genuinely-typed wrong-type fixtures
-        // (relativeto-wrong-type) cover the same path: when the calling context
-        // does require an anchor, the absent-relativeTo branch raises
-        // RangeError ≡ JS RangeError.
-        if ($rt === null) {
-            return false;
-        }
-        if ($rt instanceof PlainDate || $rt instanceof ZonedDateTime) {
-            return true; // PlainDate and ZonedDateTime objects are valid relativeTo values
-        }
-        if (is_string($rt)) {
-            self::parseString($rt); // throws on invalid
-            return true;
-        }
-        if (is_object($rt)) {
-            $rt = self::normalizeBag($rt);
-        }
-        if (is_array($rt)) {
-            self::validatePropertyBag($rt);
-            return true;
-        }
-        throw new TypeError('relativeTo must be a string or property bag array.');
+        self::readOption($options);
+        return array_key_exists('relativeTo', $options);
     }
 
     /**
@@ -181,10 +194,8 @@ final class RelativeTo
     /**
      * The local date a `relativeTo` property bag denotes, as a day count.
      *
-     * ToRelativeTemporalObject builds the anchor with overflow=constrain, so an
-     * out-of-range month or day clamps instead of throwing; only a year outside the
-     * ISO limits leaves nothing to clamp towards. Clamping first also keeps the
-     * Julian-day arithmetic inside int64, which an unbounded field would blow past.
+     * Field resolution constrains the date and checks its representable range
+     * before converting it to a day count.
      *
      * @param array<array-key,mixed> $bag
      * @throws RangeError if the year is outside the ISO date limits.
@@ -192,15 +203,7 @@ final class RelativeTo
     private static function bagEpochDays(array $bag): int
     {
         [$year, $month, $day] = self::anchorYmd($bag);
-        if ($year < -271_821 || $year > 275_760) {
-            throw new RangeError('relativeTo property bag is outside the representable date range.');
-        }
-        $month = max(1, min(12, $month));
-        return AnchorMath::isoDateToEpochDays(
-            $year,
-            $month,
-            max(1, min(CalendarMath::calcDaysInMonth($year, $month), $day)),
-        );
+        return AnchorMath::isoDateToEpochDays($year, $month, $day);
     }
 
     /**
@@ -296,62 +299,18 @@ final class RelativeTo
     }
 
     /**
-     * Extracts the ISO year/month/day anchor from a validated relativeTo property
-     * bag. The bag is guaranteed to name a year — as 'year' or, on a calendar with
-     * eras, as 'era' + 'eraYear' — plus 'month' or 'monthCode', and 'day' (see
-     * {@see self::validatePropertyBag()}); its numeric fields have already been
-     * checked for Infinity/NaN, so each value only needs ToIntegerWithTruncation — an
-     * int passes through unchanged, every other finite numeric/coercible value goes
-     * through PHP's `(int)` cast, which truncates toward zero exactly as the spec
-     * requires. When only 'monthCode' is present the month number is the digits after
-     * the leading 'M' (a trailing leap-marker 'L', as in "M05L", is dropped by the
-     * `(int)` cast).
+     * Resolves a validated relativeTo property bag to a constrained ISO date.
      *
-     * @param array<array-key,mixed> $bag
+     * @param array<array-key, mixed> $bag
      * @return array{int, int, int} [year, month, day]
      */
     public static function anchorYmd(array $bag): array
     {
-        $year = self::anchorYear($bag);
-        if (array_key_exists('month', $bag)) {
-            $month = self::truncateToInteger($bag['month']);
-        } else {
-            /** @var mixed $monthCodeRaw */
-            $monthCodeRaw = $bag['monthCode'];
-            /** @phpstan-ignore cast.string */
-            $month = (int) substr(string: is_string($monthCodeRaw) ? $monthCodeRaw : (string) $monthCodeRaw, offset: 1);
-        }
-        $day = self::truncateToInteger($bag['day']);
-        return [$year, $month, $day];
-    }
+        // Reuse the canonical identifier so calendar values are not coerced twice.
+        $bag['calendar'] = self::bagCalendarId($bag) ?? 'iso8601';
+        $date = DateFields::fromBag($bag);
 
-    /**
-     * The year the anchor names: the 'year' field, or — on a calendar with eras —
-     * the year its 'era'/'eraYear' pair resolves to. Mirrors {@see DateFields::fromBag()},
-     * where a resolved era likewise wins over a 'year' handed in alongside it. The
-     * pair resolves to null when either half is null — PHP's spelling of JS
-     * `undefined`, which the spec reads as the field being absent.
-     *
-     * @param array<array-key,mixed> $bag
-     * @throws RangeError if 'eraYear' is not a finite number.
-     * @throws TypeError if 'era' cannot be coerced to a string.
-     */
-    private static function anchorYear(array $bag): int
-    {
-        $calendarId = self::bagCalendarId($bag);
-        if ($calendarId !== null && CalendarMath::supportsEras($calendarId)) {
-            $resolved = CalendarMath::resolveYearFromEra(
-                CalendarFactory::get($calendarId),
-                $bag['era'] ?? null,
-                $bag['eraYear'] ?? null,
-                'relativeTo',
-            );
-            if ($resolved !== null) {
-                return $resolved;
-            }
-        }
-
-        return self::truncateToInteger($bag['year']);
+        return [$date->isoYear, $date->isoMonth, $date->isoDay];
     }
 
     /**
@@ -800,7 +759,7 @@ final class RelativeTo
      * TC39 ToIntegerWithTruncation for an already-finiteness-validated property-bag
      * field: an int passes through unchanged, every other finite numeric/coercible
      * value goes through PHP's `(int)` cast, which truncates toward zero exactly as
-     * the spec requires. Used only by {@see self::anchorYmd()} and {@see self::anchorYear()}.
+     * the spec requires.
      */
     private static function truncateToInteger(mixed $value): int
     {

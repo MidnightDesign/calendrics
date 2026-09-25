@@ -61,7 +61,7 @@ final class PureIndianCalendar implements CalendarProtocol
     /**
      * Returns the ISO date of the first day of the given Saka year (1 Chaitra).
      *
-     * @return array{0: int, 1: int, 2: int}
+     * @return array{int, int, int}
      */
     private static function sakaNewYearIso(int $sakaYear): array
     {
@@ -73,7 +73,7 @@ final class PureIndianCalendar implements CalendarProtocol
     /**
      * Converts ISO date to Saka year, month, day.
      *
-     * @return array{0: int, 1: int, 2: int}
+     * @return array{int, int, int}
      */
     private static function isoToSaka(int $isoYear, int $isoMonth, int $isoDay): array
     {
@@ -112,7 +112,7 @@ final class PureIndianCalendar implements CalendarProtocol
     /**
      * Converts Saka year, month, day to ISO date.
      *
-     * @return array{0: int, 1: int, 2: int}
+     * @return array{int, int, int}
      */
     private static function sakaToIso(int $sakaYear, int $month, int $day): array
     {

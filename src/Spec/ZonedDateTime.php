@@ -15,7 +15,9 @@ use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasEpochParts;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\LocaleComponentMode;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PartialDateFields;
 use Calendrics\Spec\Internal\TimeZoneHelper;
 use Calendrics\Spec\Internal\ZonedArithmetic;
 use Calendrics\Spec\Internal\ZonedDifference;
@@ -41,6 +43,11 @@ final class ZonedDateTime implements Stringable
     use HasStringRepresentations;
 
     private const int MS_PER_SECOND = 1_000;
+
+    // Stands in for JS `undefined` on an optional argument whose omitted behavior
+    // differs from its behavior for JS null. A null default would collapse the two,
+    // which is what GetOptionsObject and ToTemporalTime distinguish.
+    private const string OMITTED = "\0omitted";
 
     // -------------------------------------------------------------------------
     // Actual stored property
@@ -467,12 +474,12 @@ final class ZonedDateTime implements Stringable
      * e.g. '2020-01-01T12:00:00+05:30[Asia/Kolkata]'.
      *
      * @param self|string|array<array-key, mixed>|object $item    ZonedDateTime, ISO string, or property-bag array/object.
-     * @param array<array-key, mixed>|object|null $options Options array; supports 'disambiguation' (string).
+     * @param array<array-key, mixed>|object $options Options array; supports 'disambiguation' (string).
      * @throws TypeError              for unsupported types.
      * @throws RangeError for invalid strings or property bags.
      * @psalm-api
      */
-    public static function from(string|array|object $item, mixed $options = null): self
+    public static function from(string|array|object $item, mixed $options = []): self
     {
         // Each branch of ToTemporalZonedDateTime reaches GetOptionsObject at a different
         // point, and the difference is observable on an options bag with accessors:
@@ -626,17 +633,17 @@ final class ZonedDateTime implements Stringable
     /**
      * Returns a new ZonedDateTime with the time portion replaced.
      *
-     * If $time is null the time is set to midnight (00:00:00).
-     * Accepts PlainTime, null, a time string, or a property-bag array.
+     * Called with no argument the time is set to midnight (00:00:00); an explicit
+     * null is a TypeError, as it is for JS `null` in ToTemporalTime.
      *
-     * @param PlainTime|string|array<array-key, mixed>|object|null $time PlainTime, null, string, or array.
+     * @param PlainTime|string|array<array-key, mixed>|object $time PlainTime, string, or array.
      * @psalm-api
      */
-    public function withPlainTime(string|array|object|null $time = null): self
+    public function withPlainTime(mixed $time = self::OMITTED): self
     {
         // When called with no arguments, use startOfDay semantics (TC39 spec).
         // This handles cross-midnight DST gaps correctly.
-        if ($time === null) {
+        if ($time === self::OMITTED) {
             return $this->startOfDay();
         }
         if ($time instanceof PlainTime) {
@@ -728,15 +735,15 @@ final class ZonedDateTime implements Stringable
      *   - timeZoneName: 'auto' (default, include name) | 'never' | 'critical'
      *   - calendarName: 'auto' (default, omit for iso8601) | 'always' | 'never' | 'critical'
      *
-     * @param array<array-key, mixed>|object|null $options null, array, or object (treated as empty bag).
+     * @param array<array-key, mixed>|object $options null, array, or object (treated as empty bag).
      * @throws TypeError              if option values have wrong types.
      * @throws RangeError if option values are invalid strings.
      * @psalm-api
      */
     #[\Override]
-    public function toString(mixed $options = null): string
+    public function toString(mixed $options = []): string
     {
-        $options = Options::normalizeOptions($options, [
+        $options = Options::requireObject($options, [
             'calendarName',
             'fractionalSecondDigits',
             'offset',
@@ -919,7 +926,7 @@ final class ZonedDateTime implements Stringable
      *   - calendar: calendar identifier appended as u-ca locale extension
      *
      * @param string|array<array-key, mixed>|null $locales BCP 47 locale string or array of strings.
-     * @param array<array-key, mixed>|object|null $options Intl.DateTimeFormat options array.
+     * @param array<array-key, mixed>|object $options Intl.DateTimeFormat options array.
      * @psalm-api
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
@@ -936,8 +943,15 @@ final class ZonedDateTime implements Stringable
             throw new TypeError('toLocaleString(): timeZone option is not allowed for ZonedDateTime.');
         }
 
+        IntlFormatter::validateOptionValues($opts);
+
         $locale = IntlFormatter::resolveLocale($locales);
-        IntlFormatter::validateCalendar($this->calendarId, $locale, $opts, defaultComponents: 'datetime');
+        IntlFormatter::validateCalendar(
+            $this->calendarId,
+            $locale,
+            $opts,
+            defaultComponents: LocaleComponentMode::DateTime,
+        );
 
         // TC39: ZDT's default format includes the timezone name — but only when the
         // caller named no components at all. Asking for one component (`{year:'numeric'}`)
@@ -950,9 +964,9 @@ final class ZonedDateTime implements Stringable
         IntlFormatter::validateStyleConflicts($opts);
 
         $timeZone = $this->timeZoneId;
-        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, 'datetime');
+        $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts, LocaleComponentMode::DateTime);
         [$epochSec, $subNs] = $this->epochParts();
-        $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs, $timeZone, $locale);
+        $result = IntlFormatter::formatEpoch($formatter, $epochSec, $subNs);
 
         return $result !== false ? $result : $this->toString();
     }
@@ -968,10 +982,10 @@ final class ZonedDateTime implements Stringable
      * Time units add nanoseconds directly to the epoch.
      *
      * @param Duration|string|array<array-key, mixed>|object $duration Duration, ISO 8601 duration string, or property-bag array.
-     * @param array<array-key, mixed>|object|null $options Options array; supports 'overflow' ('constrain'|'reject').
+     * @param array<array-key, mixed>|object $options Options array; supports 'overflow' ('constrain'|'reject').
      * @psalm-api
      */
-    public function add(string|array|object $duration, mixed $options = null): self
+    public function add(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return ZonedArithmetic::add($this, 1, $dur, $options);
@@ -981,10 +995,10 @@ final class ZonedDateTime implements Stringable
      * Returns a new ZonedDateTime with the given duration subtracted.
      *
      * @param Duration|string|array<array-key,mixed>|object $duration Duration, ISO 8601 duration string, or property-bag array.
-     * @param array<array-key, mixed>|object|null $options Options array; supports 'overflow' ('constrain'|'reject').
+     * @param array<array-key, mixed>|object $options Options array; supports 'overflow' ('constrain'|'reject').
      * @psalm-api
      */
-    public function subtract(string|array|object $duration, mixed $options = null): self
+    public function subtract(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
         return ZonedArithmetic::add($this, -1, $dur, $options);
@@ -996,10 +1010,10 @@ final class ZonedDateTime implements Stringable
      * Default largestUnit is 'hour' (per TC39 ZonedDateTime spec).
      *
      * @param self|string|array<array-key, mixed>|object $other   ZonedDateTime or ZDT string.
-     * @param array<array-key, mixed>|object|null $options Options array with largestUnit, smallestUnit, roundingMode, roundingIncrement.
+     * @param array<array-key, mixed>|object $options Options array with largestUnit, smallestUnit, roundingMode, roundingIncrement.
      * @psalm-api
      */
-    public function since(string|array|object $other, mixed $options = null): Duration
+    public function since(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -1016,10 +1030,10 @@ final class ZonedDateTime implements Stringable
      * Default largestUnit is 'hour' (per TC39 ZonedDateTime spec).
      *
      * @param self|string|array<array-key, mixed>|object $other   ZonedDateTime or ZDT string.
-     * @param array<array-key, mixed>|object|null $options Options array with largestUnit, smallestUnit, roundingMode, roundingIncrement.
+     * @param array<array-key, mixed>|object $options Options array with largestUnit, smallestUnit, roundingMode, roundingIncrement.
      * @psalm-api
      */
-    public function until(string|array|object $other, mixed $options = null): Duration
+    public function until(string|array|object $other, mixed $options = []): Duration
     {
         $o = $other instanceof self ? $other : self::from($other);
         if ($this->calendarId !== $o->calendarId) {
@@ -1168,7 +1182,7 @@ final class ZonedDateTime implements Stringable
      * @param array<array-key, mixed>|object|null       $options Options bag: ['overflow' => ..., 'disambiguation' => ...]
      * @psalm-api
      */
-    public function with(array|object $fields, mixed $options = null): self
+    public function with(array|object $fields, mixed $options = []): self
     {
         // Reject Temporal objects (IsPartialTemporalObject step 2).
         if (
@@ -1221,7 +1235,7 @@ final class ZonedDateTime implements Stringable
         // GetOptionsObject reads every recognized option once, in the spec's
         // alphabetical order. The resolvers below take that snapshot rather than the
         // raw bag, so an accessor fires exactly once and in that order.
-        $opts = Options::normalizeOptions($options, ['disambiguation', 'offset', 'overflow']);
+        $opts = Options::requireObject($options, ['disambiguation', 'offset', 'overflow']);
         $overflow = Options::overflowFromBag($opts);
         $disambiguation = ZonedFields::disambiguationFromBag($opts);
 
@@ -1311,168 +1325,15 @@ final class ZonedDateTime implements Stringable
             }
         }
 
-        $calendar = $this->calendarId !== 'iso8601' ? CalendarFactory::get($this->calendarId) : null;
-
-        // --- Non-ISO calendar date resolution ---
-        if ($calendar !== null) {
-            $hasYear = array_key_exists('year', $fields);
-            $hasEra = array_key_exists('era', $fields);
-            $hasEraYear = array_key_exists('eraYear', $fields);
-            $hasMonth = array_key_exists('month', $fields);
-            $hasMonthCode = array_key_exists('monthCode', $fields);
-
-            // Chinese/Dangi have no eras — providing era or eraYear is always a TypeError.
-            if (($hasEra || $hasEraYear) && in_array($this->calendarId, ['chinese', 'dangi'], strict: true)) {
-                throw new TypeError('eraYear and era are invalid for this calendar.');
-            }
-
-            // TC39: era without eraYear (or vice versa) is TypeError when year is not also provided.
-            if ($hasEra && !$hasEraYear && !$hasYear) {
-                throw new TypeError('era provided without eraYear in with() fields.');
-            }
-            if ($hasEraYear && !$hasEra && !$hasYear) {
-                throw new TypeError('eraYear provided without era in with() fields.');
-            }
-
-            // Resolve year: era+eraYear takes precedence over the current year if both provided.
-            // When $hasYear is false, $hasEra implies $hasEraYear (and vice versa) due to checks above.
-            $year = $this->year;
-            if ($hasYear) {
-                $year = CalendarMath::toFiniteInt($fields['year'], 'ZonedDateTime::with() year');
-            } elseif ($hasEra) {
-                $resolved = CalendarMath::resolveYearFromEra(
-                    $calendar,
-                    $fields['era'],
-                    $fields['eraYear'],
-                    'ZonedDateTime::with()',
-                );
-                if ($resolved !== null) {
-                    $year = $resolved;
-                }
-            }
-
-            // Resolve monthCode/month with mutual exclusion.
-            // When neither is provided, default to current monthCode (not ordinal month).
-            $monthCode = null;
-            $month = null;
-            $useMonthCode = false;
-
-            if ($hasMonthCode) {
-                /** @var mixed $mc */
-                $mc = $fields['monthCode'];
-                if (!is_string($mc)) {
-                    throw new RangeError('ZonedDateTime::with() monthCode must be a string.');
-                }
-                $monthCode = $mc;
-                $useMonthCode = true;
-            }
-            if ($hasMonth) {
-                $month = CalendarMath::toFiniteInt($fields['month'], 'ZonedDateTime::with() month');
-                // Validate month/monthCode conflict.
-                if ($monthCode !== null) {
-                    $monthFromCode = $calendar->monthCodeToMonth($monthCode, $year);
-                    if ($month !== $monthFromCode) {
-                        throw new RangeError('Conflicting month and monthCode fields.');
-                    }
-                }
-                $useMonthCode = false; // explicit month takes precedence
-            }
-            if (!$hasMonth && !$hasMonthCode) {
-                // Default: preserve current monthCode.
-                $monthCode = $this->monthCode;
-                $useMonthCode = true;
-            }
-
-            $day = $this->day;
-            if (array_key_exists('day', $fields)) {
-                $day = CalendarMath::toFiniteInt($fields['day'], 'ZonedDateTime::with() day');
-            }
-
-            if ($day < 1) {
-                throw new RangeError("Invalid day {$day}: must be at least 1.");
-            }
-
-            if ($useMonthCode && $monthCode !== null) {
-                [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($year, $monthCode, $day, $overflow);
-            } else {
-                /** @var int $month */
-                if ($month < 1) {
-                    throw new RangeError("Invalid month {$month}: must be at least 1.");
-                }
-                [$isoY, $isoM, $isoD] = $calendar->calendarToIso($year, $month, $day, $overflow);
-            }
-
-            return ZonedFields::fromLocal(
-                $isoY,
-                $isoM,
-                $isoD,
-                $h,
-                $min,
-                $sec,
-                $ms,
-                $us,
-                $ns,
-                $this->timeZoneId,
-                $this->calendarId,
-                $disambiguation,
-            );
-        }
-
-        // --- ISO calendar date resolution ---
-        $year = $lc['year'];
-        $month = $lc['month'];
-        $day = $lc['day'];
-
-        if (array_key_exists('year', $fields)) {
-            $year = CalendarMath::toFiniteInt($fields['year'], 'ZonedDateTime::with() year');
-        }
-
-        $hasMonth = array_key_exists('month', $fields);
-        $hasMonthCode = array_key_exists('monthCode', $fields);
-        if ($hasMonthCode) {
-            /** @var mixed $mc */
-            $mc = $fields['monthCode'];
-            if (!is_string($mc)) {
-                throw new RangeError('ZonedDateTime::with() monthCode must be a string.');
-            }
-            $month = CalendarMath::monthCodeToMonth($mc);
-        }
-        if ($hasMonth) {
-            $newMonth = CalendarMath::toFiniteInt($fields['month'], 'ZonedDateTime::with() month');
-            if ($hasMonthCode && $newMonth !== $month) {
-                throw new RangeError('Conflicting month and monthCode fields.');
-            }
-            $month = $newMonth;
-        }
-
-        if (array_key_exists('day', $fields)) {
-            $day = CalendarMath::toFiniteInt($fields['day'], 'ZonedDateTime::with() day');
-        }
-
-        if ($month < 1) {
-            throw new RangeError("Invalid month {$month}: must be at least 1.");
-        }
-        if ($day < 1) {
-            throw new RangeError("Invalid day {$day}: must be at least 1.");
-        }
-
-        if ($overflow === 'constrain') {
-            /**
-             * @psalm-suppress UnnecessaryVarAnnotation — Mago can't narrow min()
-             */
-            $month = min(12, $month);
-            $maxDay = CalendarMath::calcDaysInMonth($year, $month);
-            $day = min($maxDay, $day);
-        } else {
-            // overflow === 'reject'
-            if ($month > 12) {
-                throw new RangeError("Invalid month {$month}: must be 1–12.");
-            }
-            $maxDay = CalendarMath::calcDaysInMonth($year, $month);
-            if ($day > $maxDay) {
-                throw new RangeError("Day {$day} is out of range for {$year}-{$month} (max {$maxDay}).");
-            }
-        }
+        $date = PartialDateFields::prepare(
+            $fields,
+            $this->calendarId,
+            $this->year,
+            $this->monthCode,
+            $this->day,
+            'ZonedDateTime::with()',
+        );
+        [$year, $month, $day] = $date->resolve($overflow);
 
         // If no offset field was provided but offset option requires preserving,
         // use the ZDT's current offset for wall-to-epoch conversion. Per TC39,
