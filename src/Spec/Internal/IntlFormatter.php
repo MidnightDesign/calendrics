@@ -513,11 +513,11 @@ final class IntlFormatter
     {
         $removedFields = $which === 'year' ? 'yYuUrG' : 'dD';
         $matches = null;
-        preg_match_all("/'(?:[^']|'')*'|([A-Za-z])\\1*/", $pattern, $matches, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL);
+        preg_match_all("/'(?:[^']|'')*'|([A-Za-z])\\1*/", $pattern, $matches, PREG_SET_ORDER);
 
         $skeleton = '';
         foreach ($matches as $match) {
-            if ($match[1] === null || str_contains($removedFields, $match[1])) {
+            if (!array_key_exists(1, $match) || str_contains($removedFields, $match[1])) {
                 continue;
             }
 
