@@ -74,7 +74,11 @@ final class IntlPatternMatcher
                 ),
                 $skeleton,
             ) ?? $skeleton;
-        $request = IntlPatternField::parse($mapped);
+        $unquotedSkeleton = preg_replace("/'(?:[^']|'')*'/", replacement: '', subject: $mapped) ?? $mapped;
+        preg_match_all('/([hHKk])\\1*/', $unquotedSkeleton, $requestedHours);
+        $requestedWidth = $requestedHours[0] === []
+            ? null
+            : strlen($requestedHours[0][array_key_last($requestedHours[0])]);
         $unquoted = preg_replace("/'(?:[^']|'')*'/", replacement: '', subject: $pattern) ?? $pattern;
         preg_match_all('/([hHKk])\\1*/', $unquoted, $hours);
         if ($hours[0] === []) {
@@ -83,7 +87,6 @@ final class IntlPatternMatcher
         $hourWidth = strlen($hours[0][array_key_last($hours[0])]);
         // Quoted literals can separate runs that the field parser joins together.
         $unchangedWidth = count($hours[0]) === 1 && $unquoted === $pattern ? null : $hourWidth;
-        $requestedWidth = $request[11]->width ?? null;
         // Record selection can only choose between these two widths.
         if ($requestedWidth === null || $hourWidth === $requestedWidth) {
             return $requestedWidth === null ? null : $unchangedWidth;
@@ -92,6 +95,7 @@ final class IntlPatternMatcher
         if (!$records->hasHourWidth($requestedWidth)) {
             return $requestedWidth;
         }
+        $request = IntlPatternField::parse($mapped);
         [$best, $missing, $extra] = $records->best($request);
         if (($missing !== 0 || $extra !== 0) && array_key_first($request) < 10) {
             [$best, $missing] = $records->best(array_filter(
