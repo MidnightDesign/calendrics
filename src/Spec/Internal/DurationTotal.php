@@ -215,11 +215,12 @@ final class DurationTotal
         // pair the way DurationRounding does. The combined nanosecond count passes int64
         // long before MaxTimeDuration, and float64's ulp up there is milliseconds wide,
         // so summing into a float first and scaling afterwards drops digits the spec
-        // keeps — 8692288669465520513 ms came back a whole ulp out. Both halves of the
-        // pair stay inside int64, and the single conversion at the end is the one
-        // rounding TC39 allows.
-        $absNs = (int) abs((float) $d->nanoseconds);
-        $absUs = (int) abs((float) $d->microseconds);
+        // keeps — 8692288669465520513 ms came back a whole ulp out. Split nanoseconds
+        // and microseconds before casting because either field can itself exceed int64.
+        // The resulting whole-second and remainder parts stay inside int64, and the
+        // single conversion at the end is the one rounding TC39 allows.
+        $absNsField = abs((float) $d->nanoseconds);
+        $absUsField = abs((float) $d->microseconds);
         $absMs = (int) abs((float) $d->milliseconds);
         $absSec =
             ((int) abs((float) $d->days) * 86_400)
@@ -227,10 +228,10 @@ final class DurationTotal
             + ((int) abs((float) $d->minutes) * 60)
             + (int) abs((float) $d->seconds);
 
-        // Carry each sub-second field up separately: a single milliseconds field may hold
-        // enough to overflow int64 once multiplied out to nanoseconds.
-        $absUs += intdiv(num1: $absNs, num2: 1_000_000_000) * 1_000_000;
-        $absMs += intdiv(num1: $absUs, num2: 1_000_000) * 1_000;
+        [$nsSeconds, $absNs] = self::splitSubsecondField($absNsField, 9);
+        $absSec += $nsSeconds;
+        [$usSeconds, $absUs] = self::splitSubsecondField($absUsField, 6);
+        $absSec += $usSeconds;
         $absSec += intdiv(num1: $absMs, num2: 1_000);
         $subNs = (($absMs % 1_000) * 1_000_000) + (($absUs % 1_000_000) * 1_000) + ($absNs % 1_000_000_000);
         $absSec += intdiv(num1: $subNs, num2: 1_000_000_000);
@@ -241,6 +242,28 @@ final class DurationTotal
         // Return int when the result is a whole number (matches JS behavior where
         // e.g. 24 hours total('hours') is 24, not 24.0).
         return self::toIntIfWhole($result);
+    }
+
+    /**
+     * Splits a non-negative float64-representable integer into whole seconds and
+     * the remaining field units without rounding the quotient up at large magnitudes.
+     *
+     * @return array{int, int}
+     */
+    private static function splitSubsecondField(float $value, int $decimalPlaces): array
+    {
+        $digits = str_pad(
+            string: sprintf('%.0F', $value),
+            length: $decimalPlaces + 1,
+            pad_string: '0',
+            pad_type: STR_PAD_LEFT,
+        );
+        $splitAt = strlen($digits) - $decimalPlaces;
+
+        return [
+            (int) substr(string: $digits, offset: 0, length: $splitAt),
+            (int) substr(string: $digits, offset: $splitAt),
+        ];
     }
 
     /**

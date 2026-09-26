@@ -168,7 +168,7 @@ final class ZonedDifference
      * `until($x, ['smallestUnit' => 'day'])` work without also naming a largest unit.
      *
      * @param array<array-key, mixed>|object $options
-     * @return array{0: string, 1: string, 2: string, 3: int<1, max>} [largestUnit, smallestUnit, roundingMode, roundingIncrement]
+     * @return array{string, string, string, int<1, max>} [largestUnit, smallestUnit, roundingMode, roundingIncrement]
      */
     private static function resolveOptions(ZonedDateTime $temporalDate, array|object|null $options): array
     {
@@ -476,7 +476,7 @@ final class ZonedDifference
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $tdLocal
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $otherLocal
      * @param 'month'|'year' $normLargest
-     * @return array{0: int, 1: DateSpan} [adjustedJdn, span]
+     * @return array{int, DateSpan} [adjustedJdn, span]
      */
     private static function nonIsoDateDiff(array $tdLocal, array $otherLocal, string $calId, string $normLargest): array
     {
@@ -509,7 +509,7 @@ final class ZonedDifference
      * date portion overshot — the intermediate date fell in a DST gap — so one day comes
      * back off and the measurement repeats.
      *
-     * @return array{0: int, 1: DateSpan} [timeDiffNs, span]
+     * @return array{int, DateSpan} [timeDiffNs, span]
      */
     private static function remeasureTimeRemainder(
         ZonedDateTime $earlierZ,
@@ -914,20 +914,11 @@ final class ZonedDifference
     /**
      * Adds years and months to a date, clamping the day to the resulting month's length.
      *
-     * @return array{0: int, 1: int, 2: int} [year, month, day]
+     * @return array{int, int, int} [year, month, day]
      */
     private static function addYearsMonthsToDate(int $year, int $month, int $day, int $addYears, int $addMonths): array
     {
-        $newYear = $year + $addYears;
-        $newMonth = $month + $addMonths;
-        if ($newMonth > 12) {
-            $newYear += intdiv(num1: $newMonth - 1, num2: 12);
-            $newMonth = (($newMonth - 1) % 12) + 1;
-        } elseif ($newMonth < 1) {
-            $newYear += intdiv(num1: $newMonth - 12, num2: 12);
-            $newMonth = (((($newMonth - 1) % 12) + 12) % 12) + 1;
-        }
-        return [$newYear, $newMonth, min($day, CalendarMath::calcDaysInMonth($newYear, $newMonth))];
+        return CalendarFactory::get('iso8601')->dateAdd($year, $month, $day, $addYears, $addMonths, 0, 0, 'constrain');
     }
 
     /**

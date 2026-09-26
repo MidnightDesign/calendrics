@@ -618,6 +618,19 @@ final class PlainDateTest extends TestCase
         static::assertNotSame($pd, $result);
     }
 
+    public function testWithCalendarAcceptsTemporalObject(): void
+    {
+        // TC39 ToTemporalCalendarIdentifier fast path: a Temporal date-bearing
+        // value contributes its own calendar.
+        $pd = new PlainDate(2020, 6, 15);
+        $source = new PlainDate(2024, 1, 1, Calendar::Hebrew);
+
+        $result = $pd->withCalendar($source);
+
+        static::assertSame(Calendar::Hebrew, $result->calendar);
+        static::assertSame('2020-06-15', $result->toString(CalendarDisplay::Never));
+    }
+
     // -------------------------------------------------------------------------
     // with() calendar-specific fields
     // -------------------------------------------------------------------------

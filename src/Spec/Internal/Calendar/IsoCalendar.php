@@ -239,7 +239,7 @@ final class IsoCalendar implements CalendarProtocol
      * same point on the timeline as its normalized 1-12 form ("month 0" is the previous
      * December, "month 13" the next January).
      *
-     * @return array{0: int, 1: int<1, 12>} [year, month]
+     * @return array{int, int<1, 12>} [year, month]
      */
     private static function normalizeMonth(int $year, int $month): array
     {
@@ -251,7 +251,7 @@ final class IsoCalendar implements CalendarProtocol
     /**
      * Validates and optionally constrains an ISO date.
      *
-     * @return array{0: int, 1: int, 2: int} [isoYear, isoMonth, isoDay]
+     * @return array{int, int, int} [isoYear, isoMonth, isoDay]
      */
     private static function regulateIsoDate(int $year, int $month, int $day, string $overflow): array
     {

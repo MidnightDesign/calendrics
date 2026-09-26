@@ -437,7 +437,7 @@ final class IntlFormatter
                 if ($pattern === false) {
                     $pattern = '';
                 }
-                $pattern = self::stripPatternComponents($pattern, $absentComponent);
+                $pattern = self::stripPatternComponents($pattern, $absentComponent, $locale);
                 $formatter = new \IntlDateFormatter(
                     $locale,
                     \IntlDateFormatter::NONE,
@@ -502,32 +502,32 @@ final class IntlFormatter
     /**
      * Strips year or day components from an ICU date pattern.
      *
-     * For 'year': removes y, Y, u, U, r, G (era often pairs with year) pattern chars
-     * and surrounding separators/whitespace.
-     * For 'day': removes d, D pattern chars and surrounding separators.
-     *
-     * Quoted literals (inside single quotes) are preserved.
+     * The surviving field runs form a skeleton from which ICU generates a new
+     * locale-appropriate pattern. Quoted literals are skipped while reading the
+     * source pattern and ICU restores any connectors and punctuation required by
+     * the remaining fields.
      *
      * @param 'year'|'day' $which
      */
-    public static function stripPatternComponents(string $pattern, string $which): string
+    public static function stripPatternComponents(string $pattern, string $which, string $locale): string
     {
-        if ($which === 'year') {
-            // Remove year-related fields: y, Y, u, U, r and era G
-            $result = (string) preg_replace('/[yYuUrG]+/', replacement: '', subject: $pattern);
-        } else {
-            // Remove day-related fields: d, D
-            $result = (string) preg_replace('/[dD]+/', replacement: '', subject: $pattern);
+        $removedFields = $which === 'year' ? 'yYuUrG' : 'dD';
+        $matches = null;
+        preg_match_all("/'(?:[^']|'')*'|([A-Za-z])\\1*/", $pattern, $matches, PREG_SET_ORDER);
+
+        $skeleton = '';
+        foreach ($matches as $match) {
+            if (!array_key_exists(1, $match) || str_contains($removedFields, $match[1])) {
+                continue;
+            }
+
+            $skeleton .= $match[0];
         }
 
-        // Clean up leftover separators: double separators, leading/trailing punctuation
-        $result = (string) preg_replace('/\s*[,\/\-\.]\s*(?=[,\/\-\.\s]|$)/', replacement: '', subject: $result);
-        $result = (string) preg_replace('/^[\s,\/\-\.]+/', replacement: '', subject: $result);
-        $result = (string) preg_replace('/[\s,\/\-\.]+$/', replacement: '', subject: $result);
-        // Collapse multiple spaces
-        $result = (string) preg_replace('/\s{2,}/', replacement: ' ', subject: $result);
+        $generator = new \IntlDatePatternGenerator($locale);
+        $result = $generator->getBestPattern($skeleton);
 
-        return trim($result);
+        return $result !== false ? $result : $skeleton;
     }
 
     /**
