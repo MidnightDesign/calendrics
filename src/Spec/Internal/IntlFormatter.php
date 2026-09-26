@@ -129,9 +129,6 @@ final class IntlFormatter
     /** @var list<string> */
     private const array NUMERIC_ZONE_MINUTE_CLDR_LOCALES = ['ckb-IR', 'lrc-IR', 'mzn-IR', 'th-TH'];
 
-    /** @var list<string> */
-    private const array NUMERIC_ZONE_ANY_MINUTE_CLDR_LOCALES = ['fa'];
-
     /** The IntlDateFormatter constant each {@see self::FORMAT_STYLES} value selects. */
     private const array FORMAT_STYLE_CONSTANTS = [
         'full' => \IntlDateFormatter::FULL,
@@ -726,7 +723,7 @@ final class IntlFormatter
             return self::setHourFieldWidth($pattern, 2);
         }
         if ($hour === 'numeric') {
-            $resolvedHourWidth = self::resolvedNumericHourWidth($opts, $locale, $pattern, $minute, $second);
+            $resolvedHourWidth = self::resolvedNumericHourWidth($opts, $locale, $minute, $second);
             if ($resolvedHourWidth !== null) {
                 return self::setHourFieldWidth($pattern, $resolvedHourWidth);
             }
@@ -742,7 +739,7 @@ final class IntlFormatter
      * IntlDatePatternGenerator binding does not expose that option. The option only changes
      * the selected width when another requested field makes ICU choose a format record with a
      * different hour width. The combinations below mirror those observable transitions; an
-     * hour without a minute takes its width from the locale's standalone-hour record.
+     * hour without a minute keeps ICU's resolved width except for the CLDR corrections below.
      *
      * @param array<string, mixed> $opts
      * @return 1|2|null Null preserves the width selected by the local ICU data.
@@ -750,7 +747,6 @@ final class IntlFormatter
     private static function resolvedNumericHourWidth(
         array $opts,
         string $locale,
-        string $pattern,
         ?string $minute,
         ?string $second,
     ): ?int {
@@ -782,7 +778,7 @@ final class IntlFormatter
             ) {
                 return 1;
             }
-            if ($minute !== null && in_array($language, self::NUMERIC_ZONE_ANY_MINUTE_CLDR_LOCALES, strict: true)) {
+            if ($minute !== null && $language === 'fa') {
                 return 1;
             }
 
@@ -790,13 +786,23 @@ final class IntlFormatter
         }
 
         if ($minute === null) {
-            return self::standaloneHourWidth($locale, $pattern);
+            if (in_array($localeDataId, self::TWO_DIGIT_HOUR_CLDR_LOCALES, strict: true)) {
+                return 2;
+            }
+            if (
+                in_array($language, self::NUMERIC_HOUR_CLDR_LOCALES, strict: true)
+                || in_array($localeDataId, self::NUMERIC_HOUR_CLDR_LOCALES, strict: true)
+            ) {
+                return 1;
+            }
+
+            return null;
         }
         if ($minute !== '2-digit') {
             return null;
         }
 
-        if (\Locale::getPrimaryLanguage($localeId) === 'yo') {
+        if ($language === 'yo') {
             return 2;
         }
 
@@ -804,58 +810,6 @@ final class IntlFormatter
             return $localeDataId === 'sv-FI' ? 1 : null;
         }
         return 1;
-    }
-
-    /**
-     * Reads the locale's own standalone-hour format rather than ICU's generic root fallback.
-     *
-     * @return 1|2
-     */
-    private static function standaloneHourWidth(string $locale, string $pattern): int
-    {
-        $match = null;
-        if (preg_match("/'(?:[^']|'')*'(*SKIP)(*F)|([hHKk])\\1*/", $pattern, $match) !== 1) {
-            return 1;
-        }
-
-        $hourSymbol = $match[1];
-        $language = \Locale::getPrimaryLanguage($locale);
-        $localeId = self::canonicalLocaleId($locale);
-        $localeDataId = self::localeLanguageRegionId($localeId);
-        if (in_array($localeDataId, self::TWO_DIGIT_HOUR_CLDR_LOCALES, strict: true)) {
-            return 2;
-        }
-        if (
-            in_array($language, self::NUMERIC_HOUR_CLDR_LOCALES, strict: true)
-            || in_array($localeDataId, self::NUMERIC_HOUR_CLDR_LOCALES, strict: true)
-        ) {
-            return 1;
-        }
-
-        $candidates = [$localeId];
-        if (is_string($language)) {
-            $candidates[] = $language;
-        }
-        $calendarType = IntlCalendarFactory::forLocale(timeZone: null, locale: $locale)->getType();
-        foreach (array_unique($candidates) as $candidate) {
-            $baseLocale = explode('@', $candidate, limit: 2)[0];
-            $bundle = \ResourceBundle::create($baseLocale, bundle: null, fallback: false);
-            if (!$bundle instanceof \ResourceBundle) {
-                continue;
-            }
-
-            $calendar = $bundle->get('calendar');
-            $calendarData = $calendar instanceof \ResourceBundle ? $calendar->get($calendarType) : null;
-            $formats = $calendarData instanceof \ResourceBundle ? $calendarData->get('availableFormats') : null;
-            $hourPattern = $formats instanceof \ResourceBundle ? $formats->get($hourSymbol) : null;
-            if (!is_string($hourPattern)) {
-                continue;
-            }
-
-            return preg_match("/'(?:[^']|'')*'(*SKIP)(*F)|{$hourSymbol}{2,}/", $hourPattern) === 1 ? 2 : 1;
-        }
-
-        return strlen($match[0]) >= 2 ? 2 : 1;
     }
 
     private static function canonicalLocaleId(string $locale): string
