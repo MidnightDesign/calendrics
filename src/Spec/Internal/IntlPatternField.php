@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Calendrics\Spec\Internal;
 
 /** @internal */
-final readonly class IntlPatternField
+final class IntlPatternField
 {
+    /** @var array<string, self> */
+    private static array $tokens = [];
+
     /** @param non-negative-int $width */
     public function __construct(
-        public string $symbol,
-        public int $width,
-        public int $type,
-        public string $base,
+        public readonly string $symbol,
+        public readonly int $width,
+        public readonly int $type,
+        public readonly string $base,
     ) {}
 
     /** @return array<int, self> */
@@ -44,6 +47,10 @@ final readonly class IntlPatternField
                 default => null,
             };
             if ($index === null) {
+                continue;
+            }
+            if (array_key_exists($token, self::$tokens)) {
+                $fields[$index] = self::$tokens[$token];
                 continue;
             }
             $text =
@@ -79,12 +86,16 @@ final readonly class IntlPatternField
                 in_array($symbol, ['E', 'e', 'c', 'M', 'L', 'Q', 'q'], strict: true) => 3,
                 default => 1,
             };
-            $fields[$index] = new self(
-                $symbol,
-                $width,
-                $text ? $textType - $delta : 256 + $delta + $width,
-                str_repeat($symbol, $baseWidth),
-            );
+            if (count(self::$tokens) === 256) {
+                array_shift(self::$tokens);
+            }
+            $fields[$index] =
+                self::$tokens[$token] = new self(
+                    $symbol,
+                    $width,
+                    $text ? $textType - $delta : 256 + $delta + $width,
+                    str_repeat($symbol, $baseWidth),
+                );
         }
         if (array_key_exists(12, $fields) && array_key_exists(14, $fields) && !array_key_exists(13, $fields)) {
             $fields[13] = new self('s', 1, 257, 's');
