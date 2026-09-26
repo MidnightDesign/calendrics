@@ -14,8 +14,9 @@ use Calendrics\Spec\ZonedDateTime;
 /**
  * Test-harness stand-in for the ECMA-402 `Intl.DateTimeFormat` object, scoped to
  * what the intl402 Temporal fixtures actually exercise: `format()`,
- * `formatToParts()`, and `resolvedOptions()` over Temporal spec values and the
- * legacy {@see JsDate} shim.
+ * `formatToParts()`, `formatRange()`, `formatRangeToParts()`, and
+ * `resolvedOptions()` over Temporal spec values and the legacy {@see JsDate}
+ * shim.
  *
  * This is a second entry point into the same formatting code, not a wrapper around
  * `Temporal.X.prototype.toLocaleString`, and ECMA-402 keeps the two apart. A
@@ -37,6 +38,9 @@ use Calendrics\Spec\ZonedDateTime;
  */
 final class IntlDateTimeFormat
 {
+    /** Separator used by the English-locale range fixtures supported by this shim. */
+    private const string RANGE_SEPARATOR = ' – ';
+
     /** @var string|array<array-key, mixed>|null */
     private readonly string|array|null $locales;
 
@@ -121,6 +125,42 @@ final class IntlDateTimeFormat
     }
 
     /**
+     * ECMA-402 DateTimeFormat.prototype.formatRange ( startDate, endDate ).
+     *
+     * PHP's intl extension binds no ICU date-interval formatter, so the endpoints
+     * are formatted separately and joined. Identical renderings collapse to the
+     * single shared rendering, as ECMA-402 requires.
+     */
+    public function formatRange(mixed $start, mixed $end): string
+    {
+        self::assertSameTemporalType($start, $end);
+        $from = $this->format($start);
+        $to = $this->format($end);
+        return $from === $to ? $from : $from . self::RANGE_SEPARATOR . $to;
+    }
+
+    /**
+     * ECMA-402 DateTimeFormat.prototype.formatRangeToParts ( startDate, endDate ),
+     * on the same terms as {@see formatRange()}.
+     *
+     * @return list<IntlFormatPart>
+     */
+    public function formatRangeToParts(mixed $start, mixed $end): array
+    {
+        self::assertSameTemporalType($start, $end);
+        $from = $this->formatToParts($start);
+        $to = $this->formatToParts($end);
+        if (self::partsToString($from) === self::partsToString($to)) {
+            return self::withSource($from, 'shared');
+        }
+        return [
+            ...self::withSource($from, 'startRange'),
+            new IntlFormatPart('literal', self::RANGE_SEPARATOR, 'shared'),
+            ...self::withSource($to, 'endRange'),
+        ];
+    }
+
+    /**
      * ECMA-402 DateTimeFormat.prototype.resolvedOptions (), scoped to the fields
      * fixtures read. `calendarId` mirrors `calendar` because the transpiler renames
      * `.calendar` property reads to `.calendarId` (the Temporal property name).
@@ -199,6 +239,46 @@ final class IntlDateTimeFormat
             return;
         }
         throw new TypeError('Intl.DateTimeFormat: unsupported value.');
+    }
+
+    /**
+     * ECMA-402 requires both range endpoints to use the same Temporal type once
+     * either endpoint is a Temporal value.
+     *
+     * @throws TypeError if the endpoints use different Temporal types
+     */
+    private static function assertSameTemporalType(mixed $start, mixed $end): void
+    {
+        if (self::temporalTypeOf($start) === self::temporalTypeOf($end)) {
+            return;
+        }
+        throw new TypeError('Intl.DateTimeFormat: range endpoints must be the same Temporal type.');
+    }
+
+    /** Returns the Temporal class of a value, or null for legacy values. */
+    private static function temporalTypeOf(mixed $value): ?string
+    {
+        return $value instanceof Instant || $value instanceof ZonedDateTime || $value instanceof PlainLocaleFormattable
+            ? $value::class
+            : null;
+    }
+
+    /**
+     * @param list<IntlFormatPart> $parts
+     * @return list<IntlFormatPart>
+     */
+    private static function withSource(array $parts, string $source): array
+    {
+        return array_map(
+            static fn(IntlFormatPart $part): IntlFormatPart => new IntlFormatPart($part->type, $part->value, $source),
+            $parts,
+        );
+    }
+
+    /** @param list<IntlFormatPart> $parts */
+    private static function partsToString(array $parts): string
+    {
+        return implode('', array_map(static fn(IntlFormatPart $part): string => $part->value, $parts));
     }
 
     private function locale(): string
