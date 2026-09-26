@@ -1104,15 +1104,13 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         ];
 
         $sign = $diffNs >= 0 ? 1 : -1;
-        $absNs = abs($diffNs);
 
-        // Round diffNs to the nearest multiple of nsIncrement.
-        // For floor/ceil/halfFloor/halfCeil, the direction depends on the sign of diffNs.
         $nsIncrement = ($nsPerUnit[$smallestUnit] ?? 1) * $roundingIncrement;
-        $roundedAbsNs = self::roundSignedNs($diffNs, $nsIncrement, $roundingMode);
-        // roundSignedNs returns a signed value; take abs for balancing, sign already captured.
-        unset($absNs); // avoid accidental use
-        $roundedAbsNs = abs($roundedAbsNs);
+        $roundedAbsNs = EpochRounding::roundAsIfPositive(
+            abs($diffNs),
+            $nsIncrement,
+            $diffNs < 0 ? EpochRounding::negateMode($roundingMode) : $roundingMode,
+        );
 
         // Balance the rounded absolute value up to largestUnit.
         $remaining = $roundedAbsNs;
@@ -1153,71 +1151,5 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             microseconds: $sign * $us,
             nanoseconds: $sign * $ns,
         );
-    }
-
-    /**
-     * Rounds a signed nanosecond diff to the nearest multiple of $increment,
-     * correctly handling directional modes (floor, ceil, halfFloor, halfCeil) for
-     * negative values.
-     *
-     * Returns a signed result (may be negative).
-     *
-     */
-    private static function roundSignedNs(int $ns, int $increment, string $mode): int
-    {
-        // PHP's intdiv truncates toward zero.
-        $q = intdiv(num1: $ns, num2: $increment);
-        $rem = $ns - ($q * $increment); // same sign as $ns (or 0)
-        $trunc = $q * $increment; // truncated toward zero
-        $absRem = abs($rem);
-
-        $expand = $ns >= 0 ? $trunc + $increment : $trunc - $increment;
-
-        switch ($mode) {
-            case 'trunc':
-                return $trunc;
-            case 'floor':
-                return $rem < 0 ? $trunc - $increment : $trunc;
-            case 'ceil':
-                return $rem > 0 ? $trunc + $increment : $trunc;
-            case 'expand':
-                if ($rem < 0) {
-                    return $trunc - $increment;
-                }
-                return $rem > 0 ? $trunc + $increment : $trunc;
-            case 'halfExpand':
-                return ($absRem * 2) >= $increment ? $expand : $trunc;
-            case 'halfTrunc':
-                return ($absRem * 2) > $increment ? $expand : $trunc;
-            case 'halfFloor':
-                $cmp = $absRem * 2;
-                if ($cmp < $increment) {
-                    return $trunc;
-                }
-                if ($cmp > $increment) {
-                    return $expand;
-                }
-                // tie: toward -∞
-                return $ns >= 0 ? $trunc : $trunc - $increment;
-            case 'halfCeil':
-                $cmp = $absRem * 2;
-                if ($cmp < $increment) {
-                    return $trunc;
-                }
-                if ($cmp > $increment) {
-                    return $expand;
-                }
-                // tie: toward +∞
-                return $ns >= 0 ? $trunc + $increment : $trunc;
-            default:
-                $cmp = $absRem * 2;
-                if ($cmp < $increment) {
-                    return $trunc;
-                }
-                if ($cmp > $increment) {
-                    return $expand;
-                }
-                return ($q % 2) === 0 ? $trunc : $expand;
-        }
     }
 }
