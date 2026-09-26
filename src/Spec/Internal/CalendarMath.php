@@ -28,9 +28,6 @@ final class CalendarMath
         }
         /** @var mixed $raw */
         $raw = $bag[$field];
-        if ($raw === null) {
-            throw new RangeError("{$className} property bag {$field} field must not be undefined.");
-        }
         return self::toFiniteInt($raw, "{$className} {$field}");
     }
 
@@ -133,25 +130,14 @@ final class CalendarMath
         if (is_bool($value)) {
             return (int) $value;
         }
+        if ($value instanceof \Stringable) {
+            $value = (string) $value;
+        }
         if (is_string($value)) {
             if (!is_numeric($value)) {
                 throw new RangeError("{$errorContext} must be numeric.");
             }
             $floatVal = (float) $value;
-            if (!is_finite($floatVal)) {
-                throw new RangeError("{$errorContext} must be finite.");
-            }
-            return (int) $floatVal;
-        }
-        // Stringable: cast to string then re-run the numeric checks. The JsSymbol
-        // sentinel's __toString throws Calendrics\Exception\TypeError here, while a
-        // plain stdClass (not Stringable) falls through to RangeError below.
-        if ($value instanceof \Stringable) {
-            $str = (string) $value;
-            if (!is_numeric($str)) {
-                throw new RangeError("{$errorContext} must be numeric.");
-            }
-            $floatVal = (float) $str;
             if (!is_finite($floatVal)) {
                 throw new RangeError("{$errorContext} must be finite.");
             }
@@ -280,13 +266,7 @@ final class CalendarMath
         // For negative diffs, flip floor/ceil so they retain their directional meaning.
         $effectiveMode = $mode;
         if ($sign < 0) {
-            $effectiveMode = match ($mode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $mode,
-            };
+            $effectiveMode = EpochRounding::negateMode($mode);
         }
         return match ($effectiveMode) {
             'trunc', 'floor' => false,
@@ -330,13 +310,7 @@ final class CalendarMath
 
         $effectiveMode = $mode;
         if ($sign < 0) {
-            $effectiveMode = match ($mode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $mode,
-            };
+            $effectiveMode = EpochRounding::negateMode($mode);
         }
         return match ($effectiveMode) {
             'trunc', 'floor' => false,
@@ -359,25 +333,32 @@ final class CalendarMath
      * @phpstan-assert int<0, 999> $ns
      * @throws RangeError if any field is out of its valid range.
      */
-    public static function validateTimeFields(int $h, int $min, int $sec, int $ms, int $us, int $ns): void
-    {
+    public static function validateTimeFields(
+        int $h,
+        int $min,
+        int $sec,
+        int $ms,
+        int $us,
+        int $ns,
+        string $errorFormat = 'Invalid time: %s %d is out of range 0–%d.',
+    ): void {
         if ($h < 0 || $h > 23) {
-            throw new RangeError("Invalid time: hour {$h} is out of range 0–23.");
+            throw new RangeError(sprintf($errorFormat, 'hour', $h, 23));
         }
         if ($min < 0 || $min > 59) {
-            throw new RangeError("Invalid time: minute {$min} is out of range 0–59.");
+            throw new RangeError(sprintf($errorFormat, 'minute', $min, 59));
         }
         if ($sec < 0 || $sec > 59) {
-            throw new RangeError("Invalid time: second {$sec} is out of range 0–59.");
+            throw new RangeError(sprintf($errorFormat, 'second', $sec, 59));
         }
         if ($ms < 0 || $ms > 999) {
-            throw new RangeError("Invalid time: millisecond {$ms} is out of range 0–999.");
+            throw new RangeError(sprintf($errorFormat, 'millisecond', $ms, 999));
         }
         if ($us < 0 || $us > 999) {
-            throw new RangeError("Invalid time: microsecond {$us} is out of range 0–999.");
+            throw new RangeError(sprintf($errorFormat, 'microsecond', $us, 999));
         }
         if ($ns < 0 || $ns > 999) {
-            throw new RangeError("Invalid time: nanosecond {$ns} is out of range 0–999.");
+            throw new RangeError(sprintf($errorFormat, 'nanosecond', $ns, 999));
         }
     }
 

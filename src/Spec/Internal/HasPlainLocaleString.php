@@ -17,9 +17,10 @@ use Calendrics\Exception\TypeError;
  * deliberately not users: both format an exact instant in a real time zone through
  * {@see IntlFormatter::formatEpoch()}, and each carries its own `toLocaleString()`.
  *
- * A new user must also implement {@see PlainLocaleFormattable}: collaborators select
- * this formatting path by that interface, and nothing else enforces the pairing.
+ * Collaborators select this formatting path through {@see PlainLocaleFormattable}.
  *
+ * @phpstan-require-implements PlainLocaleFormattable
+ * @psalm-require-implements PlainLocaleFormattable
  * @internal
  */
 trait HasPlainLocaleString
@@ -44,9 +45,6 @@ trait HasPlainLocaleString
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
     {
-        if (!$this instanceof PlainLocaleFormattable) {
-            throw new \LogicException('HasPlainLocaleString requires PlainLocaleFormattable.');
-        }
         if ($options === null) {
             $opts = [];
         } else {

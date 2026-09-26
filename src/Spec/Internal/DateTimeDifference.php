@@ -7,6 +7,7 @@ namespace Calendrics\Spec\Internal;
 use Calendrics\Exception\RangeError;
 use Calendrics\Spec\Duration;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\Calendar\CalendarProtocol;
 use Calendrics\Spec\PlainDateTime;
 
 /**
@@ -334,20 +335,12 @@ final class DateTimeDifference
                             $nonIsoAdjJdn = $otherJdn - $dateSign;
                         }
                     }
-                    [$adjY2b, $adjM2b, $adjD2b] = CalendarMath::fromJulianDay($nonIsoAdjJdn);
-                    [$years, $months, , $days] = $cal->dateUntil(
-                        $temporalDate->isoYear,
-                        $temporalDate->isoMonth,
-                        $temporalDate->isoDay,
-                        $adjY2b,
-                        $adjM2b,
-                        $adjD2b,
+                    [$years, $months, $days] = self::absoluteCalendarDiff(
+                        $cal,
+                        $temporalDate,
+                        $nonIsoAdjJdn,
                         $calendarUnit,
                     );
-                    // Take absolute values — the output sign is applied later.
-                    $years = abs($years);
-                    $months = abs($months);
-                    $days = abs($days);
                 } else {
                     // ISO calendar: the endpoints are already in (earlier, later) order,
                     // so which one is the receiver has to be passed explicitly for the
@@ -467,13 +460,7 @@ final class DateTimeDifference
             // For negative output diffs, flip floor/ceil.
             $effTimeMode = $roundingMode;
             if ($outputSign < 0) {
-                $effTimeMode = match ($roundingMode) {
-                    'floor' => 'ceil',
-                    'ceil' => 'floor',
-                    'halfFloor' => 'halfCeil',
-                    'halfCeil' => 'halfFloor',
-                    default => $roundingMode,
-                };
+                $effTimeMode = EpochRounding::negateMode($roundingMode);
             }
             $absTimeNs = EpochRounding::roundAsIfPositive($timeDiffNs, $nsIncrement, $effTimeMode);
 
@@ -490,19 +477,12 @@ final class DateTimeDifference
                 if ($calId !== 'iso8601') {
                     // Non-ISO: shift nonIsoAdjJdn by overflow in the diff direction.
                     $tc39Jdn2 = $nonIsoAdjJdn + ($sign >= 0 ? $overflowDays : -$overflowDays);
-                    [$adjY3, $adjM3, $adjD3] = CalendarMath::fromJulianDay($tc39Jdn2);
-                    [$years, $months, , $days] = $cal->dateUntil(
-                        $temporalDate->isoYear,
-                        $temporalDate->isoMonth,
-                        $temporalDate->isoDay,
-                        $adjY3,
-                        $adjM3,
-                        $adjD3,
+                    [$years, $months, $days] = self::absoluteCalendarDiff(
+                        $cal,
+                        $temporalDate,
+                        $tc39Jdn2,
                         $calendarUnit,
                     );
-                    $years = abs($years);
-                    $months = abs($months);
-                    $days = abs($days);
                 } else {
                     // ISO: add overflow to the swap-based adjOtherJdn.
                     $isoAdjJdn2 = $adjOtherJdn + $overflowDays;
@@ -554,13 +534,7 @@ final class DateTimeDifference
         // For negative output diffs, flip floor/ceil so they retain their directional meaning.
         $effectiveRoundMode = $roundingMode;
         if ($outputSign < 0) {
-            $effectiveRoundMode = match ($roundingMode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $roundingMode,
-            };
+            $effectiveRoundMode = EpochRounding::negateMode($roundingMode);
         }
         $roundedAbsNs = EpochRounding::roundAsIfPositive($totalAbsNs, $nsIncrement, $effectiveRoundMode);
 
@@ -628,6 +602,29 @@ final class DateTimeDifference
     }
 
     /**
+     * @param 'month'|'year' $unit
+     * @return array{int, int, int}
+     */
+    private static function absoluteCalendarDiff(
+        CalendarProtocol $calendar,
+        PlainDateTime $receiver,
+        int $targetJdn,
+        string $unit,
+    ): array {
+        [$year, $month, $day] = CalendarMath::fromJulianDay($targetJdn);
+        [$years, $months, , $days] = $calendar->dateUntil(
+            $receiver->isoYear,
+            $receiver->isoMonth,
+            $receiver->isoDay,
+            $year,
+            $month,
+            $day,
+            $unit,
+        );
+        return [abs($years), abs($months), abs($days)];
+    }
+
+    /**
      * Calendar-aware rounding for months (NudgeToCalendarUnit, unit=months).
      *
      * Rounds $totalMonths (non-negative) + $remainingDays + $remainingTimeNs to the
@@ -657,9 +654,7 @@ final class DateTimeDifference
 
         // Total fractional progress: remaining days + remaining time as fraction of a day.
         $totalRemNs = ($remainingDays * EpochLimits::NS_PER_DAY) + $remainingTimeNs;
-        $progress = $intervalDays > 0
-            ? (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY)
-            : 0.0;
+        $progress = (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY);
 
         $roundUp = CalendarMath::applyCalendarRoundingProgress($totalMonths, $progress, $increment, $mode, $sign);
 
@@ -702,9 +697,7 @@ final class DateTimeDifference
         $monthsJdn = self::addSignedMonths($receiver, $dir * (($floorCount * 12) + $remMonths));
         $remDaysFromMonths = abs($monthsJdn - $anchorJdn);
         $totalRemNs = (($remDaysFromMonths + $remainingDays) * EpochLimits::NS_PER_DAY) + $remainingTimeNs;
-        $progress = $intervalDays > 0
-            ? (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY)
-            : 0.0;
+        $progress = (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY);
 
         $roundUp = CalendarMath::applyCalendarRoundingProgress($years, $progress, $increment, $mode, $sign);
 

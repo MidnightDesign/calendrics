@@ -8,6 +8,8 @@ use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DateParse;
+use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
@@ -574,29 +576,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             }
         }
 
-        // Validate time portion if present.
-        if ($m[3] !== '') {
-            $hour = (int) $m[3];
-            if ($hour > 23) {
-                throw new RangeError("PlainYearMonth::from() cannot parse \"{$s}\": hour {$hour} out of range.");
-            }
-            if ($m[4] !== '') {
-                $minute = (int) $m[4];
-                if ($minute > 59) {
-                    throw new RangeError(
-                        "PlainYearMonth::from() cannot parse \"{$s}\": minute {$minute} out of range.",
-                    );
-                }
-                if ($m[5] !== '') {
-                    $second = (int) $m[5];
-                    if ($second > 60) {
-                        throw new RangeError(
-                            "PlainYearMonth::from() cannot parse \"{$s}\": second {$second} out of range.",
-                        );
-                    }
-                }
-            }
-        }
+        DateParse::validateOptionalTime($m[3], $m[4], $m[5], $s, 'PlainYearMonth');
 
         // Validate bracket annotations and extract calendar ID.
         $annotationSection = $m[7];
@@ -771,25 +751,6 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
     ): Duration {
         /** @var list<string> $validUnits */
         static $validUnits = ['auto', 'month', 'months', 'year', 'years'];
-        /** @var list<string> $disallowedUnits */
-        static $disallowedUnits = [
-            'week',
-            'weeks',
-            'day',
-            'days',
-            'hour',
-            'hours',
-            'minute',
-            'minutes',
-            'second',
-            'seconds',
-            'millisecond',
-            'milliseconds',
-            'microsecond',
-            'microseconds',
-            'nanosecond',
-            'nanoseconds',
-        ];
 
         $largestUnit = 'year'; // default for PlainYearMonth per spec (auto = year)
         $smallestUnit = null;
@@ -808,7 +769,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
                     $lu = Options::coerceEnumOption($lu, 'largestUnit');
                 }
                 if (is_string($lu)) {
-                    if (in_array($lu, $disallowedUnits, strict: true) || !in_array($lu, $validUnits, strict: true)) {
+                    if (!in_array($lu, $validUnits, strict: true)) {
                         throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
                     }
                     $largestUnit = $lu;
@@ -844,7 +805,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
                     $su = Options::coerceEnumOption($su, 'smallestUnit');
                 }
                 if (is_string($su)) {
-                    if (in_array($su, $disallowedUnits, strict: true) || !in_array($su, $validUnits, strict: true)) {
+                    if (!in_array($su, $validUnits, strict: true)) {
                         throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
                     }
                     $smallestUnit = $su;
@@ -921,22 +882,16 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         // TC39: for "since", GetDifferenceSettings negates the rounding mode.
         $sinceSign = $operation === 'since' ? -1 : 1;
         if ($operation === 'since') {
-            $roundingMode = self::negateRoundingMode($roundingMode);
+            $roundingMode = EpochRounding::negateMode($roundingMode);
         }
 
         if ($normLargest === 'month') {
             // $normSmallest is 'month' too: a 'year' smallestUnit under a 'month'
             // largestUnit is rejected above.
-            if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
+            if ($roundingIncrement === 1) {
                 return new Duration(months: $sinceSign * $totalMonths);
             }
-            $rounded = self::roundCalendarYearMonths(
-                $totalMonths,
-                $temporalDate,
-                $roundingIncrement,
-                $roundingMode,
-                false,
-            );
+            $rounded = self::roundCalendarYearMonths($totalMonths, $temporalDate, $roundingIncrement, $roundingMode);
             return new Duration(months: $sinceSign * $rounded);
         }
 
@@ -951,13 +906,12 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
                 $temporalDate,
                 $roundingIncrement,
                 $roundingMode,
-                false,
             );
             return new Duration(years: $sinceSign * $roundedYears);
         }
 
         // normSmallest === 'month', normLargest === 'year'
-        if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
+        if ($roundingIncrement === 1) {
             return new Duration(years: $sinceSign * $rawYears, months: $sinceSign * $rawMonths);
         }
         [$ry, $rm] = self::roundCalendarMonthsWithinYear(
@@ -966,7 +920,6 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             $temporalDate,
             $roundingIncrement,
             $roundingMode,
-            false,
         );
         return new Duration(years: $sinceSign * $ry, months: $sinceSign * $rm);
     }
@@ -979,82 +932,24 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
      *
      * @throws RangeError if the rounded result is outside the valid range.
      */
-    private static function roundCalendarYearMonths(
-        int $totalMonths,
-        self $receiver,
-        int $increment,
-        string $mode,
-        bool $receiverIsLater,
-    ): int {
+    private static function roundCalendarYearMonths(int $totalMonths, self $receiver, int $increment, string $mode): int
+    {
         $sign = $totalMonths >= 0 ? 1 : -1;
         $absMonths = abs($totalMonths);
 
         $floorCount = intdiv(num1: $absMonths, num2: $increment) * $increment;
         $remainingMonths = $absMonths - $floorCount;
 
-        // No rounding needed when mode is trunc/floor (always rounds down).
-        if ($increment === 1) {
-            $sign2 = $totalMonths >= 0 ? 1 : -1;
-            // Validate range.
-            $dir2 = $receiverIsLater ? -$sign2 : $sign2;
-            [$ry, $rm] = self::addSignedMonthsYM($receiver->isoYear, $receiver->isoMonth, $dir2 * $absMonths);
-            if (!self::isoYearMonthWithinLimits($ry, $rm)) {
-                throw new RangeError('PlainYearMonth arithmetic result is outside the representable range.');
-            }
-            return $totalMonths;
-        }
-
-        // Anchor: receiver going toward "other" by floorCount months.
-        $dir = $receiverIsLater ? -$sign : $sign;
-
-        // Compute anchor and next boundary as year-month.
-        [$anchorY, $anchorM] = self::addSignedMonthsYM($receiver->isoYear, $receiver->isoMonth, $dir * $floorCount);
-        [$nextY, $nextM] = self::addSignedMonthsYM(
+        return $sign
+        * self::roundMonthOffset(
             $receiver->isoYear,
             $receiver->isoMonth,
-            $dir * ($floorCount + $increment),
+            $sign,
+            $floorCount,
+            $remainingMonths,
+            $increment,
+            $mode,
         );
-
-        // Validate the next boundary is within the representable range (§NudgeToCalendarUnit step 8).
-        if (!self::isoYearMonthWithinLimits($nextY, $nextM)) {
-            throw new RangeError('PlainYearMonth rounding result is outside the representable range.');
-        }
-
-        // Interval size in days (anchor → next boundary).
-        $anchorJdn = CalendarMath::toJulianDay($anchorY, $anchorM, 1);
-        $nextJdn = CalendarMath::toJulianDay($nextY, $nextM, 1);
-        $intervalDays = abs($nextJdn - $anchorJdn);
-
-        // Compute how far the remaining months reach within the interval (in days).
-        [$remY, $remM] = self::addSignedMonthsYM($anchorY, $anchorM, $dir * $remainingMonths);
-        $remJdn = CalendarMath::toJulianDay($remY, $remM, 1);
-        $remDays = abs($remJdn - $anchorJdn);
-
-        $progress = $intervalDays > 0 ? $remDays / $intervalDays : 0.0;
-
-        $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
-
-        $roundedAbs = $roundUp ? $floorCount + $increment : $floorCount;
-
-        // $roundedAbs is either $floorCount or $floorCount + $increment; the latter is
-        // exactly the next boundary already validated above, the former is strictly
-        // inside it. A re-check of the rounded result can therefore never fail.
-
-        return $sign * $roundedAbs;
-    }
-
-    /**
-     * Inverts a rounding mode for negative diffs.
-     */
-    private static function negateRoundingMode(string $mode): string
-    {
-        return match ($mode) {
-            'floor' => 'ceil',
-            'ceil' => 'floor',
-            'halfFloor' => 'halfCeil',
-            'halfCeil' => 'halfFloor',
-            default => $mode,
-        };
     }
 
     private static function roundCalendarYearsYM(
@@ -1063,7 +958,6 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         self $receiver,
         int $increment,
         string $mode,
-        bool $receiverIsLater,
     ): int {
         if ($years !== 0) {
             $sign = $years >= 0 ? 1 : -1;
@@ -1074,49 +968,19 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
 
         $floorCount = intdiv(num1: $absYears, num2: $increment) * $increment;
 
-        $dir = $receiverIsLater ? -$sign : $sign;
-
-        // Anchor at floorCount years from receiver.
-        [$anchorY, $anchorM] = self::addSignedMonthsYM(
-            $receiver->isoYear,
-            $receiver->isoMonth,
-            $dir * $floorCount * 12,
-        );
-        [$nextY, $nextM] = self::addSignedMonthsYM(
-            $receiver->isoYear,
-            $receiver->isoMonth,
-            $dir * ($floorCount + $increment) * 12,
-        );
-
-        // Validate the next boundary is within the representable range.
-        if (!self::isoYearMonthWithinLimits($nextY, $nextM)) {
-            throw new RangeError('PlainYearMonth rounding result is outside the representable range.');
-        }
-
-        $anchorJdn = CalendarMath::toJulianDay($anchorY, $anchorM, 1);
-        $nextJdn = CalendarMath::toJulianDay($nextY, $nextM, 1);
-        $intervalDays = abs($nextJdn - $anchorJdn);
-
-        // Target: anchor + (total remaining months from anchor to target).
-        // The target is at floorCount*12 + remaining_months from receiver,
-        // i.e., the full abs diff (absYears*12 + absMonths) months from receiver.
-        // From anchor (= receiver + dir*floorCount*12), the target is at dir*(absYears-floorCount)*12 + dir*absMonths.
         $absMonths = abs($months);
         $remMonthsFromAnchor = (($absYears - $floorCount) * 12) + $absMonths;
-        [$subY, $subM] = self::addSignedMonthsYM($anchorY, $anchorM, $dir * $remMonthsFromAnchor);
-        $subJdn = CalendarMath::toJulianDay($subY, $subM, 1);
-        $remDays = abs($subJdn - $anchorJdn);
+        $roundedMonths = self::roundMonthOffset(
+            $receiver->isoYear,
+            $receiver->isoMonth,
+            $sign,
+            $floorCount * 12,
+            $remMonthsFromAnchor,
+            $increment * 12,
+            $mode,
+        );
 
-        $progress = $intervalDays > 0 ? $remDays / $intervalDays : 0.0;
-        $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
-
-        $roundedAbs = $roundUp ? $floorCount + $increment : $floorCount;
-
-        // $roundedAbs * 12 months is bounded by the next boundary already validated
-        // above ($floorCount + $increment years), so the rounded result is always
-        // within range; a re-check can never fail.
-
-        return $sign * $roundedAbs;
+        return $sign * intdiv($roundedMonths, num2: 12);
     }
 
     /**
@@ -1136,7 +1000,6 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         self $receiver,
         int $increment,
         string $mode,
-        bool $receiverIsLater,
     ): array {
         if ($rawYears !== 0) {
             $sign = $rawYears >= 0 ? 1 : -1;
@@ -1144,43 +1007,24 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             $sign = $rawMonths >= 0 ? 1 : -1;
         }
 
-        // Direction from receiver toward the other.
-        $dir = $receiverIsLater ? -$sign : $sign;
-
         // Yearly anchor: receiver moved by |rawYears| years (the whole-year portion of the diff).
         [$yearAnchorY, $yearAnchorM] = self::addSignedMonthsYM(
             $receiver->isoYear,
             $receiver->isoMonth,
-            $dir * abs($rawYears) * 12,
+            $sign * abs($rawYears) * 12,
         );
 
         $absMonths = abs($rawMonths);
         $floorCount = intdiv(num1: $absMonths, num2: $increment) * $increment;
-        $nextCount = $floorCount + $increment;
-
-        // Month anchor: yearAnchor moved by floorCount months (= lower boundary of the rounding bucket).
-        [$monthAnchorY, $monthAnchorM] = self::addSignedMonthsYM($yearAnchorY, $yearAnchorM, $dir * $floorCount);
-        [$nextY, $nextM] = self::addSignedMonthsYM($yearAnchorY, $yearAnchorM, $dir * $nextCount);
-
-        // Validate that the next boundary is representable.
-        if (!self::isoYearMonthWithinLimits($nextY, $nextM)) {
-            throw new RangeError('PlainYearMonth rounding result is outside the representable range.');
-        }
-
-        // Calendar-aware progress: measure remaining months in days from the month anchor.
-        $monthAnchorJdn = CalendarMath::toJulianDay($monthAnchorY, $monthAnchorM, 1);
-        $nextJdn = CalendarMath::toJulianDay($nextY, $nextM, 1);
-        $intervalDays = abs($nextJdn - $monthAnchorJdn);
-
-        $remainingMonths = $absMonths - $floorCount;
-        [$remY, $remM] = self::addSignedMonthsYM($monthAnchorY, $monthAnchorM, $dir * $remainingMonths);
-        $remJdn = CalendarMath::toJulianDay($remY, $remM, 1);
-        $remDays = abs($remJdn - $monthAnchorJdn);
-
-        $progress = $intervalDays > 0 ? $remDays / $intervalDays : 0.0;
-        $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
-
-        $roundedAbsMonths = $roundUp ? $nextCount : $floorCount;
+        $roundedAbsMonths = self::roundMonthOffset(
+            $yearAnchorY,
+            $yearAnchorM,
+            $sign,
+            $floorCount,
+            $absMonths - $floorCount,
+            $increment,
+            $mode,
+        );
 
         // Convert rounded abs months to a years+months result with carry.
         $carryYears = intdiv(num1: $roundedAbsMonths, num2: 12);
@@ -1188,11 +1032,36 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         $roundedYears = $rawYears + ($sign * $carryYears);
         $roundedMonths = $sign * $remainMonths;
 
-        // The total offset (|rawYears| * 12 + $roundedAbsMonths, with
-        // $roundedAbsMonths <= $nextCount) never exceeds the next boundary already
-        // validated above, so the rounded result is always within range.
-
         return [$roundedYears, $roundedMonths];
+    }
+
+    private static function roundMonthOffset(
+        int $year,
+        int $month,
+        int $sign,
+        int $floorCount,
+        int $remainingMonths,
+        int $increment,
+        string $mode,
+    ): int {
+        [$anchorY, $anchorM] = self::addSignedMonthsYM($year, $month, $sign * $floorCount);
+        [$nextY, $nextM] = self::addSignedMonthsYM($year, $month, $sign * ($floorCount + $increment));
+
+        if (!self::isoYearMonthWithinLimits($nextY, $nextM)) {
+            throw new RangeError('PlainYearMonth rounding result is outside the representable range.');
+        }
+
+        $anchorJdn = CalendarMath::toJulianDay($anchorY, $anchorM, 1);
+        $nextJdn = CalendarMath::toJulianDay($nextY, $nextM, 1);
+        $intervalDays = abs($nextJdn - $anchorJdn);
+        [$remY, $remM] = self::addSignedMonthsYM($anchorY, $anchorM, $sign * $remainingMonths);
+        $remJdn = CalendarMath::toJulianDay($remY, $remM, 1);
+        $remDays = abs($remJdn - $anchorJdn);
+
+        $progress = $remDays / $intervalDays;
+        $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
+
+        return $roundUp ? $floorCount + $increment : $floorCount;
     }
 
     /**

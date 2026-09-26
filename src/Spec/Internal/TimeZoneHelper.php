@@ -89,7 +89,7 @@ final class TimeZoneHelper
                     return 'UTC';
                 }
                 $obm = null;
-                if (preg_match('/^([+\-]\d{2}):(\d{2})$/', $bracket, $obm) === 1) {
+                if (preg_match('/^([+\-](?:[01]\d|2[0-3])):([0-5]\d)$/', $bracket, $obm) === 1) {
                     return sprintf('%s:%s', $obm[1], $obm[2]);
                 }
                 return self::canonicalIanaName($bracket, $id);
@@ -103,7 +103,7 @@ final class TimeZoneHelper
             }
             // Extended (±HH:MM) and basic (±HHMM) spellings are both valid inline offsets.
             $om = null;
-            if (preg_match('/([+\-])(\d{2}):?(\d{2})(?:\[|$)/', $id, $om) === 1) {
+            if (preg_match('/([+\-])([01]\d|2[0-3]):?([0-5]\d)(?:\[|$)/', $id, $om) === 1) {
                 return sprintf('%s%s:%s', $om[1], $om[2], $om[3]);
             }
             throw new RangeError("Invalid timeZoneId \"{$id}\": bare datetime without Z, offset, or bracket.");
@@ -111,16 +111,16 @@ final class TimeZoneHelper
 
         // Pure UTC-offset strings.
         // ±HH:MM
-        if (preg_match('/^([+\-]\d{2}):(\d{2})$/', $id) === 1) {
+        if (preg_match('/^([+\-](?:[01]\d|2[0-3])):([0-5]\d)$/', $id) === 1) {
             return $id;
         }
         // ±HHMM → ±HH:MM
         $m = null;
-        if (preg_match('/^([+\-])(\d{2})(\d{2})$/', $id, $m) === 1) {
+        if (preg_match('/^([+\-])([01]\d|2[0-3])([0-5]\d)$/', $id, $m) === 1) {
             return sprintf('%s%s:%s', $m[1], $m[2], $m[3]);
         }
         // ±HH → ±HH:00
-        if (preg_match('/^([+\-])(\d{2})$/', $id, $m) === 1) {
+        if (preg_match('/^([+\-])([01]\d|2[0-3])$/', $id, $m) === 1) {
             return sprintf('%s%s:00', $m[1], $m[2]);
         }
         // Sub-minute offsets → reject.

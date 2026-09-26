@@ -368,18 +368,13 @@ final class IntlCalendarBridge implements CalendarProtocol
         $this->setIsoDate($isoYear, $isoMonth, $isoDay);
 
         // Apply ICU 76.1 correction for known Chinese calendar discrepancies.
+        $v = null;
         if ($this->calendarId === 'chinese') {
             $calYear = $this->intlCal->get(self::FIELD_EXTENDED_YEAR) - self::CHINESE_YEAR_OFFSET;
-            if (array_key_exists($calYear, self::CHINESE_DAYS_IN_YEAR_CORRECTIONS)) {
-                $v = self::CHINESE_DAYS_IN_YEAR_CORRECTIONS[$calYear];
-                if (count($this->daysInYearCache) >= self::FIELD_CACHE_CAP) {
-                    $this->daysInYearCache = [];
-                }
-                return $this->daysInYearCache[$key] = $v;
-            }
+            $v = self::CHINESE_DAYS_IN_YEAR_CORRECTIONS[$calYear] ?? null;
         }
 
-        $v = $this->intlCal->getActualMaximum(\IntlCalendar::FIELD_DAY_OF_YEAR);
+        $v ??= $this->intlCal->getActualMaximum(\IntlCalendar::FIELD_DAY_OF_YEAR);
         if (count($this->daysInYearCache) >= self::FIELD_CACHE_CAP) {
             $this->daysInYearCache = [];
         }
@@ -424,8 +419,11 @@ final class IntlCalendarBridge implements CalendarProtocol
 
         $v = match ($this->calendarId) {
             'chinese', 'dangi' => $this->hasChineseLeapMonth(),
-            'coptic', 'ethiopic', 'ethioaa' => $this->intlCal->getActualMaximum(\IntlCalendar::FIELD_DAY_OF_YEAR) > 365,
-            'persian' => $this->intlCal->getActualMaximum(\IntlCalendar::FIELD_DAY_OF_YEAR) > 365,
+            'coptic',
+            'ethiopic',
+            'ethioaa',
+            'persian',
+                => $this->intlCal->getActualMaximum(\IntlCalendar::FIELD_DAY_OF_YEAR) > 365,
             default => $this->intlCal->getActualMaximum(\IntlCalendar::FIELD_DAY_OF_YEAR) > 354, // Islamic variants: leap year has 355 days, non-leap 354
         };
         if (count($this->inLeapYearCache) >= self::FIELD_CACHE_CAP) {
@@ -546,17 +544,7 @@ final class IntlCalendarBridge implements CalendarProtocol
             }
         }
 
-        try {
-            $this->setCalendarFieldsFromMonthCode($calYear, $monthCode, $calDay);
-        } catch (RangeError $e) {
-            // Leap month code in a year without that leap month: constrain.
-            if ($overflow === 'constrain' && $isLeapCode) {
-                $baseCode = substr($monthCode, offset: 0, length: -1);
-                $this->setCalendarFieldsFromMonthCode($calYear, $baseCode, $calDay);
-            } else {
-                throw $e;
-            }
-        }
+        $this->setCalendarFieldsFromMonthCode($calYear, $monthCode, $calDay);
         return $this->resolveAndConstrain($calDay, $overflow);
     }
 
@@ -1017,11 +1005,7 @@ final class IntlCalendarBridge implements CalendarProtocol
         $isLeapCode = str_ends_with($monthCode, 'L');
         $baseCode = $isLeapCode ? substr($monthCode, offset: 0, length: -1) : $monthCode;
 
-        $m = null;
-        if (preg_match('/^M(\d{2})$/', $baseCode, $m) !== 1) {
-            throw new RangeError("Invalid monthCode \"{$monthCode}\" for calendar \"{$this->calendarId}\".");
-        }
-        $baseNum = (int) $m[1]; // 1-12
+        $baseNum = (int) substr($baseCode, offset: 1);
         if ($baseNum < 1 || $baseNum > 12) {
             throw new RangeError("monthCode \"{$monthCode}\" is out of range for calendar \"{$this->calendarId}\".");
         }
@@ -1253,7 +1237,7 @@ final class IntlCalendarBridge implements CalendarProtocol
         // Day overflow is handled by resolveAndConstrain (for calendarToIso) or
         // is intentional (for dateAdd/dateUntil arithmetic).
         $isoYear = match ($this->calendarId) {
-            'gregory', 'japanese' => $calYear,
+            'japanese' => $calYear,
             'buddhist' => $calYear - 543,
             'roc' => $calYear + self::ROC_YEAR_OFFSET,
             default => null,
@@ -1333,11 +1317,7 @@ final class IntlCalendarBridge implements CalendarProtocol
             // Chinese/Dangi: MxxL → ICU month xx-1 with IS_LEAP_MONTH=1
             $isLeapCode = str_ends_with($monthCode, 'L');
             $baseCode = $isLeapCode ? substr($monthCode, offset: 0, length: -1) : $monthCode;
-            $m = null;
-            if (preg_match('/^M(\d{2})$/', $baseCode, $m) !== 1) {
-                throw new RangeError("Invalid monthCode \"{$monthCode}\" for calendar \"{$this->calendarId}\".");
-            }
-            $baseNum = (int) $m[1];
+            $baseNum = (int) substr($baseCode, offset: 1);
             if ($baseNum < 1 || $baseNum > 12) {
                 throw new RangeError(
                     "monthCode \"{$monthCode}\" is out of range for calendar \"{$this->calendarId}\".",

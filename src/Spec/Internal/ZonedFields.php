@@ -209,7 +209,7 @@ final class ZonedFields
         // years past ~9999 or negative years reliably.
         $epochDays = CalendarMath::toJulianDay($year, $month, $day) - 2_440_588;
         $wallSec = ($epochDays * 86_400) + ($hour * 3600) + ($minute * 60) + $second;
-        if ($wallSec > EpochLimits::MAX_EPOCH_SECONDS || $wallSec < -EpochLimits::MAX_EPOCH_SECONDS) {
+        if ($epochDays < -100_000_001 || $epochDays > 100_000_000) {
             throw new RangeError('ZonedDateTime property bag: local date-time is outside the representable range.');
         }
 
@@ -383,7 +383,7 @@ final class ZonedFields
     }
 
     /**
-     * Checks that an `offset`, if present, is a `±HH:MM` or `±HH:MM:SS` string.
+     * Checks an offset with whole-second precision, including trailing fractional zeros.
      *
      * Runs even under `offsetOption: 'ignore'` — the field must be well-formed whether or
      * not its value ends up being used.
@@ -400,8 +400,8 @@ final class ZonedFields
         if (!is_string($raw)) {
             throw new TypeError('ZonedDateTime offset must be a string.');
         }
-        if (preg_match('/^[+-]\d{2}:\d{2}(:\d{2})?$/', $raw) !== 1) {
-            throw new RangeError("Invalid offset string \"{$raw}\": must be ±HH:MM or ±HH:MM:SS.");
+        if (preg_match('/^[+-]\d{2}:\d{2}(?::\d{2}(?:[.,]0{1,9})?)?$/', $raw) !== 1) {
+            throw new RangeError("Invalid offset string \"{$raw}\": must have whole-second precision.");
         }
     }
 }

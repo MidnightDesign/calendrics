@@ -809,23 +809,8 @@ final class ZonedDateTime implements Stringable
             $calendarName = $cn;
         }
 
-        // Compute rounding increment in nanoseconds.
-        if ($isMinute) {
-            $increment = 60_000_000_000;
-        } else {
-            $increment = match ($digits) {
-                0 => 1_000_000_000,
-                1 => 100_000_000,
-                2 => 10_000_000,
-                3 => 1_000_000,
-                4 => 100_000,
-                5 => 10_000,
-                6 => 1_000,
-                7 => 100,
-                8 => 10,
-                default => 1,
-            };
-        }
+        /** @var int<1, 1000000000>|60000000000 $increment */
+        $increment = $isMinute ? 60_000_000_000 : ($digits < 0 ? 1 : 10 ** (9 - $digits));
 
         // Round using RoundNumberToIncrementAsIfPositive, operating on the TRUE
         // epoch parts (sentinel-aware) so out-of-int64 instants render their real
@@ -1167,10 +1152,6 @@ final class ZonedDateTime implements Stringable
         // Compute the rounded result as epoch seconds + sub-ns.
         $roundedEpochSec = $midnightEpochSec + intdiv(num1: $roundedOffsetNs, num2: EpochLimits::NS_PER_SECOND);
         $roundedSubNs = $roundedOffsetNs % EpochLimits::NS_PER_SECOND;
-        if ($roundedSubNs < 0) {
-            $roundedEpochSec--;
-            $roundedSubNs += EpochLimits::NS_PER_SECOND;
-        }
 
         return self::fromEpochParts($roundedEpochSec, $roundedSubNs, $this->timeZoneId, $this->calendarId);
     }
@@ -1305,24 +1286,7 @@ final class ZonedDateTime implements Stringable
             $us = max(0, min(999, $us));
             $ns = max(0, min(999, $ns));
         } else {
-            if ($h < 0 || $h > 23) {
-                throw new RangeError("Invalid hour {$h}: must be 0–23.");
-            }
-            if ($min < 0 || $min > 59) {
-                throw new RangeError("Invalid minute {$min}: must be 0–59.");
-            }
-            if ($sec < 0 || $sec > 59) {
-                throw new RangeError("Invalid second {$sec}: must be 0–59.");
-            }
-            if ($ms < 0 || $ms > 999) {
-                throw new RangeError("Invalid millisecond {$ms}: must be 0–999.");
-            }
-            if ($us < 0 || $us > 999) {
-                throw new RangeError("Invalid microsecond {$us}: must be 0–999.");
-            }
-            if ($ns < 0 || $ns > 999) {
-                throw new RangeError("Invalid nanosecond {$ns}: must be 0–999.");
-            }
+            CalendarMath::validateTimeFields($h, $min, $sec, $ms, $us, $ns, 'Invalid %s %d: must be 0–%d.');
         }
 
         $date = PartialDateFields::prepare(
@@ -1647,8 +1611,8 @@ final class ZonedDateTime implements Stringable
      * Named to match {@see Instant::fromEpochParts()}: it is the same operation on the
      * other class that carries an instant, and it used to answer to three names.
      *
-     * $epochSec/$subNs accept int|float and are narrowed by
-     * {@see EpochValue::narrowParts()}, which documents where float parts come from.
+     * Float seconds represent overflowing transpiler literals and are rejected by
+     * {@see EpochValue::narrowParts()}. Sub-second nanoseconds are always integers.
      *
      * @internal
      * @psalm-internal Calendrics\Spec
@@ -1656,7 +1620,7 @@ final class ZonedDateTime implements Stringable
      */
     public static function fromEpochParts(
         int|float $epochSec,
-        int|float $subNs,
+        int $subNs,
         string $tzId,
         string $calendarId = 'iso8601',
     ): self {

@@ -45,44 +45,24 @@ final readonly class EpochValue
     ) {}
 
     /**
-     * Narrows an (epochSec, subNs) pair that may arrive as floats into int parts,
-     * or returns null when the pair cannot describe a representable instant.
+     * Rejects seconds emitted as an overflowing integer literal by the transpiler.
      *
      * Instant and ZonedDateTime expose @internal factories that take true epoch parts.
      * The test262 transpiler feeds them the floor decomposition of an over-int64 BigInt
      * epoch value, whose epoch-seconds component lands in PHP as a float literal once it
-     * passes PHP_INT_MAX. Both factories therefore accept int|float and funnel the value
+     * passes PHP_INT_MAX. Both factories therefore accept int|float seconds and funnel the value
      * through here, so an out-of-range magnitude surfaces as the caller's RangeError
      * rather than as a TypeError from the parameter type.
      *
-     * A finite over-int64 float epochSec cannot be inside the ±8.64e12 s spec range, so
-     * it is rejected unconditionally. (float) PHP_INT_MAX rounds up past PHP_INT_MAX, so
-     * the comparison uses the spec bound — which is < 2^53 and therefore exact in float.
+     * Runtime callers produce integer parts. The transpiler's BigInt remainder is
+     * always in [0, 1e9), so only its seconds literal can overflow PHP's integer range.
+     * Such a value necessarily exceeds the ±8.64e12-second Temporal range.
      *
      * @return array{int, int}|null The int pair, or null when no valid pair exists.
      */
-    public static function narrowParts(int|float $epochSec, int|float $subNs): ?array
+    public static function narrowParts(int|float $epochSec, int $subNs): ?array
     {
-        $maxSec = EpochLimits::MAX_EPOCH_SECONDS;
-        if (is_float($epochSec)) {
-            if (!is_finite($epochSec) || $epochSec > (float) $maxSec || $epochSec < -(float) $maxSec) {
-                return null;
-            }
-            $epochSec = (int) $epochSec;
-        }
-        if (is_float($subNs)) {
-            if (
-                !is_finite($subNs)
-                || floor($subNs) !== $subNs
-                || $subNs > (float) PHP_INT_MAX
-                || $subNs < (float) PHP_INT_MIN
-            ) {
-                return null;
-            }
-            $subNs = (int) $subNs;
-        }
-
-        return [$epochSec, $subNs];
+        return is_float($epochSec) ? null : [$epochSec, $subNs];
     }
 
     /**
