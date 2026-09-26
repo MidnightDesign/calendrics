@@ -487,18 +487,27 @@ final class ZonedDifference
         $dateSign = $tdJdn <=> $otherJdn;
         $adjJdn = $timeSign !== 0 && $timeSign === -$dateSign ? $otherJdn - $timeSign : $otherJdn;
 
-        [$adjY, $adjM, $adjD] = CalendarMath::fromJulianDay($adjJdn);
+        return [$adjJdn, self::absoluteCalendarSpan($tdLocal, $adjJdn, $calId, $normLargest)];
+    }
+
+    /**
+     * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $receiver
+     * @param 'month'|'year' $unit
+     */
+    private static function absoluteCalendarSpan(array $receiver, int $targetJdn, string $calId, string $unit): DateSpan
+    {
+        [$adjY, $adjM, $adjD] = CalendarMath::fromJulianDay($targetJdn);
         [$years, $months, , $days] = CalendarFactory::get($calId)->dateUntil(
-            $tdLocal['year'],
-            $tdLocal['month'],
-            $tdLocal['day'],
+            $receiver['year'],
+            $receiver['month'],
+            $receiver['day'],
             $adjY,
             $adjM,
             $adjD,
-            $normLargest,
+            $unit,
         );
 
-        return [$adjJdn, new DateSpan(years: abs($years), months: abs($months), days: abs($days))];
+        return new DateSpan(years: abs($years), months: abs($months), days: abs($days));
     }
 
     /**
@@ -711,19 +720,12 @@ final class ZonedDifference
         if ($overflowDays > 0 && in_array($normLargest, ['year', 'month'], strict: true)) {
             if ($calId !== 'iso8601') {
                 assert($tc39AdjJdn !== null, description: 'the non-ISO date-diff branch must have set $tc39AdjJdn');
-                [$anchorY, $anchorM, $anchorD] = CalendarMath::fromJulianDay(
+                $span = self::absoluteCalendarSpan(
+                    $tdLocal,
                     $tc39AdjJdn + ($sign >= 0 ? $overflowDays : -$overflowDays),
-                );
-                [$years, $months, , $days] = CalendarFactory::get($calId)->dateUntil(
-                    $tdLocal['year'],
-                    $tdLocal['month'],
-                    $tdLocal['day'],
-                    $anchorY,
-                    $anchorM,
-                    $anchorD,
+                    $calId,
                     $normLargest,
                 );
-                $span = new DateSpan(years: abs($years), months: abs($months), days: abs($days));
             } else {
                 [$anchorY, $anchorM, $anchorD] = CalendarMath::fromJulianDay($adjOtherJdn + $overflowDays);
                 $span = self::isoDateSpan(

@@ -696,22 +696,10 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             $hourNum = (int) $m[3];
             $minNum = (int) $m[4];
             $secNum = $m[5] !== '' ? (int) $m[5] : 0;
-            // Leap second 60 maps to 59.
-            if ($secNum === 60) {
-                $secNum = 59;
-            }
             $fracRaw = $m[6] !== '' ? $m[6] : '';
             $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
 
-            CalendarMath::validateTimeFields($hourNum, $minNum, $secNum, 0, 0, 0);
-
-            $totalNs =
-                ($hourNum * self::NS_PER_HOUR)
-                + ($minNum * self::NS_PER_MINUTE)
-                + ($secNum * EpochLimits::NS_PER_SECOND)
-                + $subNs;
-
-            return self::fromNs($totalNs);
+            return self::fromParsedTime($hourNum, $minNum, $secNum, $subNs);
         }
 
         // Try pure time string (with optional T prefix and optional offset/annotations).
@@ -764,21 +752,10 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             $hourNum = (int) $m2[1];
             $minNum = (int) $m2[2];
             $secNum = $m2[3] !== '' ? (int) $m2[3] : 0;
-            if ($secNum === 60) {
-                $secNum = 59;
-            }
             $fracRaw = $m2[4] !== '' ? $m2[4] : '';
             $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
 
-            CalendarMath::validateTimeFields($hourNum, $minNum, $secNum, 0, 0, 0);
-
-            $totalNs =
-                ($hourNum * self::NS_PER_HOUR)
-                + ($minNum * self::NS_PER_MINUTE)
-                + ($secNum * EpochLimits::NS_PER_SECOND)
-                + $subNs;
-
-            return self::fromNs($totalNs);
+            return self::fromParsedTime($hourNum, $minNum, $secNum, $subNs);
         }
 
         /** @var list<string> $m3 */
@@ -788,9 +765,6 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             $hourNum = (int) $m3[1];
             $minNum = $m3[2] !== '' ? (int) $m3[2] : 0;
             $secNum = $m3[3] !== '' ? (int) $m3[3] : 0;
-            if ($secNum === 60) {
-                $secNum = 59;
-            }
             $fracRaw = $m3[4] !== '' ? $m3[4] : '';
             $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
             $annotationSection = $m3[5] !== '' ? $m3[5] : '';
@@ -802,18 +776,22 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
                 throw new RangeError("PlainTime::from() cannot parse \"{$s}\": invalid ISO 8601 time string.");
             }
 
-            CalendarMath::validateTimeFields($hourNum, $minNum, $secNum, 0, 0, 0);
-
-            $totalNs =
-                ($hourNum * self::NS_PER_HOUR)
-                + ($minNum * self::NS_PER_MINUTE)
-                + ($secNum * EpochLimits::NS_PER_SECOND)
-                + $subNs;
-
-            return self::fromNs($totalNs);
+            return self::fromParsedTime($hourNum, $minNum, $secNum, $subNs);
         }
 
         throw new RangeError("PlainTime::from() cannot parse \"{$s}\": invalid ISO 8601 time string.");
+    }
+
+    private static function fromParsedTime(int $hour, int $minute, int $second, int $subNs): self
+    {
+        if ($second === 60) {
+            $second = 59;
+        }
+        CalendarMath::validateTimeFields($hour, $minute, $second, 0, 0, 0);
+        return self::fromNs(($hour * self::NS_PER_HOUR)
+        + ($minute * self::NS_PER_MINUTE)
+        + ($second * EpochLimits::NS_PER_SECOND)
+        + $subNs);
     }
 
     /**

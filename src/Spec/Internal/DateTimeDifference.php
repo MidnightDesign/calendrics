@@ -7,6 +7,7 @@ namespace Calendrics\Spec\Internal;
 use Calendrics\Exception\RangeError;
 use Calendrics\Spec\Duration;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\Calendar\CalendarProtocol;
 use Calendrics\Spec\PlainDateTime;
 
 /**
@@ -334,20 +335,12 @@ final class DateTimeDifference
                             $nonIsoAdjJdn = $otherJdn - $dateSign;
                         }
                     }
-                    [$adjY2b, $adjM2b, $adjD2b] = CalendarMath::fromJulianDay($nonIsoAdjJdn);
-                    [$years, $months, , $days] = $cal->dateUntil(
-                        $temporalDate->isoYear,
-                        $temporalDate->isoMonth,
-                        $temporalDate->isoDay,
-                        $adjY2b,
-                        $adjM2b,
-                        $adjD2b,
+                    [$years, $months, $days] = self::absoluteCalendarDiff(
+                        $cal,
+                        $temporalDate,
+                        $nonIsoAdjJdn,
                         $calendarUnit,
                     );
-                    // Take absolute values — the output sign is applied later.
-                    $years = abs($years);
-                    $months = abs($months);
-                    $days = abs($days);
                 } else {
                     // ISO calendar: the endpoints are already in (earlier, later) order,
                     // so which one is the receiver has to be passed explicitly for the
@@ -484,19 +477,12 @@ final class DateTimeDifference
                 if ($calId !== 'iso8601') {
                     // Non-ISO: shift nonIsoAdjJdn by overflow in the diff direction.
                     $tc39Jdn2 = $nonIsoAdjJdn + ($sign >= 0 ? $overflowDays : -$overflowDays);
-                    [$adjY3, $adjM3, $adjD3] = CalendarMath::fromJulianDay($tc39Jdn2);
-                    [$years, $months, , $days] = $cal->dateUntil(
-                        $temporalDate->isoYear,
-                        $temporalDate->isoMonth,
-                        $temporalDate->isoDay,
-                        $adjY3,
-                        $adjM3,
-                        $adjD3,
+                    [$years, $months, $days] = self::absoluteCalendarDiff(
+                        $cal,
+                        $temporalDate,
+                        $tc39Jdn2,
                         $calendarUnit,
                     );
-                    $years = abs($years);
-                    $months = abs($months);
-                    $days = abs($days);
                 } else {
                     // ISO: add overflow to the swap-based adjOtherJdn.
                     $isoAdjJdn2 = $adjOtherJdn + $overflowDays;
@@ -613,6 +599,29 @@ final class DateTimeDifference
         $roundUp = CalendarMath::applyCalendarRoundingProgress($days, $progress, $increment, $mode, $sign);
         $q = intdiv(num1: $days, num2: $increment);
         return $roundUp ? ($q + 1) * $increment : $q * $increment;
+    }
+
+    /**
+     * @param 'month'|'year' $unit
+     * @return array{int, int, int}
+     */
+    private static function absoluteCalendarDiff(
+        CalendarProtocol $calendar,
+        PlainDateTime $receiver,
+        int $targetJdn,
+        string $unit,
+    ): array {
+        [$year, $month, $day] = CalendarMath::fromJulianDay($targetJdn);
+        [$years, $months, , $days] = $calendar->dateUntil(
+            $receiver->isoYear,
+            $receiver->isoMonth,
+            $receiver->isoDay,
+            $year,
+            $month,
+            $day,
+            $unit,
+        );
+        return [abs($years), abs($months), abs($days)];
     }
 
     /**
