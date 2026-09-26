@@ -503,52 +503,11 @@ final class DurationRounding
      */
     private static function balanceNsToFields(int $totalAbsNs, int $largestUnitIdx): array
     {
-        $ns = $totalAbsNs % 1_000;
-        $rem = intdiv(num1: $totalAbsNs, num2: 1_000);
-        $us = $rem % 1_000;
-        $rem = intdiv(num1: $rem, num2: 1_000);
-        $ms = $rem % 1_000;
-        $rem = intdiv(num1: $rem, num2: 1_000);
-        $s = $rem % 60;
-        $rem = intdiv(num1: $rem, num2: 60);
-        $m = $rem % 60;
-        $rem = intdiv(num1: $rem, num2: 60);
-        $h = $rem % 24;
-        $days = intdiv(num1: $rem, num2: 24);
-
-        // Bubble excess upward when largestUnit is smaller than 'day' (idx 6).
-        if ($largestUnitIdx < 6) {
-            $h += $days * 24;
-            $days = 0;
-        }
-        if ($largestUnitIdx < 5) {
-            $m += $h * 60;
-            $h = 0;
-        }
-        if ($largestUnitIdx < 4) {
-            $s += $m * 60;
-            $m = 0;
-        }
-        if ($largestUnitIdx < 3) {
-            $ms += $s * 1_000;
-            $s = 0;
-        }
-        if ($largestUnitIdx < 2) {
-            $us += $ms * 1_000;
-            $ms = 0;
-        }
-        if ($largestUnitIdx < 1) {
-            $ns += $us * 1_000;
-            $us = 0;
-        }
-
-        // Apply float64 rounding to field values that exceed 2^53 (MAX_SAFE_INTEGER).
-        // JS stores Duration fields as float64; integers > 2^53 lose precision when stored.
-        // We simulate this by casting to float, which PHP performs with float64 rounding.
-        $floatMax = 9_007_199_254_740_992;
-        $f64 = static fn(int $v): int|float => $v >= $floatMax || $v <= -$floatMax ? (float) $v : $v;
-
-        return [$f64($days), $f64($h), $f64($m), $f64($s), $f64($ms), $f64($us), $f64($ns)];
+        return self::balanceSecondsToFields(
+            intdiv($totalAbsNs, num2: 1_000_000_000),
+            $totalAbsNs % 1_000_000_000,
+            $largestUnitIdx,
+        );
     }
 
     /**

@@ -984,7 +984,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         $remJdn = CalendarMath::toJulianDay($remY, $remM, 1);
         $remDays = abs($remJdn - $anchorJdn);
 
-        $progress = $intervalDays > 0 ? $remDays / $intervalDays : 0.0;
+        $progress = $remDays / $intervalDays;
 
         $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
 
@@ -1044,7 +1044,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         $subJdn = CalendarMath::toJulianDay($subY, $subM, 1);
         $remDays = abs($subJdn - $anchorJdn);
 
-        $progress = $intervalDays > 0 ? $remDays / $intervalDays : 0.0;
+        $progress = $remDays / $intervalDays;
         $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
 
         $roundedAbs = $roundUp ? $floorCount + $increment : $floorCount;
@@ -1110,7 +1110,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         $remJdn = CalendarMath::toJulianDay($remY, $remM, 1);
         $remDays = abs($remJdn - $monthAnchorJdn);
 
-        $progress = $intervalDays > 0 ? $remDays / $intervalDays : 0.0;
+        $progress = $remDays / $intervalDays;
         $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
 
         $roundedAbsMonths = $roundUp ? $nextCount : $floorCount;
