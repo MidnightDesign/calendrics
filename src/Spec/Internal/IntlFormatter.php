@@ -820,12 +820,11 @@ final class IntlFormatter
 
     private static function usesAlternateHourCycle(string $locale, string $pattern): bool
     {
-        // ICU's standard time records use the locale's default cycle. Switching
+        // ICU's standard time records use the calendar's inherited cycle. Switching
         // cycle families selects availableFormats records whose numeric-hour
         // skeletons preserve the matched width, even when other fields are padded.
-        $generator = new \IntlDatePatternGenerator(self::canonicalLocaleId($locale));
-        $defaultPattern = $generator->getBestPattern('j');
-        if ($defaultPattern === false) {
+        $defaultPattern = IntlCalendarPatterns::standardTimePattern($locale);
+        if ($defaultPattern === null) {
             return false;
         }
 
@@ -854,16 +853,11 @@ final class IntlFormatter
         if (str_contains($key, 'h')) {
             $key = $dayPeriod . $key;
         }
-        $calendarType = IntlCalendarFactory::forLocale(timeZone: null, locale: $locale)->getType();
-        $bundle = \ResourceBundle::create(self::canonicalLocaleId($locale), bundle: null);
-        $calendar = $bundle?->get('calendar');
-        $calendarData = $calendar instanceof \ResourceBundle ? $calendar->get($calendarType) : null;
-        $formats = $calendarData instanceof \ResourceBundle ? $calendarData->get('availableFormats') : null;
-        if (!$formats instanceof \ResourceBundle || is_string($formats->get($key))) {
+        if (IntlCalendarPatterns::availableFormat($locale, $key) !== null) {
             return false;
         }
 
-        return is_string($formats->get(strtr($key, ['h' => 'hh', 'H' => 'HH'])));
+        return IntlCalendarPatterns::availableFormat($locale, strtr($key, ['h' => 'hh', 'H' => 'HH'])) !== null;
     }
 
     /**
