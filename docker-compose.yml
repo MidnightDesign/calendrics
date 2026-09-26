@@ -1,5 +1,6 @@
 services:
   php:
+    network_mode: bridge
     build:
       context: .
       args:
