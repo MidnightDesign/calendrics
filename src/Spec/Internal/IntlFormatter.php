@@ -113,6 +113,25 @@ final class IntlFormatter
      */
     private const array HOUR_CYCLES = ['h11', 'h12', 'h23', 'h24'];
 
+    /**
+     * Standalone-hour width changes in current CLDR data that are absent from ICU 76.
+     *
+     * @var list<string>
+     */
+    private const array NUMERIC_HOUR_CLDR_LOCALES = ['be', 'en-IL', 'ie', 'it', 'mk', 'ru', 'sv-FI', 'uk'];
+
+    /** @var list<string> */
+    private const array TWO_DIGIT_HOUR_CLDR_LOCALES = ['es-BR', 'es-BZ'];
+
+    /** @var list<string> */
+    private const array TWO_DIGIT_ZONE_HOUR_CLDR_LOCALES = ['en-IL', 'gsw', 'smn-FI', 'yue-CN'];
+
+    /** @var list<string> */
+    private const array NUMERIC_ZONE_MINUTE_CLDR_LOCALES = ['ckb-IR', 'lrc-IR', 'mzn-IR', 'th-TH'];
+
+    /** @var list<string> */
+    private const array NUMERIC_ZONE_ANY_MINUTE_CLDR_LOCALES = ['fa'];
+
     /** The IntlDateFormatter constant each {@see self::FORMAT_STYLES} value selects. */
     private const array FORMAT_STYLE_CONSTANTS = [
         'full' => \IntlDateFormatter::FULL,
@@ -703,11 +722,164 @@ final class IntlFormatter
         $result = $generator->getBestPattern($skeleton);
         $pattern = $result !== false ? $result : $skeleton;
 
-        return ($opts['hour'] ?? null) === '2-digit' ? self::widenHourField($pattern) : $pattern;
+        if ($hour === '2-digit') {
+            return self::setHourFieldWidth($pattern, 2);
+        }
+        if ($hour === 'numeric') {
+            $resolvedHourWidth = self::resolvedNumericHourWidth($opts, $locale, $pattern, $minute, $second);
+            if ($resolvedHourWidth !== null) {
+                return self::setHourFieldWidth($pattern, $resolvedHourWidth);
+            }
+        }
+
+        return $pattern;
     }
 
     /**
-     * Widens the hour field of an ICU pattern to two characters.
+     * Resolves the hour width chosen by ECMA-402's best-fit match.
+     *
+     * ICU exposes this through UDATPG_MATCH_HOUR_FIELD_LENGTH, but PHP's
+     * IntlDatePatternGenerator binding does not expose that option. The option only changes
+     * the selected width when another requested field makes ICU choose a format record with a
+     * different hour width. The combinations below mirror those observable transitions; an
+     * hour without a minute takes its width from the locale's standalone-hour record.
+     *
+     * @param array<string, mixed> $opts
+     * @return 1|2|null Null preserves the width selected by the local ICU data.
+     */
+    private static function resolvedNumericHourWidth(
+        array $opts,
+        string $locale,
+        string $pattern,
+        ?string $minute,
+        ?string $second,
+    ): ?int {
+        $localeId = self::canonicalLocaleId($locale);
+        $localeDataId = self::localeLanguageRegionId($localeId);
+        $language = \Locale::getPrimaryLanguage($localeId);
+        if ($localeDataId === 'af-NA' && ($opts['dayPeriod'] ?? null) !== null) {
+            return $minute === null ? 1 : 2;
+        }
+        if (($opts['timeZoneName'] ?? null) !== null) {
+            if ($minute === '2-digit' && $second !== null) {
+                return 1;
+            }
+            if (
+                $minute === null
+                && (
+                    in_array($language, self::TWO_DIGIT_ZONE_HOUR_CLDR_LOCALES, strict: true)
+                    || in_array($localeDataId, self::TWO_DIGIT_ZONE_HOUR_CLDR_LOCALES, strict: true)
+                )
+            ) {
+                return 2;
+            }
+            if (
+                $minute === '2-digit'
+                && (
+                    in_array($language, self::NUMERIC_ZONE_MINUTE_CLDR_LOCALES, strict: true)
+                    || in_array($localeDataId, self::NUMERIC_ZONE_MINUTE_CLDR_LOCALES, strict: true)
+                )
+            ) {
+                return 1;
+            }
+            if ($minute !== null && in_array($language, self::NUMERIC_ZONE_ANY_MINUTE_CLDR_LOCALES, strict: true)) {
+                return 1;
+            }
+
+            return null;
+        }
+
+        if ($minute === null) {
+            return self::standaloneHourWidth($locale, $pattern);
+        }
+        if ($minute !== '2-digit') {
+            return null;
+        }
+
+        if (\Locale::getPrimaryLanguage($localeId) === 'yo') {
+            return 2;
+        }
+
+        if ($second === 'numeric' || ($opts['fractionalSecondDigits'] ?? null) !== null) {
+            return $localeDataId === 'sv-FI' ? 1 : null;
+        }
+        return 1;
+    }
+
+    /**
+     * Reads the locale's own standalone-hour format rather than ICU's generic root fallback.
+     *
+     * @return 1|2
+     */
+    private static function standaloneHourWidth(string $locale, string $pattern): int
+    {
+        $match = null;
+        if (preg_match("/'(?:[^']|'')*'(*SKIP)(*F)|([hHKk])\\1*/", $pattern, $match) !== 1) {
+            return 1;
+        }
+
+        $hourSymbol = $match[1];
+        $language = \Locale::getPrimaryLanguage($locale);
+        $localeId = self::canonicalLocaleId($locale);
+        $localeDataId = self::localeLanguageRegionId($localeId);
+        if (in_array($localeDataId, self::TWO_DIGIT_HOUR_CLDR_LOCALES, strict: true)) {
+            return 2;
+        }
+        if (
+            in_array($language, self::NUMERIC_HOUR_CLDR_LOCALES, strict: true)
+            || in_array($localeDataId, self::NUMERIC_HOUR_CLDR_LOCALES, strict: true)
+        ) {
+            return 1;
+        }
+
+        $candidates = [$localeId];
+        if (is_string($language)) {
+            $candidates[] = $language;
+        }
+        $calendarType = IntlCalendarFactory::forLocale(timeZone: null, locale: $locale)->getType();
+        foreach (array_unique($candidates) as $candidate) {
+            $baseLocale = explode('@', $candidate, limit: 2)[0];
+            $bundle = \ResourceBundle::create($baseLocale, bundle: null, fallback: false);
+            if (!$bundle instanceof \ResourceBundle) {
+                continue;
+            }
+
+            $calendar = $bundle->get('calendar');
+            $calendarData = $calendar instanceof \ResourceBundle ? $calendar->get($calendarType) : null;
+            $formats = $calendarData instanceof \ResourceBundle ? $calendarData->get('availableFormats') : null;
+            $hourPattern = $formats instanceof \ResourceBundle ? $formats->get($hourSymbol) : null;
+            if (!is_string($hourPattern)) {
+                continue;
+            }
+
+            return preg_match("/'(?:[^']|'')*'(*SKIP)(*F)|{$hourSymbol}{2,}/", $hourPattern) === 1 ? 2 : 1;
+        }
+
+        return strlen($match[0]) >= 2 ? 2 : 1;
+    }
+
+    private static function canonicalLocaleId(string $locale): string
+    {
+        $canonical = \Locale::canonicalize($locale);
+        $localeId = is_string($canonical) ? $canonical : $locale;
+        $localeId = explode('-u-', $localeId, limit: 2)[0];
+
+        return str_replace(search: '_', replace: '-', subject: explode('@', $localeId, limit: 2)[0]);
+    }
+
+    private static function localeLanguageRegionId(string $locale): string
+    {
+        $language = \Locale::getPrimaryLanguage($locale);
+        $region = \Locale::getRegion($locale);
+        if (!is_string($language) || $language === '' || !is_string($region) || $region === '') {
+            return $locale;
+        }
+
+        return sprintf('%s-%s', $language, $region);
+    }
+
+    /**
+     * Sets the hour field of an ICU pattern to the requested width.
      *
      * ECMA-402 has `hour: '2-digit'` pad a single-digit hour, but
      * {@see \IntlDatePatternGenerator::getBestPattern()} is free to answer with the locale's
@@ -719,17 +891,18 @@ final class IntlFormatter
      * The alternation matches a quoted literal first so its contents are copied through
      * untouched: de-DE's `HH 'Uhr'` must not have the `h` of `Uhr` read as an hour field.
      */
-    private static function widenHourField(string $pattern): string
+    /** @param 1|2 $width */
+    private static function setHourFieldWidth(string $pattern, int $width): string
     {
-        $widened = preg_replace_callback(
+        $adjusted = preg_replace_callback(
             "/'[^']*'|([hHKk])\\1*/",
             /** @param array<array-key, string> $match */
             static fn(array $match): string => array_key_exists(1, $match)
-                ? str_repeat($match[1], times: 2)
+                ? str_repeat($match[1], times: $width)
                 : $match[0],
             subject: $pattern,
         );
 
-        return $widened ?? $pattern;
+        return $adjusted ?? $pattern;
     }
 }
