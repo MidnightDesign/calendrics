@@ -290,24 +290,7 @@ final class DurationRounding
         // Validate increment: must be strictly less than the next-higher-unit count and divide it evenly.
         // Per TC39: e.g. minutes increment must be < 60 and divide 60 evenly.
         if ($suNormResolved !== 'days' && $suIdx < 6) {
-            /** @var array<string,int> */
-            static $MAX_PER_UNIT = [
-                'nanoseconds' => 1_000,
-                'microseconds' => 1_000,
-                'milliseconds' => 1_000,
-                'seconds' => 60,
-                'minutes' => 60,
-                'hours' => 24,
-            ];
-            $maxPerUnit = $MAX_PER_UNIT[$suNormResolved] ?? 1;
-            if ($increment >= $maxPerUnit) {
-                throw new RangeError("roundingIncrement {$increment} is too large for unit \"{$suNormResolved}\".");
-            }
-            if (($maxPerUnit % $increment) !== 0) {
-                throw new RangeError(
-                    "roundingIncrement {$increment} does not evenly divide into the next unit for \"{$suNormResolved}\".",
-                );
-            }
+            self::validateSubdayIncrement($suNormResolved, $increment);
         }
 
         // ZDT sub-day rounding: for ZonedDateTime relativeTo with a time smallestUnit and
@@ -489,6 +472,28 @@ final class DurationRounding
             $sign * $rUs,
             $sign * $rNs,
         );
+    }
+
+    private static function validateSubdayIncrement(string $unit, int $increment): void
+    {
+        /** @var array<string,int> */
+        static $MAX_PER_UNIT = [
+            'nanoseconds' => 1_000,
+            'microseconds' => 1_000,
+            'milliseconds' => 1_000,
+            'seconds' => 60,
+            'minutes' => 60,
+            'hours' => 24,
+        ];
+        $maxPerUnit = $MAX_PER_UNIT[$unit] ?? 1;
+        if ($increment >= $maxPerUnit) {
+            throw new RangeError("roundingIncrement {$increment} is too large for unit \"{$unit}\".");
+        }
+        if (($maxPerUnit % $increment) !== 0) {
+            throw new RangeError(
+                "roundingIncrement {$increment} does not evenly divide into the next unit for \"{$unit}\".",
+            );
+        }
     }
 
     /**
@@ -944,24 +949,7 @@ final class DurationRounding
         // Validate sub-day increment: must be strictly less than next-higher-unit count and divide it evenly.
         // Per TC39: e.g. minutes increment must be < 60 and divide 60 evenly.
         if ($suIdx < 6) {
-            /** @var array<string,int> */
-            static $MAX_PER_UNIT_RWR = [
-                'nanoseconds' => 1_000,
-                'microseconds' => 1_000,
-                'milliseconds' => 1_000,
-                'seconds' => 60,
-                'minutes' => 60,
-                'hours' => 24,
-            ];
-            $maxPerUnit = $MAX_PER_UNIT_RWR[$suNormResolved] ?? 1;
-            if ($increment >= $maxPerUnit) {
-                throw new RangeError("roundingIncrement {$increment} is too large for unit \"{$suNormResolved}\".");
-            }
-            if (($maxPerUnit % $increment) !== 0) {
-                throw new RangeError(
-                    "roundingIncrement {$increment} does not evenly divide into the next unit for \"{$suNormResolved}\".",
-                );
-            }
+            self::validateSubdayIncrement($suNormResolved, $increment);
         }
 
         // Round the signed total nanoseconds.
@@ -978,18 +966,7 @@ final class DurationRounding
                 // For ZDT: use DST-aware day lengths to compute fractional days.
                 // Balance the time portion into days using actual day lengths first,
                 // then compute the fractional remainder for rounding.
-                $calDateEnd = $startDate;
-                $applySign = $d->sign;
-                if ((int) $d->years !== 0) {
-                    $calDateEnd = AnchorMath::addYearsClamped($calDateEnd, $applySign * abs((int) $d->years));
-                }
-                if ((int) $d->months !== 0) {
-                    $calDateEnd = AnchorMath::addMonthsClamped($calDateEnd, $applySign * abs((int) $d->months));
-                }
-                if ((int) $d->weeks !== 0) {
-                    $awDays = $applySign * abs((int) $d->weeks) * 7;
-                    $calDateEnd = $calDateEnd->modify(sprintf('%+d days', $awDays));
-                }
+                $calDateEnd = AnchorMath::applyYearsMonthsWeeks($d, $startDate);
                 $absRawDays = abs((int) $d->days);
                 $absTimeOnlyNs = abs($timeNs);
                 $calEndY = (int) $calDateEnd->format('Y');
@@ -1040,18 +1017,7 @@ final class DurationRounding
             // round only the sub-day remainder, then check for day overflow.
             if ($zdtInfoRWR !== null) {
                 // Compute the date after adding calendar fields (years/months/weeks) only.
-                $calDateEnd = $startDate;
-                $applySign = $d->sign;
-                if ((int) $d->years !== 0) {
-                    $calDateEnd = AnchorMath::addYearsClamped($calDateEnd, $applySign * abs((int) $d->years));
-                }
-                if ((int) $d->months !== 0) {
-                    $calDateEnd = AnchorMath::addMonthsClamped($calDateEnd, $applySign * abs((int) $d->months));
-                }
-                if ((int) $d->weeks !== 0) {
-                    $awDays = $applySign * abs((int) $d->weeks) * 7;
-                    $calDateEnd = $calDateEnd->modify(sprintf('%+d days', $awDays));
-                }
+                $calDateEnd = AnchorMath::applyYearsMonthsWeeks($d, $startDate);
                 $absRawDays = abs((int) $d->days);
                 $absTimeOnlyNs = abs($timeNs);
                 $calEndY = (int) $calDateEnd->format('Y');

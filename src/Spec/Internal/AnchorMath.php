@@ -336,19 +336,7 @@ final class AnchorMath
      */
     public static function applyCalendarToDate(Duration $d, \DateTimeImmutable $startDate): array
     {
-        $endDate = $startDate;
-        // Apply years, months, weeks with TC39-compliant clamped arithmetic.
-        $applySign = $d->sign;
-        if ((int) $d->years !== 0) {
-            $endDate = self::addYearsClamped($endDate, $applySign * abs((int) $d->years));
-        }
-        if ((int) $d->months !== 0) {
-            $endDate = self::addMonthsClamped($endDate, $applySign * abs((int) $d->months));
-        }
-        if ((int) $d->weeks !== 0) {
-            $awDays = $applySign * abs((int) $d->weeks) * 7;
-            $endDate = $endDate->modify(sprintf('%+d days', $awDays));
-        }
+        $endDate = self::applyYearsMonthsWeeks($d, $startDate);
         // Apply days.
         $calDays = (int) $d->days;
         if ($calDays !== 0) {
@@ -361,5 +349,22 @@ final class AnchorMath
             throw new RangeError('Duration applied to relativeTo produces a date outside the representable range.');
         }
         return [$endDate, $calendarDays];
+    }
+
+    public static function applyYearsMonthsWeeks(Duration $d, \DateTimeImmutable $startDate): \DateTimeImmutable
+    {
+        $endDate = $startDate;
+        $applySign = $d->sign;
+        if ((int) $d->years !== 0) {
+            $endDate = self::addYearsClamped($endDate, $applySign * abs((int) $d->years));
+        }
+        if ((int) $d->months !== 0) {
+            $endDate = self::addMonthsClamped($endDate, $applySign * abs((int) $d->months));
+        }
+        if ((int) $d->weeks !== 0) {
+            $awDays = $applySign * abs((int) $d->weeks) * 7;
+            $endDate = $endDate->modify(sprintf('%+d days', $awDays));
+        }
+        return $endDate;
     }
 }
