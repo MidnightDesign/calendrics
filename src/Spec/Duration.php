@@ -7,6 +7,7 @@ namespace Calendrics\Spec;
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\DurationRounding;
+use Calendrics\Spec\Internal\DurationTime;
 use Calendrics\Spec\Internal\DurationTotal;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
@@ -736,6 +737,7 @@ final class Duration implements Stringable
      */
     public function total(string|array|object $totalOf): int|float
     {
+        $anchor = null;
         // A string totalOf is the smallestUnit shorthand; an array/object is an options
         // bag normalized via GetOptionsObject (a Symbol sentinel object => TypeError).
         // TC39: if totalOf is undefined, throw TypeError (required arg).
@@ -750,7 +752,7 @@ final class Duration implements Stringable
             // GetTemporalRelativeToOption runs before the unit is read (steps 6 and 9),
             // and unconditionally: a malformed anchor is rejected even when the unit
             // that follows would never have needed one.
-            RelativeTo::readOption($totalOf);
+            $anchor = RelativeTo::readOption($totalOf);
         }
 
         if (is_array($totalOf)) {
@@ -764,7 +766,7 @@ final class Duration implements Stringable
         }
         $unit = Options::normalizeUnit($unit);
 
-        return DurationTotal::compute($this, $unit, $totalOf);
+        return DurationTotal::compute($this, $unit, $anchor);
     }
 
     /**
@@ -1204,30 +1206,28 @@ final class Duration implements Stringable
         // GetTemporalRelativeToOption is step 4, ahead of the identical-slots early return
         // in step 5, so a malformed anchor is rejected even when the two durations would
         // have compared equal without one (Duration/compare/relativeto-string-invalid.js).
-        $relativeToProvided = RelativeTo::isPresent($opts);
+        $anchor = RelativeTo::readOption($opts);
 
         // Step 5, which needs no anchor even for a calendar duration.
         if ($d1->equals($d2)) {
             return 0;
         }
 
-        if ($hasCalendar && !$relativeToProvided) {
+        if ($hasCalendar && $anchor === null) {
             throw new RangeError(
                 'Duration::compare() with calendar units (years, months, or weeks) requires a relativeTo option.',
             );
         }
-        $anchor = $relativeToProvided ? RelativeTo::toTemporalObject($opts['relativeTo']) : null;
-        if ($anchor instanceof ZonedDateTime && ($hasCalendar || $d1->days !== 0 || $d2->days !== 0)) {
-            return ZonedDateTime::compare(
-                self::zonedEndForComparison($d1, $anchor),
-                self::zonedEndForComparison($d2, $anchor),
-            );
-        }
-
         $days1 = (int) $d1->days;
         $days2 = (int) $d2->days;
-        if ($hasCalendar) {
-            assert($anchor instanceof PlainDate);
+        if ($anchor instanceof ZonedDateTime) {
+            if ($hasCalendar || $days1 !== 0 || $days2 !== 0) {
+                return ZonedDateTime::compare(
+                    self::zonedEndForComparison($d1, $anchor),
+                    self::zonedEndForComparison($d2, $anchor),
+                );
+            }
+        } elseif ($hasCalendar) {
             $days1 = self::calendarDaysForComparison($d1, $anchor);
             $days2 = self::calendarDaysForComparison($d2, $anchor);
         }
@@ -1273,23 +1273,8 @@ final class Duration implements Stringable
     /** @return array{int, int} Whole seconds and a nonnegative nanosecond remainder. */
     private static function timePartsForComparison(self $duration, int $days): array
     {
-        $seconds =
-            ($days * 86_400)
-            + ((int) $duration->hours * 3_600)
-            + ((int) $duration->minutes * 60)
-            + (int) $duration->seconds;
-        $subNs = 0;
-        foreach ([
-            [$duration->milliseconds, 1_000, 1_000_000],
-            [$duration->microseconds, 1_000_000, 1_000],
-            [$duration->nanoseconds, 1_000_000_000, 1],
-        ] as [$field, $divisor, $scale]) {
-            [$whole, $remainder] = self::tdivmod($field, $divisor);
-            $seconds += (int) $whole;
-            $subNs += $remainder * $scale;
-        }
-        $seconds += intdiv($subNs, num2: 1_000_000_000);
-        $subNs %= 1_000_000_000;
+        [$seconds, $subNs] = DurationTime::parts($duration);
+        $seconds += $days * 86_400;
         if (abs($seconds) >= 9_007_199_254_740_992) {
             throw new RangeError('Duration time fields exceed the maximum representable range.');
         }

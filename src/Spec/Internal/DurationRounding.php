@@ -118,31 +118,18 @@ final class DurationRounding
 
         $needsRelativeTo = $suIsCalendar || $luIsCalendar || $durationHasCalendar;
 
-        $relativeToProvided = RelativeTo::isPresent($roundTo);
+        $relativeTo = RelativeTo::readOption($roundTo);
+        $zdtRelativeTo = $relativeTo instanceof ZonedDateTime;
+        $zdtInfoRound = $relativeTo !== null ? RelativeTo::resolveZdt($relativeTo) : null;
+        $anchor = $relativeTo !== null ? RelativeTo::resolveAnchor($relativeTo) : null;
 
-        // Detect ZonedDateTime relativeTo for sub-day rounding behavior.
-        // $roundTo is always an array at this point (strings/objects normalized above).
-        /** @var mixed $rtRawForZdt */
-        $rtRawForZdt = $roundTo['relativeTo'] ?? null;
-        $zdtRelativeTo = $rtRawForZdt instanceof \Calendrics\Spec\ZonedDateTime;
-        $zdtInfoRound = $rtRawForZdt !== null ? RelativeTo::resolveZdt($rtRawForZdt) : null;
-
-        // The anchor with its spelling reduced away, so the range guards below can ask
-        // what kind of anchor TC39 would have built rather than how it was written.
-        // Resolving it here also range-checks the anchor itself, on both paths.
-        $anchor = $relativeToProvided ? RelativeTo::resolveAnchor($rtRawForZdt) : null;
-
-        if ($needsRelativeTo && !$relativeToProvided) {
-            throw new RangeError(
-                'Duration::round() with calendar units (years, months, weeks) requires a relativeTo option.',
-            );
-        }
         if ($needsRelativeTo) {
-            /** @var mixed $rtRaw */
-            $rtRaw = $roundTo['relativeTo'] ?? null;
+            if ($relativeTo === null) {
+                throw new RangeError('Duration::round() with calendar units requires a relativeTo option.');
+            }
             return self::roundWithRelativeTo(
                 $d,
-                $rtRaw,
+                $relativeTo,
                 $suNorm,
                 $luIsAuto,
                 $luNorm,
@@ -199,25 +186,16 @@ final class DurationRounding
         // Compute total absolute nanoseconds, balancing all sub-day fields first.
         $sign = $d->sign;
         $signedMode = $sign === -1 ? EpochRounding::negateMode($roundingMode) : $roundingMode;
-        [$nsSeconds, $absNs] = DurationTotal::splitSubsecondField(abs((float) $d->nanoseconds), 9);
-        [$usSeconds, $absUs] = DurationTotal::splitSubsecondField(abs((float) $d->microseconds), 6);
-        $absMs = (int) abs((float) $d->milliseconds);
-        $absS = (int) abs((float) $d->seconds) + $nsSeconds + $usSeconds;
-        $absM = (int) abs((float) $d->minutes);
-        $absH = (int) abs((float) $d->hours);
-        $absD = (int) abs((float) $d->days);
-
-        // Balance up to get exact integers.
-        $absUs += intdiv(num1: $absNs, num2: 1_000);
-        $absNs %= 1_000;
-        $absMs += intdiv(num1: $absUs, num2: 1_000);
-        $absUs %= 1_000;
-        $absS += intdiv(num1: $absMs, num2: 1_000);
-        $absMs %= 1_000;
-        $absM += intdiv(num1: $absS, num2: 60);
-        $absS %= 60;
-        $absH += intdiv(num1: $absM, num2: 60);
-        $absM %= 60;
+        [$seconds, $nanoseconds] = DurationTime::parts($d);
+        $absSeconds = abs($seconds);
+        $absSubNs = abs($nanoseconds);
+        $absH = intdiv($absSeconds, num2: 3_600);
+        $absM = intdiv($absSeconds % 3_600, num2: 60);
+        $absS = $absSeconds % 60;
+        $absMs = intdiv($absSubNs, num2: 1_000_000);
+        $absUs = intdiv($absSubNs % 1_000_000, num2: 1_000);
+        $absNs = $absSubNs % 1_000;
+        $absD = abs((int) $d->days);
 
         // Balance hours into days: DST-aware when ZDT IANA relativeTo is present.
         if ($zdtInfoRound !== null) {
@@ -816,7 +794,6 @@ final class DurationRounding
     /**
      * Implements Duration::round() when calendar arithmetic is needed (relativeTo is a PlainDate).
      *
-     * @param mixed $rtRaw Already-validated relativeTo value (PlainDate, string, or array).
      * @param ?string $suNorm Normalized smallestUnit or null.
      * @param bool $luIsAuto Whether largestUnit is 'auto'.
      * @param ?string $luNorm Normalized largestUnit or null.
@@ -826,7 +803,7 @@ final class DurationRounding
      */
     private static function roundWithRelativeTo(
         Duration $d,
-        mixed $rtRaw,
+        PlainDate|ZonedDateTime $relativeTo,
         ?string $suNorm,
         bool $luIsAuto,
         ?string $luNorm,
@@ -834,8 +811,8 @@ final class DurationRounding
         string $roundingMode,
         array $UNIT_IDX,
     ): Duration {
-        $bag = RelativeTo::toPlainDateBag($rtRaw);
-        $zdtInfoRWR = RelativeTo::resolveZdt($rtRaw);
+        $bag = RelativeTo::toPlainDateBag($relativeTo);
+        $zdtInfoRWR = RelativeTo::resolveZdt($relativeTo);
         // When relativeTo resolves to a ZonedDateTime, use the ZDT's local date
         // (which accounts for UTC offset to local time conversion, e.g. Z+IANA strings).
         if ($zdtInfoRWR !== null) {

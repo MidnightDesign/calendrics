@@ -4,112 +4,27 @@ declare(strict_types=1);
 
 namespace Calendrics\Spec\Internal;
 
-use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Duration;
-use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\PlainDate;
 use Calendrics\Spec\ZonedDateTime;
 
-/**
- * Resolution and validation of the `relativeTo` option.
- *
- * A Duration carrying years, months or weeks has no fixed length, so
- * {@see Duration::total()} and {@see Duration::round()} need an anchor before they
- * can convert it to anything. TC39 spells that anchor four different ways — a
- * `PlainDate`, a `ZonedDateTime`, an ISO string, or a property bag — and each
- * spelling carries its own validation rules and its own set of ways to be out of
- * range. This class turns all four into the two shapes the arithmetic consumes:
- *
- *   - a plain `year`/`month`/`day` bag, via {@see self::toPlainDateBag()}; and
- *   - a zoned info record, via {@see self::resolveZdt()}, which is non-null only
- *     when the anchor names an IANA zone that may observe DST. UTC and fixed-offset
- *     anchors resolve to null, because a calendar day is exactly 86 400 seconds there
- *     and the DST-aware arithmetic in {@see AnchorMath} would be wasted work.
- *
- * @internal
- */
+/** @internal */
 final class RelativeTo
 {
     /**
-     * The calendar fields a `relativeTo` property bag is built from — a ZonedDateTime-
-     * shaped anchor, so the full date-and-time set. `era`/`eraYear` are added by
-     * {@see FieldBag} for calendars that have eras; `offset`/`timeZone` are non-calendar
-     * fields, passed alongside.
+     * Resolves GetTemporalRelativeToOption once, before callers take any early return.
+     * Only an absent option means no anchor; an explicit null is invalid.
      *
-     * @var list<string>
+     * @param array<array-key, mixed> $options
      */
-    private const array FIELDS = [
-        'year',
-        'month',
-        'monthCode',
-        'day',
-        'hour',
-        'minute',
-        'second',
-        'millisecond',
-        'microsecond',
-        'nanosecond',
-    ];
-
-    /**
-     * TC39 GetTemporalRelativeToOption. Every entry point that reads `relativeTo` calls
-     * this before it knows whether it will need the anchor, so an unusable one is
-     * rejected here rather than at the point of use.
-     *
-     * Only an absent key gets through untouched — the PHP spelling of JS `undefined`,
-     * the sole value the operation treats as "no anchor".
-     *
-     * @param array<array-key, mixed> $options An options bag already normalized by {@see Options}.
-     * @throws RangeError for invalid relativeTo strings or property bags.
-     * @throws TypeError for invalid relativeTo types.
-     */
-    public static function readOption(array $options): void
+    public static function readOption(array $options): PlainDate|ZonedDateTime|null
     {
         if (!array_key_exists('relativeTo', $options)) {
-            return;
+            return null;
         }
-        /** @var mixed $rt */
-        $rt = $options['relativeTo'];
-        // Step 5.a: a value that is neither an Object nor a String is a TypeError, and
-        // PHP null is JS null, not JS undefined.
-        if ($rt === null) {
-            throw new TypeError('relativeTo must be a string, property bag, or Temporal date/datetime.');
-        }
-        if ($rt instanceof PlainDate || $rt instanceof ZonedDateTime) {
-            return; // PlainDate and ZonedDateTime objects are valid relativeTo values
-        }
-        if (is_string($rt)) {
-            self::parseString($rt); // throws on invalid
-            return;
-        }
-        if (is_object($rt)) {
-            $rt = self::normalizeBag($rt);
-        }
-        if (is_array($rt)) {
-            self::validatePropertyBag($rt);
-            return;
-        }
-        throw new TypeError('relativeTo must be a string or property bag array.');
-    }
-
-    /**
-     * Reads the option as {@see self::readOption()} does, and reports whether it named
-     * an anchor — for the callers that go on to ask whether they needed one.
-     *
-     * @param array<array-key, mixed> $options An options bag already normalized by {@see Options}.
-     * @throws RangeError for invalid relativeTo strings or property bags.
-     * @throws TypeError for invalid relativeTo types.
-     */
-    public static function isPresent(array $options): bool
-    {
-        self::readOption($options);
-        return array_key_exists('relativeTo', $options);
-    }
-
-    /** Converts an already-validated anchor without discarding its calendar or time zone. */
-    public static function toTemporalObject(mixed $relativeTo): PlainDate|ZonedDateTime
-    {
+        /** @var mixed $relativeTo */
+        $relativeTo = $options['relativeTo'];
         if ($relativeTo instanceof PlainDate || $relativeTo instanceof ZonedDateTime) {
             return $relativeTo;
         }
@@ -118,634 +33,92 @@ final class RelativeTo
                 ? ZonedDateTime::from($relativeTo)
                 : PlainDate::from($relativeTo);
         }
-        if (is_object($relativeTo)) {
-            $relativeTo = self::normalizeBag($relativeTo);
+        if (!is_array($relativeTo) && !is_object($relativeTo)) {
+            throw new TypeError('relativeTo must be a string, property bag, or Temporal date/datetime.');
         }
-        assert(is_array($relativeTo));
-        if (array_key_exists('offset', $relativeTo)) {
-            /** @var string $offset Validation permits only zero seconds and fractional seconds. */
-            $offset = $relativeTo['offset'];
-            $relativeTo['offset'] = substr($offset, offset: 0, length: 6);
+        $bag = FieldBag::forCalendarType(
+            $relativeTo,
+            ZonedFields::CALENDAR_FIELDS,
+            ['offset', 'timeZone'],
+            'relativeTo',
+        );
+        if (array_key_exists('timeZone', $bag)) {
+            return ZonedDateTime::from($bag);
         }
-        return array_key_exists('timeZone', $relativeTo)
-            ? ZonedDateTime::from($relativeTo)
-            : PlainDate::from($relativeTo);
-    }
-
-    /**
-     * Snapshots a `relativeTo` property bag, reading the anchor fields TC39 prescribes.
-     *
-     * Every caller that accepts a bag goes through here rather than calling
-     * {@see FieldBag::forCalendarType()} itself, so {@see self::FIELDS} has one owner
-     * and no call site can drift to a different field list.
-     *
-     * @param array<array-key, mixed>|object $rt
-     * @return array<array-key, mixed>
-     */
-    public static function normalizeBag(array|object $rt): array
-    {
-        return FieldBag::forCalendarType($rt, self::FIELDS, ['offset', 'timeZone'], 'relativeTo');
-    }
-
-    /**
-     * Converts a relativeTo value (PlainDate, ZonedDateTime, string, or property bag)
-     * into an array with integer 'year', 'month', 'day' keys.
-     *
-     * @return array{year: int, month: int, day: int}
-     */
-    public static function toPlainDateBag(mixed $rt): array
-    {
-        if ($rt instanceof ZonedDateTime) {
-            return self::zdtToPlainDateBag($rt);
-        }
-        if ($rt instanceof PlainDate) {
-            return ['year' => $rt->isoYear, 'month' => $rt->isoMonth, 'day' => $rt->isoDay];
-        }
-        if (is_string($rt)) {
-            $parsed = self::parseString($rt);
-            return ['year' => (int) $parsed['year'], 'month' => (int) $parsed['month'], 'day' => (int) $parsed['day']];
-        }
-        // Property bag — normalize generic objects to arrays first.
-        if (is_object($rt)) {
-            $rt = self::normalizeBag($rt);
-        }
-        assert(is_array($rt), description: 'non-string $rt must be a property-bag array at this point');
-        [$year, $month, $day] = self::anchorYmd($rt);
-        return ['year' => $year, 'month' => $month, 'day' => $day];
-    }
-
-    /**
-     * Reduces a `relativeTo` of any spelling to the anchor it denotes.
-     *
-     * Every spelling resolves through here so that the range rules downstream can be
-     * asked of the anchor rather than re-derived per spelling; see {@see RelativeAnchor}
-     * for why that distinction is the whole point.
-     *
-     * Not to be confused with {@see self::resolveZdt()}, which answers the narrower
-     * question "does this anchor need DST-aware arithmetic" and so reports UTC and
-     * fixed-offset anchors as unzoned. Here every zoned anchor counts as zoned.
-     *
-     * @throws RangeError if the anchor itself is outside the representable range.
-     */
-    public static function resolveAnchor(mixed $rt): RelativeAnchor
-    {
-        if (is_object($rt) && !$rt instanceof ZonedDateTime && !$rt instanceof PlainDate) {
-            $rt = self::normalizeBag($rt);
-        }
-        if ($rt instanceof ZonedDateTime) {
-            return RelativeAnchor::onInstant(...$rt->epochParts());
-        }
-        if ($rt instanceof PlainDate) {
-            return RelativeAnchor::onDate(AnchorMath::isoDateToEpochDays($rt->isoYear, $rt->isoMonth, $rt->isoDay));
-        }
-        if (is_string($rt)) {
-            $parsed = self::parseString($rt);
-            return $parsed['_isZDT'] === true
-                ? RelativeAnchor::onInstant((int) $parsed['_utcSec'], 0)
-                : RelativeAnchor::onDate((int) $parsed['_epochDays']);
-        }
-        assert(is_array($rt), description: 'non-string $rt must be a property-bag array at this point');
-        $epochDays = self::bagEpochDays($rt);
-        if (array_key_exists('timeZone', $rt)) {
-            return self::zonedBagAnchor($rt, $epochDays);
-        }
-        return RelativeAnchor::onDate($epochDays);
-    }
-
-    /**
-     * The local date a `relativeTo` property bag denotes, as a day count.
-     *
-     * Field resolution constrains the date and checks its representable range
-     * before converting it to a day count.
-     *
-     * @param array<array-key,mixed> $bag
-     * @throws RangeError if the year is outside the ISO date limits.
-     */
-    private static function bagEpochDays(array $bag): int
-    {
-        [$year, $month, $day] = self::anchorYmd($bag);
-        return AnchorMath::isoDateToEpochDays($year, $month, $day);
-    }
-
-    /**
-     * The instant a `relativeTo` property bag naming a time zone denotes.
-     *
-     * @param array<array-key,mixed> $bag
-     * @param int $epochDays The bag's local date, as a day count.
-     * @throws RangeError if the instant is outside the representable range.
-     */
-    private static function zonedBagAnchor(array $bag, int $epochDays): RelativeAnchor
-    {
-        $info = self::resolveZdt($bag);
-        if ($info !== null) {
-            // An IANA zone, where a wall clock can be ambiguous or non-existent:
-            // resolveZdt() has already walked the transition data to settle it.
-            return RelativeAnchor::onInstant($info['epochSec'], $info['subNs']);
-        }
-        /** @var mixed $tz */
-        $tz = $bag['timeZone'];
-        assert(is_string($tz), description: 'validatePropertyBag() rejects a non-string timeZone');
-        // Every other zone holds one constant offset, so the instant is the wall clock
-        // shifted by it, with no ambiguity to disambiguate.
-        $wallSec =
-            ($epochDays * 86_400)
-            + (self::bagTimeField($bag, 'hour', 23) * 3_600)
-            + (self::bagTimeField($bag, 'minute', 59) * 60)
-            + self::bagTimeField($bag, 'second', 59);
-        $epochSec = TimeZoneHelper::wallSecToEpochSec($wallSec, TimeZoneHelper::normalizeTimezoneId($tz));
-        $subNs =
-            (self::bagTimeField($bag, 'millisecond', 999) * 1_000_000)
-            + (self::bagTimeField($bag, 'microsecond', 999) * 1_000)
-            + self::bagTimeField($bag, 'nanosecond', 999);
-        if (
-            $epochSec > EpochLimits::MAX_EPOCH_SECONDS
-            || $epochSec < -EpochLimits::MAX_EPOCH_SECONDS
-            || $epochSec === EpochLimits::MAX_EPOCH_SECONDS && $subNs > 0
-        ) {
-            throw new RangeError('relativeTo property bag is outside the representable range.');
-        }
-        return RelativeAnchor::onInstant($epochSec, $subNs);
-    }
-
-    /**
-     * Reads an optional time field from a property bag, defaulting to zero.
-     *
-     * Values are finiteness-checked by {@see self::validatePropertyBag()} beforehand, so
-     * what is left is ToIntegerWithTruncation and the clamp RegulateTime applies under
-     * the overflow=constrain that ToRelativeTemporalObject asks for.
-     *
-     * @param array<array-key,mixed> $bag
-     * @param int $max Largest value the field can hold.
-     */
-    private static function bagTimeField(array $bag, string $name, int $max): int
-    {
-        if (!array_key_exists($name, $bag)) {
-            return 0;
-        }
-        return max(0, min($max, self::truncateToInteger($bag[$name])));
-    }
-
-    /**
-     * Converts a ZonedDateTime to a year/month/day property bag.
-     *
-     * Uses the ZDT's epochNanoseconds and timezone offset to determine the local date.
-     *
-     * @return array{year: int, month: int, day: int}
-     */
-    public static function zdtToPlainDateBag(ZonedDateTime $zdt): array
-    {
-        $local = $zdt->localComponents();
-        return ['year' => $local['year'], 'month' => $local['month'], 'day' => $local['day']];
-    }
-
-    /**
-     * Resolves a validated relativeTo property bag to a constrained ISO date.
-     *
-     * @param array<array-key, mixed> $bag
-     * @return array{int, int, int} [year, month, day]
-     */
-    public static function anchorYmd(array $bag): array
-    {
-        // Reuse the canonical identifier so calendar values are not coerced twice.
-        $bag['calendar'] = self::bagCalendarId($bag) ?? 'iso8601';
-        $date = DateFields::fromBag($bag);
-
-        return [$date->isoYear, $date->isoMonth, $date->isoDay];
-    }
-
-    /**
-     * Validates a relativeTo property bag.
-     *
-     * @param array<array-key,mixed> $rt
-     * @throws TypeError if required fields (year or era+eraYear, month/monthCode, day) are missing.
-     * @throws RangeError if a field value is out of range.
-     */
-    public static function validatePropertyBag(array $rt): void
-    {
-        // The calendar decides whether era/eraYear are fields at all, so it is read
-        // before the presence check — as TC39 does, running
-        // GetTemporalCalendarIdentifierWithISODefault ahead of PrepareCalendarFields.
-        $calendarId = self::bagCalendarId($rt);
-        $hasEraAndEraYear = CalendarMath::hasEraAndEraYear($rt, $calendarId, 'relativeTo');
-        $hasYear = array_key_exists('year', $rt) || $hasEraAndEraYear && CalendarMath::supportsEras($calendarId);
-        $hasMonth = array_key_exists('month', $rt) || array_key_exists('monthCode', $rt);
-        $hasDay = array_key_exists('day', $rt);
-        if (!$hasYear || !$hasMonth || !$hasDay) {
-            throw new TypeError('relativeTo property bag must have year, month/monthCode, and day fields.');
-        }
-        // Validate Infinity/NaN in numeric fields.
-        foreach ([
-            'year',
-            'eraYear',
-            'month',
-            'day',
-            'hour',
-            'minute',
-            'second',
-            'millisecond',
-            'microsecond',
-            'nanosecond',
-        ] as $field) {
-            if (!array_key_exists($field, $rt)) {
+        foreach (['hour', 'minute', 'second', 'millisecond', 'microsecond', 'nanosecond'] as $field) {
+            if (!array_key_exists($field, $bag)) {
                 continue;
             }
-            /** @var mixed $v */
-            $v = $rt[$field];
-            if (is_float($v) && is_infinite($v)) {
-                throw new RangeError("relativeTo field \"{$field}\" must be a finite number.");
-            }
+            CalendarMath::toFiniteInt($bag[$field], "relativeTo {$field}");
         }
-        // timeZone: if present must be a string; null or non-string → TypeError.
-        if (array_key_exists('timeZone', $rt)) {
-            /** @var mixed $tzVal */
-            $tzVal = $rt['timeZone'];
-            if (!is_string($tzVal)) {
-                throw new TypeError('relativeTo timeZone must be a string.');
-            }
-            TimeZoneHelper::normalizeTimezoneId($tzVal);
-        }
-        // offset: if present must be a string in ±HH:MM[[:SS[.nnnnnnnnn]]] format
-        // where optional seconds and sub-seconds must be zero.
-        if (array_key_exists('offset', $rt)) {
-            /** @var mixed $offVal */
-            $offVal = $rt['offset'];
-            if (!is_string($offVal)) {
-                throw new TypeError('relativeTo offset must be a string.');
-            }
-            // Allow ±HH:MM or ±HH:MM:00[.000...] (seconds and sub-seconds zero).
-            $offM = null;
-            if (preg_match('/^([+\-])(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?$/', $offVal, $offM) !== 1) {
-                throw new RangeError("Invalid relativeTo offset string \"{$offVal}\".");
-            }
-            // Reject non-zero seconds or sub-seconds.
-            if (array_key_exists(4, $offM) && (int) $offM[4] !== 0) {
-                throw new RangeError("Invalid relativeTo offset string \"{$offVal}\": non-zero seconds.");
-            }
-            if (array_key_exists(5, $offM) && ltrim($offM[5], characters: '0') !== '') {
-                throw new RangeError("Invalid relativeTo offset string \"{$offVal}\": non-zero sub-seconds.");
-            }
-        }
+        return PlainDate::from($bag);
     }
 
-    /**
-     * Parses a relativeTo ISO date string into a property bag.
-     * Validates format, calendar, bracket offsets, and ZonedDateTime/PlainDate range limits.
-     *
-     * ZonedDateTime strings (have both an inline Z/offset AND a timezone bracket):
-     *   - Local date must be ≥ -271821-04-20 (epoch-days ≥ −100 000 000).
-     *   - UTC instant must be at midnight (offsetSec must exactly cancel localTimeSec mod 86400).
-     *   - UTC instant must be within ±8 640 000 000 000 seconds.
-     *
-     * PlainDate strings (no inline offset or no timezone bracket):
-     *   - Date must be within [−271821-04-19, +275760-09-13] (epoch-days in [−100 000 001, +100 000 000]).
-     *
-     * @return array<string,int|bool> Bag with 'year', 'month', 'day', '_epochDays', '_isZDT', '_utcSec', '_localTimeSec'.
-     * @throws RangeError for invalid or unsupported strings.
-     */
-    public static function parseString(string $s): array
+    /** @return array{year: int, month: int, day: int} */
+    public static function toPlainDateBag(PlainDate|ZonedDateTime $anchor): array
     {
-        if ($s === '') {
-            throw new RangeError('relativeTo string must not be empty.');
+        if ($anchor instanceof ZonedDateTime) {
+            $local = $anchor->localComponents();
+            return ['year' => $local['year'], 'month' => $local['month'], 'day' => $local['day']];
         }
-        // Fractional hours: T12.5 or fractional minutes: T12:34.5 are not allowed.
-        if (preg_match('/T\d{2}\.\d/', $s) === 1 || preg_match('/T\d{2}:\d{2}\.\d{1,3}(?:Z|[+\-\[]|$)/i', $s) === 1) {
-            throw new RangeError('relativeTo string must not have fractional hours or minutes.');
+        return ['year' => $anchor->isoYear, 'month' => $anchor->isoMonth, 'day' => $anchor->isoDay];
+    }
+
+    public static function resolveAnchor(PlainDate|ZonedDateTime $anchor): RelativeAnchor
+    {
+        if ($anchor instanceof ZonedDateTime) {
+            return RelativeAnchor::onInstant(...$anchor->epochParts());
         }
-        // Validate calendar annotation.
-        $calMatch = null;
-        if (preg_match('/\[u-ca=([^\]]+)\]/', $s, $calMatch) === 1) {
-            if (!CalendarFactory::isKnownCalendar($calMatch[1])) {
-                throw new RangeError("Unknown calendar \"{$calMatch[1]}\".");
-            }
-        }
-        // Reject minus-zero extended year (-000000).
-        if (preg_match('/^-0{6}(?:[^0-9]|$)/', $s) === 1) {
-            throw new RangeError('Cannot use negative zero as extended year.');
-        }
-
-        // Detect inline Z/offset and timezone bracket annotation.
-        $hasInlineOffset = preg_match('/T\d{2}:?\d{2}(?::?\d{2}(?:\.\d+)?)?([+\-]|Z)/i', $s) === 1;
-        $hasTzBracket = preg_match('/\[(?!u-ca=)[^\]]+\]/', $s) === 1;
-
-        // TC39: ToTemporalRelativeTo:
-        // - Z + no bracket → invalid (must have a timezone bracket for ZonedDateTime).
-        // - Numeric offset with VALID format (±HH:MM[:SS]) + no bracket → treat as PlainDate.
-        // - Numeric offset with INVALID format + no bracket → throw.
-        if ($hasInlineOffset && !$hasTzBracket) {
-            $hasZOffset = preg_match('/T\d{2}:?\d{2}(?::?\d{2}(?:\.\d+)?)?Z(?!\s*\[)/i', $s) === 1;
-            if ($hasZOffset) {
-                throw new RangeError(
-                    "relativeTo string \"{$s}\" has a UTC (Z) offset but no timezone bracket annotation.",
-                );
-            }
-            // Numeric offset: validate that the offset format is ±HH:MM[:SS[.frac]] followed by
-            // end-of-string, '[', or whitespace (not extra digits).  Invalid formats (e.g. +00:0000) must throw.
-            $offMatch = null;
-            if (
-                preg_match(
-                    '/T\d{2}:?\d{2}(?::?\d{2}(?:\.\d+)?)?([+\-]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(?:\[|$)/i',
-                    $s,
-                    $offMatch,
-                ) !== 1
-            ) {
-                throw new RangeError("relativeTo string \"{$s}\" has an invalid UTC offset format.");
-            }
-            // Valid numeric offset without bracket: treat as PlainDate (ignore the time+offset part).
-            $hasInlineOffset = false;
-        }
-
-        // Validate the timezone bracket annotation.
-        $bracketMatch = null;
-        if (preg_match('/\[([^\]]+)\]/', $s, $bracketMatch) === 1 && !str_starts_with($bracketMatch[1], 'u-ca=')) {
-            $bracket = $bracketMatch[1];
-            // Sub-minute bracket offset (has seconds component): invalid.
-            if (preg_match('/^[+\-]\d{2}:\d{2}:\d{2}/', $bracket) === 1) {
-                throw new RangeError('relativeTo string must not have sub-minute offset in bracket annotation.');
-            }
-            // Bracket is a numeric UTC offset (±HH:MM or ±HHMM): must match the inline offset
-            // UNLESS the inline offset is Z (UTC instant — any timezone bracket is allowed).
-            $bOff = null;
-            if (preg_match('/^([+\-])(\d{2}):?(\d{2})$/', $bracket, $bOff) === 1) {
-                $bMin = ((int) $bOff[2] * 60) + (int) $bOff[3];
-                $bMin = $bOff[1] === '-' ? -$bMin : $bMin;
-                $iOff = null;
-                if (preg_match('/T\d{2}:?\d{2}(?::?\d{2})?([+\-]\d{2}:?\d{2}|Z)/i', $s, $iOff) === 1) {
-                    if ($iOff[1] === 'Z' || $iOff[1] === 'z') {
-                        // Z inline offset: any bracket timezone is allowed (no matching required).
-                    } else {
-                        $iOffParts = null;
-                        preg_match('/^([+\-])(\d{2}):?(\d{2})/', $iOff[1], $iOffParts);
-                        /**
-                         * @var array{non-falsy-string, '+'|'-', non-falsy-string, non-falsy-string} $iOffParts
-                         */
-                        $iMin = ((int) $iOffParts[2] * 60) + (int) $iOffParts[3];
-                        $iMin = $iOffParts[1] === '-' ? -$iMin : $iMin;
-                        if ($bMin !== $iMin) {
-                            throw new RangeError('relativeTo string bracket offset does not match inline UTC offset.');
-                        }
-                    }
-                }
-            } elseif (strtoupper($bracket) === 'UTC') {
-                $iOff = null;
-                if (preg_match('/T\d{2}:?\d{2}(?::?\d{2})?([+\-]\d{2}:?\d{2}|Z)/i', $s, $iOff) === 1) {
-                    if ($iOff[1] !== 'Z' && $iOff[1] !== 'z') {
-                        $iOffParts = null;
-                        preg_match('/^([+\-])(\d{2}):?(\d{2})/', $iOff[1], $iOffParts);
-                        /** @var array{non-falsy-string, '+'|'-', non-falsy-string, non-falsy-string} $iOffParts */
-                        $iMin = ((int) $iOffParts[2] * 60) + (int) $iOffParts[3];
-                        if ($iMin !== 0) {
-                            throw new RangeError('relativeTo string bracket offset does not match inline UTC offset.');
-                        }
-                    }
-                }
-            }
-        }
-
-        // Extract date part: ±YYYY-MM-DD or YYYYMMDD.
-        $dateMatch = null;
-        if (
-            preg_match('/^([+\-]?\d{4,6})-(\d{2})-(\d{2})/', $s, $dateMatch) !== 1
-            && preg_match('/^(\d{4})(\d{2})(\d{2})/', $s, $dateMatch) !== 1
-        ) {
-            throw new RangeError("Invalid relativeTo date string \"{$s}\".");
-        }
-        $year = (int) $dateMatch[1];
-        $month = (int) $dateMatch[2];
-        $day = (int) $dateMatch[3];
-
-        // Compute the proleptic Gregorian epoch-day count.
-        $epochDays = AnchorMath::isoDateToEpochDays($year, $month, $day);
-
-        // Defaults for the extended return metadata (set inside ZDT branch only).
-        $localTimeSec = 0;
-        $hasFracSec = false;
-        $utcSec = 0;
-
-        if ($hasInlineOffset) {
-            // ZonedDateTime string: validate local date range.
-
-            // Local date must be at or after -271821-04-20 (epochDays ≥ -100 000 000).
-            if ($epochDays < -100_000_000) {
-                throw new RangeError(
-                    "relativeTo ZonedDateTime \"{$s}\" local date is before the minimum (-271821-04-20).",
-                );
-            }
-
-            // Extract local time (hours, minutes, seconds) and detect sub-second fraction.
-            $tm = null;
-            if (preg_match('/T(\d{2}):?(\d{2})(?::?(\d{2})(\.\d+)?)?/i', $s, $tm) === 1) {
-                $localTimeSec =
-                    ((int) $tm[1] * 3_600) + ((int) $tm[2] * 60) + (array_key_exists(3, $tm) ? (int) $tm[3] : 0);
-                // @phpstan-ignore notIdentical.alwaysTrue
-                $hasFracSec = array_key_exists(4, $tm) && $tm[4] !== '';
-            }
-
-            // Extract the inline UTC offset in seconds.
-            $offsetSec = 0;
-            $iOff = null;
-            if (preg_match('/T\d{2}:?\d{2}(?::?\d{2}(?:\.\d+)?)?([+\-]\d{2}:?\d{2}|Z)/i', $s, $iOff) === 1) {
-                if ($iOff[1] !== 'Z' && $iOff[1] !== 'z') {
-                    $offParts = null;
-                    preg_match('/^([+\-])(\d{2}):?(\d{2})/', $iOff[1], $offParts);
-                    /** @var array{non-falsy-string, '+'|'-', non-falsy-string, non-falsy-string} $offParts */
-                    $offsetSec = ((int) $offParts[2] * 3_600) + ((int) $offParts[3] * 60);
-                    if ($offParts[1] === '-') {
-                        $offsetSec = -$offsetSec;
-                    }
-                }
-            }
-
-            // Sub-second fractional components are not allowed.
-            if ($hasFracSec) {
-                throw new RangeError("relativeTo ZonedDateTime \"{$s}\" has a sub-second component.");
-            }
-
-            // Compute UTC instant.
-            $utcSec = ($epochDays * 86_400) + $localTimeSec - $offsetSec;
-
-            // UTC instant must be within ±8 640 000 000 000 seconds.
-            if ($utcSec > EpochLimits::MAX_EPOCH_SECONDS || $utcSec < -EpochLimits::MAX_EPOCH_SECONDS) {
-                throw new RangeError(
-                    "relativeTo ZonedDateTime \"{$s}\" UTC instant is outside the representable range.",
-                );
-            }
-        } else {
-            // PlainDate string: valid range is [-271821-04-19, +275760-09-13]
-            // (epoch-days in [-100 000 001, +100 000 000]).
-            if ($epochDays < -100_000_001 || $epochDays > 100_000_000) {
-                throw new RangeError("relativeTo PlainDate \"{$s}\" is outside the representable range.");
-            }
-        }
-
-        $isZDT = $hasInlineOffset;
-        return [
-            'year' => $year,
-            'month' => $month,
-            'day' => $day,
-            '_epochDays' => $epochDays,
-            '_isZDT' => $isZDT,
-            '_utcSec' => $utcSec,
-            '_localTimeSec' => $localTimeSec,
-        ];
+        return RelativeAnchor::onDate(AnchorMath::isoDateToEpochDays(
+            $anchor->isoYear,
+            $anchor->isoMonth,
+            $anchor->isoDay,
+        ));
     }
 
     /**
-     * Resolves a relativeTo value to ZDT info if it represents a ZonedDateTime with
-     * an IANA timezone (i.e. one that may observe DST). Returns null for PlainDate,
-     * UTC, or fixed-offset timezones.
+     * UTC and fixed offsets need no DST arithmetic.
      *
      * @return null|array{epochSec: int, subNs: int, tzId: string, year: int, month: int, day: int, hour: int, minute: int, second: int}
      */
-    public static function resolveZdt(mixed $rt): ?array
+    public static function resolveZdt(PlainDate|ZonedDateTime $anchor): ?array
     {
-        // Normalize plain-object property bags (but keep Temporal instances intact).
-        if (is_object($rt) && !$rt instanceof ZonedDateTime && !$rt instanceof PlainDate) {
-            $rt = self::normalizeBag($rt);
-        }
-        if ($rt instanceof ZonedDateTime) {
-            $tzId = $rt->timeZoneId;
-            if ($tzId === '' || $tzId === 'UTC' || preg_match('/^[+\-]\d{2}:\d{2}$/', $tzId) === 1) {
-                return null;
-            }
-            // Read the TRUE epoch parts (sentinel-aware) rather than the clamped
-            // epochNanoseconds field, so over-int64 relativeTo anchors resolve to
-            // their real calendar date instead of the year-2262 clamp.
-            [$epochSec, $subNs] = $rt->epochParts();
-            // Compute local components via offset.
-            $tz = new \DateTimeZone($tzId);
-            $offsetSec = $tz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
-            $localSec = $epochSec + $offsetSec;
-            $dt = new \DateTimeImmutable(sprintf('@%d', $localSec));
-            return [
-                'epochSec' => $epochSec,
-                'subNs' => $subNs,
-                'tzId' => $tzId,
-                'year' => (int) $dt->format('Y'),
-                'month' => (int) $dt->format('n'),
-                'day' => (int) $dt->format('j'),
-                'hour' => (int) $dt->format('G'),
-                'minute' => (int) $dt->format('i'),
-                'second' => (int) $dt->format('s'),
-            ];
-        }
-        if (is_string($rt)) {
-            // Parse the string to check for IANA timezone.
-            $m = null;
-            if (preg_match('/\[([^\]=]+)\]\s*$/', $rt, $m) === 1) {
-                $tzId = $m[1];
-                if ($tzId !== 'UTC' && preg_match('/^[+\-]\d{2}:\d{2}$/', $tzId) !== 1) {
-                    // It's an IANA timezone string. Construct a ZDT and recurse.
-                    $zdt = ZonedDateTime::from($rt);
-                    return self::resolveZdt($zdt);
-                }
-            }
+        if (!$anchor instanceof ZonedDateTime) {
             return null;
         }
-        if (is_array($rt) && array_key_exists('timeZone', $rt)) {
-            /** @var string $tzVal Validated by readOption() before resolving the anchor. */
-            $tzVal = $rt['timeZone'];
-            $tzId = TimeZoneHelper::normalizeTimezoneId($tzVal);
-            if ($tzId === 'UTC' || preg_match('/^[+\-]\d{2}:\d{2}$/', $tzId) === 1) {
-                return null;
-            }
-            $rt['timeZone'] = $tzId;
-            return self::resolveZdt(ZonedDateTime::from($rt));
+        $tzId = $anchor->timeZoneId;
+        if ($tzId === 'UTC' || preg_match('/^[+\-]\d{2}:\d{2}$/', $tzId) === 1) {
+            return null;
         }
-        return null;
+        [$epochSec, $subNs] = $anchor->epochParts();
+        $local = $anchor->localComponents();
+        return [
+            'epochSec' => $epochSec,
+            'subNs' => $subNs,
+            'tzId' => $tzId,
+            'year' => $local['year'],
+            'month' => $local['month'],
+            'day' => $local['day'],
+            'hour' => $local['hour'],
+            'minute' => $local['minute'],
+            'second' => $local['second'],
+        ];
     }
 
-    /**
-     * Tests whether anchoring the given duration to a ZonedDateTime epoch
-     * (epochSec, subNs) lands outside the representable Temporal range
-     * (±8.64e21 ns ≙ ±8.64e12 s). The comparison is done in (seconds, sub-ns)
-     * integer space so that an over-int64 epoch plus a one-nanosecond duration
-     * is detected exactly — float seconds would lose the +1 ns at this scale.
-     *
-     * Only the time-and-day fields contribute (calendar fields are handled on
-     * the calendar paths before this is reached).
-     */
     public static function zdtTargetOutOfRange(int $epochSec, int $subNs, Duration $d): bool
     {
-        // Duration contribution as whole seconds + residual nanoseconds.
-        // Day/hour/minute/second are whole-second contributions; ms/µs/ns are sub-second.
-        $durSec =
-            ((float) $d->days * 86_400.0)
-            + ((float) $d->hours * 3_600.0)
-            + ((float) $d->minutes * 60.0)
-            + (float) $d->seconds;
-        $durNs =
-            ((float) $d->milliseconds * 1_000_000.0) + ((float) $d->microseconds * 1_000.0) + (float) $d->nanoseconds;
+        [$seconds, $nanoseconds] = DurationTime::parts($d);
+        $seconds += (int) $d->days * 86_400;
+        $subNs += $nanoseconds;
+        $carry = CalendarMath::floorDiv($subNs, EpochLimits::NS_PER_SECOND);
+        $targetSec = $epochSec + $seconds + $carry;
+        $targetSubNs = $subNs - ($carry * EpochLimits::NS_PER_SECOND);
 
-        // Fold whole seconds out of the nanosecond residual.
-        $carrySec = floor($durNs / 1_000_000_000.0);
-        $durSec += $carrySec;
-        $residualNs = $durNs - ($carrySec * 1_000_000_000.0);
-
-        // Target = (epochSec + durSec) seconds and (subNs + residualNs) sub-seconds.
-        $targetSec = (float) $epochSec + $durSec;
-        $targetSubNs = (float) $subNs + $residualNs;
-        $carry = floor($targetSubNs / 1_000_000_000.0);
-        $targetSec += $carry;
-        $targetSubNs -= $carry * 1_000_000_000.0;
-
-        // Out of range when target > (8.64e12 s, 0 ns) or < (-8.64e12 s, 0 ns).
-        if ($targetSec > EpochLimits::MAX_EPOCH_SECONDS) {
-            return true;
-        }
-        if ($targetSec === (float) EpochLimits::MAX_EPOCH_SECONDS && $targetSubNs > 0.0) {
-            return true;
-        }
-        // The floor-based carry leaves $targetSubNs in [0, 1e9), so exactly -MAX seconds is
-        // always in range — hence no sub-nanosecond mirror of the +MAX check above.
-        if ($targetSec < -EpochLimits::MAX_EPOCH_SECONDS) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * The canonical id of the calendar a property bag names, or null when it names
-     * none (which leaves the anchor on ISO 8601).
-     *
-     * TC39 ToTemporalCalendarSlotValue: a calendar in a property bag may be
-     * a Temporal object with a calendarId slot (fast path: read the slot directly),
-     * or a string / Stringable (coerce via ToString, then validate). Any other type
-     * is a TypeError; only an unknown calendar string is a RangeError, raised by
-     * canonicalize().
-     *
-     * @param array<array-key,mixed> $bag
-     * @throws TypeError if the calendar field is present but not string-like.
-     * @throws RangeError if it names an unknown calendar.
-     */
-    private static function bagCalendarId(array $bag): ?string
-    {
-        if (!array_key_exists('calendar', $bag)) {
-            return null;
-        }
-        /** @var mixed $calVal */
-        $calVal = $bag['calendar'];
-        if (is_object($calVal) && property_exists($calVal, 'calendarId') && is_string($calVal->calendarId)) {
-            $calVal = $calVal->calendarId;
-        } elseif ($calVal instanceof \Stringable) {
-            $calVal = (string) $calVal;
-        }
-        if (!is_string($calVal)) {
-            throw new TypeError('relativeTo calendar must be a string.');
-        }
-
-        return CalendarFactory::canonicalize($calVal);
-    }
-
-    /**
-     * TC39 ToIntegerWithTruncation for an already-finiteness-validated property-bag
-     * field: an int passes through unchanged, every other finite numeric/coercible
-     * value goes through PHP's `(int)` cast, which truncates toward zero exactly as
-     * the spec requires.
-     */
-    private static function truncateToInteger(mixed $value): int
-    {
-        /** @phpstan-ignore cast.int */
-        return is_int($value) ? $value : (int) $value;
+        return (
+            $targetSec > EpochLimits::MAX_EPOCH_SECONDS
+            || $targetSec < -EpochLimits::MAX_EPOCH_SECONDS
+            || $targetSec === EpochLimits::MAX_EPOCH_SECONDS
+            && $targetSubNs > 0
+        );
     }
 }

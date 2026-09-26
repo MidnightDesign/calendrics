@@ -61,7 +61,7 @@ final class FieldBag
 
         $snapshot = Options::bagSnapshot($bag, self::fieldNames($calendarFields, $calendarId, $nonCalendarFields));
         if ($calendarRaw !== Options::ABSENT) {
-            $snapshot = array_merge($snapshot, ['calendar' => $calendarRaw]);
+            $snapshot = array_merge($snapshot, ['calendar' => $calendarId]);
         }
 
         return $snapshot;
