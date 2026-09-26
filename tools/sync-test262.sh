@@ -6,14 +6,24 @@
 #   ./tools/sync-test262.sh            # sync all implemented classes
 #   ./tools/sync-test262.sh Duration   # sync only Duration
 #
-# This does a sparse checkout of just the Temporal directories we need,
-# then rsyncs them into tests/Test262/data/.
+# This does a sparse checkout of just the Temporal directories we need, plus the
+# Temporal-tagged fixtures under the ECMA-402 formatters, then rsyncs them into
+# tests/Test262/data/.
 
 set -euo pipefail
 
 REPO_URL="https://github.com/tc39/test262.git"
 CLONE_DIR="$(mktemp -d)"
 DATA_DIR="$(cd "$(dirname "$0")/../tests/Test262/data" && pwd)"
+
+# ECMA-402 formatter entry points that accept Temporal values directly. Their
+# Temporal-tagged fixtures live outside test/intl402/Temporal/ but exercise the
+# same formatting paths, so they are always synced regardless of the class
+# filter.
+INTL_FORMATTERS=(
+    DateTimeFormat
+    DurationFormat
+)
 
 # All Temporal classes we track
 ALL_CLASSES=(
@@ -55,6 +65,10 @@ SPARSE_PATHS=()
 for class in "${CLASSES[@]}"; do
     SPARSE_PATHS+=("test/built-ins/Temporal/$class")
     SPARSE_PATHS+=("test/intl402/Temporal/$class")
+done
+
+for formatter in "${INTL_FORMATTERS[@]}"; do
+    SPARSE_PATHS+=("test/intl402/$formatter")
 done
 
 if [[ $SYNC_NON_CLASS_AREAS == true ]]; then
@@ -145,6 +159,11 @@ done
 #     suite. The redundant "Temporal" path segment is dropped, the same way the
 #     intl402 tree above drops it.
 #
+#   test/intl402/{DateTimeFormat,DurationFormat}/ ->
+#       data/intl402/{DateTimeFormat,DurationFormat}/
+#     Only fixtures tagged with the Temporal feature are synced. The remaining
+#     files exercise Intl surface that this project does not implement.
+#
 # Deliberately NOT synced:
 #
 #   test/built-ins/Temporal/*.js (top level: getOwnPropertyNames.js, keys.js,
@@ -154,17 +173,6 @@ done
 #     properties, and the writable/enumerable/configurable attributes of the
 #     global `Temporal` property. A PHP namespace has no property table, so
 #     none of the three can ever run — they transpile to Assert::incomplete().
-#
-#   test/intl402/DurationFormat/
-#     Intl.DurationFormat is a separate API this library does not implement:
-#     ext-intl exposes no equivalent, and Duration::toLocaleString() is a
-#     documented toString() passthrough. All 110 fixtures build a
-#     `new Intl.DurationFormat(...)`, which the transpiler cannot lower, so they
-#     would land as 110 permanent incompletes.
-#
-#   test/intl402/DateTimeFormat/
-#     Not yet enabled here. To turn it on, add "test/intl402/DateTimeFormat" to
-#     SPARSE_PATHS above and rsync it to "$DATA_DIR/intl402/DateTimeFormat".
 
 if [[ $SYNC_NON_CLASS_AREAS == true ]]; then
     echo ""
@@ -172,6 +180,30 @@ if [[ $SYNC_NON_CLASS_AREAS == true ]]; then
 
     sync_tree "$CLONE_DIR/test/staging/Temporal" "$DATA_DIR/staging" staging
 fi
+
+# Sync the Temporal-tagged subset of the ECMA-402 formatter tests. Build a
+# filtered source tree first so sync_tree can retain its update detection and
+# deletion behavior.
+echo ""
+echo "==> Syncing Temporal-tagged Intl formatter test files..."
+
+for formatter in "${INTL_FORMATTERS[@]}"; do
+    src="$CLONE_DIR/test/intl402/$formatter"
+    filtered="$CLONE_DIR/.temporal-tagged/$formatter"
+    tagged="$CLONE_DIR/.temporal-tagged-$formatter.txt"
+
+    if [[ ! -d "$src" ]]; then
+        echo "    WARN: $formatter not found in upstream repo, skipping"
+        continue
+    fi
+
+    # Upstream tags these with `features: [Temporal]` in the YAML frontmatter.
+    (cd "$src" && grep -rl --include='*.js' -E '^features:.*\bTemporal\b' . | sed 's|^\./||' | sort) > "$tagged"
+
+    mkdir -p "$filtered"
+    rsync -rl --no-group --no-owner --files-from="$tagged" "$src/" "$filtered/"
+    sync_tree "$filtered" "$INTL402_DIR/$formatter" "intl402/$formatter"
+done
 
 echo ""
 echo "==> Done. Added: $total_added, Removed: $total_removed"
