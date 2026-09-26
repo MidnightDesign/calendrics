@@ -604,6 +604,7 @@ final class IntlFormatter
         string $locale = 'en',
     ): string {
         $parts = [];
+        $generator = new \IntlDatePatternGenerator($locale);
 
         // ECMA-402 CreateDateTimeFormat with required = "time" (PlainTime) only honors
         // the time-related option set; the date-component options (weekday, era, year,
@@ -651,8 +652,16 @@ final class IntlFormatter
         // Time components
         $hour = self::checkedKeyword($opts, 'hour', self::NUMBER_WIDTHS);
         if ($hour !== null) {
-            // Use 'j' skeleton symbol which picks locale-appropriate hour cycle
-            $parts[] = $hour === '2-digit' ? 'jj' : 'j';
+            // PHP cleans skeletons before matching; an unresolved j makes that
+            // cleaning discard an explicit day period. Resolve the hour first.
+            $hourPattern = $generator->getBestPattern('j');
+            $hourMatch = null;
+            $hourSymbol =
+                $hourPattern !== false
+                && preg_match("/'(?:[^']|'')*'(*SKIP)(*F)|[hHKk]/", $hourPattern, $hourMatch) === 1
+                    ? $hourMatch[0]
+                    : 'j';
+            $parts[] = str_repeat($hourSymbol, $hour === '2-digit' ? 2 : 1);
         }
         $minute = self::checkedKeyword($opts, 'minute', self::NUMBER_WIDTHS);
         if ($minute !== null) {
@@ -718,7 +727,6 @@ final class IntlFormatter
         $skeleton = implode('', $parts);
 
         // Use ICU's DateTimePatternGenerator to get a best-fit pattern
-        $generator = new \IntlDatePatternGenerator($locale);
         $result = $generator->getBestPattern($skeleton);
         $pattern = $result !== false ? $result : $skeleton;
 
@@ -726,7 +734,7 @@ final class IntlFormatter
             return self::setHourFieldWidth($pattern, 2);
         }
         if ($hour === 'numeric') {
-            $resolvedHourWidth = self::resolvedNumericHourWidth($opts, $locale, $pattern, $minute, $second);
+            $resolvedHourWidth = self::resolvedNumericHourWidth($opts, $locale, $pattern, $skeleton, $minute, $second);
             if ($resolvedHourWidth !== null) {
                 return self::setHourFieldWidth($pattern, $resolvedHourWidth);
             }
@@ -751,14 +759,18 @@ final class IntlFormatter
         array $opts,
         string $locale,
         string $pattern,
+        string $skeleton,
         ?string $minute,
         ?string $second,
     ): ?int {
         $localeId = self::canonicalLocaleId($locale);
         $localeDataId = self::localeLanguageRegionId($localeId);
         $language = \Locale::getPrimaryLanguage($localeId);
-        if ($localeDataId === 'af-NA' && ($opts['dayPeriod'] ?? null) !== null) {
-            return $minute === null ? 1 : 2;
+        if (($opts['timeZoneName'] ?? null) === null && preg_match("/'(?:[^']|'')*'(*SKIP)(*F)|B/", $pattern) === 1) {
+            return null;
+        }
+        if ($minute !== null && self::usesAlternateHourCycle($locale, $pattern)) {
+            return self::hasOnlyTwoDigitHourSkeleton($locale, $skeleton) ? 1 : null;
         }
         if (($opts['timeZoneName'] ?? null) !== null) {
             if ($minute === '2-digit' && $second !== null) {
@@ -804,6 +816,54 @@ final class IntlFormatter
             return $localeDataId === 'sv-FI' ? 1 : null;
         }
         return 1;
+    }
+
+    private static function usesAlternateHourCycle(string $locale, string $pattern): bool
+    {
+        // ICU's standard time records use the locale's default cycle. Switching
+        // cycle families selects availableFormats records whose numeric-hour
+        // skeletons preserve the matched width, even when other fields are padded.
+        $generator = new \IntlDatePatternGenerator(self::canonicalLocaleId($locale));
+        $defaultPattern = $generator->getBestPattern('j');
+        if ($defaultPattern === false) {
+            return false;
+        }
+
+        $twelveHourField = "/'(?:[^']|'')*'(*SKIP)(*F)|[hK]/";
+
+        return preg_match($twelveHourField, $pattern) !== preg_match($twelveHourField, $defaultPattern);
+    }
+
+    private static function hasOnlyTwoDigitHourSkeleton(string $locale, string $skeleton): bool
+    {
+        // With every other field matching exactly, a two-digit-hour skeleton
+        // differs by one width step. ICU applies the requested numeric width;
+        // an exact numeric-hour skeleton instead preserves its pattern's width.
+        $fields = null;
+        preg_match_all('/([BhHKkmsSvzO])\\1*/', $skeleton, $fields);
+        $key = '';
+        $dayPeriod = '';
+        foreach ($fields[0] as $field) {
+            if ($field[0] === 'B') {
+                $dayPeriod = $field;
+            } else {
+                $key .= $field;
+            }
+        }
+        $key = strtr($key, ['K' => 'h', 'k' => 'H']);
+        if (str_contains($key, 'h')) {
+            $key = $dayPeriod . $key;
+        }
+        $calendarType = IntlCalendarFactory::forLocale(timeZone: null, locale: $locale)->getType();
+        $bundle = \ResourceBundle::create(self::canonicalLocaleId($locale), bundle: null);
+        $calendar = $bundle?->get('calendar');
+        $calendarData = $calendar instanceof \ResourceBundle ? $calendar->get($calendarType) : null;
+        $formats = $calendarData instanceof \ResourceBundle ? $calendarData->get('availableFormats') : null;
+        if (!$formats instanceof \ResourceBundle || is_string($formats->get($key))) {
+            return false;
+        }
+
+        return is_string($formats->get(strtr($key, ['h' => 'hh', 'H' => 'HH'])));
     }
 
     /**
