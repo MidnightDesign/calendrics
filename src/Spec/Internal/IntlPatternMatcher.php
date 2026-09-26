@@ -233,6 +233,7 @@ final class IntlPatternMatcher
         return [$best, $missing, $extra];
     }
 
+    /** @return non-negative-int|null */
     private function hourWidth(string $skeleton, string $pattern): ?int
     {
         $mapped =

@@ -7,6 +7,7 @@ namespace Calendrics\Spec\Internal;
 /** @internal */
 final readonly class IntlPatternField
 {
+    /** @param non-negative-int $width */
     public function __construct(
         public string $symbol,
         public int $width,
