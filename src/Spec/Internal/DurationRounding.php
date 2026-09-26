@@ -198,7 +198,7 @@ final class DurationRounding
 
         // Compute total absolute nanoseconds, balancing all sub-day fields first.
         $sign = $d->sign;
-        $signedMode = $sign === -1 ? self::negateRoundingMode($roundingMode) : $roundingMode;
+        $signedMode = $sign === -1 ? EpochRounding::negateMode($roundingMode) : $roundingMode;
         [$nsSeconds, $absNs] = DurationTotal::splitSubsecondField(abs((float) $d->nanoseconds), 9);
         [$usSeconds, $absUs] = DurationTotal::splitSubsecondField(abs((float) $d->microseconds), 6);
         $absMs = (int) abs((float) $d->milliseconds);
@@ -642,29 +642,6 @@ final class DurationRounding
     }
 
     /**
-     * Mirrors a directed rounding mode (floor/ceil, halfFloor/halfCeil) across zero;
-     * symmetric modes pass through unchanged.
-     *
-     * TC39 RoundTimeDuration rounds the signed total, and every rounding helper here works
-     * on a magnitude with the sign reapplied afterwards, which reverses the two directions.
-     * That is not the AsIfPositive rule {@see EpochRounding} is named for: an epoch
-     * nanosecond count is a point in time, where `floor` means earlier whatever the sign.
-     *
-     * @param 'ceil'|'floor'|'expand'|'trunc'|'halfCeil'|'halfFloor'|'halfExpand'|'halfTrunc'|'halfEven' $mode
-     * @return 'ceil'|'floor'|'expand'|'trunc'|'halfCeil'|'halfFloor'|'halfExpand'|'halfTrunc'|'halfEven'
-     */
-    private static function negateRoundingMode(string $mode): string
-    {
-        return match ($mode) {
-            'floor' => 'ceil',
-            'ceil' => 'floor',
-            'halfFloor' => 'halfCeil',
-            'halfCeil' => 'halfFloor',
-            default => $mode,
-        };
-    }
-
-    /**
      * Float-based rounding for very large nanosecond totals (> PHP_INT_MAX).
      * Uses float64 arithmetic to match JS's Number semantics for large values.
      *
@@ -1031,7 +1008,7 @@ final class DurationRounding
         // Round the signed total nanoseconds.
         $sign = $totalNs >= 0 ? 1 : -1;
         $absNs = abs($totalNs);
-        $signedMode = $sign === -1 ? self::negateRoundingMode($roundingMode) : $roundingMode;
+        $signedMode = $sign === -1 ? EpochRounding::negateMode($roundingMode) : $roundingMode;
 
         // For 'days' smallest unit: work in day units to avoid int64 overflow when increment is large
         // (e.g. roundingIncrement=1e9 days → nsIncrement=8.64e22 would overflow PHP_INT_MAX=9.2e18).

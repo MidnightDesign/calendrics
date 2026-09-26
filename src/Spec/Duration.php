@@ -1158,13 +1158,7 @@ final class Duration implements Stringable
     private static function roundSubSecond(int $seconds, int $subNs, int $digits, string $mode, int $sign): array
     {
         if ($sign < 0) {
-            $mode = match ($mode) {
-                'ceil' => 'floor',
-                'floor' => 'ceil',
-                'halfCeil' => 'halfFloor',
-                'halfFloor' => 'halfCeil',
-                default => $mode,
-            };
+            $mode = EpochRounding::negateMode($mode);
         }
         $unitNs = (int) 10 ** (9 - $digits);
         // Whole-second parity is needed for half-even ties at zero fractional digits.

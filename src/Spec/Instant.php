@@ -710,11 +710,7 @@ final class Instant implements Stringable
         }
         // Pure UTC-offset strings: ±HH:MM or ±HHMM
         $m = null;
-        if (preg_match('/^([+\-])(\d{2}):(\d{2})$/', $tz, $m) === 1) {
-            $sign = $m[1] === '+' ? 1 : -1;
-            return $sign * (((int) $m[2] * 3600) + ((int) $m[3] * 60));
-        }
-        if (preg_match('/^([+\-])(\d{2})(\d{2})$/', $tz, $m) === 1) {
+        if (preg_match('/^([+\-])(\d{2}):?(\d{2})$/', $tz, $m) === 1) {
             $sign = $m[1] === '+' ? 1 : -1;
             return $sign * (((int) $m[2] * 3600) + ((int) $m[3] * 60));
         }
@@ -1373,13 +1369,7 @@ final class Instant implements Stringable
         $nsInc = $nsPerUnitByIndex[$suIdx] * $increment;
         $effectiveMode = $roundingMode;
         if ($diffSign < 0) {
-            $effectiveMode = match ($roundingMode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $roundingMode,
-            };
+            $effectiveMode = EpochRounding::negateMode($roundingMode);
         }
         [$roundedSec, $roundedSubNs] = $nsInc === 1
             ? [$absSec, $absSubNs]

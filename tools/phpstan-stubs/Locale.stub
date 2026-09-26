@@ -1,0 +1,10 @@
+<?php
+
+/** ICU returns an empty language for identifiers such as "und-US", not a non-empty string. */
+class Locale
+{
+    /** @return string|null */
+    public static function getPrimaryLanguage(string $locale)
+    {
+    }
+}

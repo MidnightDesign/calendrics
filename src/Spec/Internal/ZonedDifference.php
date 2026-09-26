@@ -132,7 +132,7 @@ final class ZonedDifference
         $diffNs = self::diffEpochNs($temporalDate, $other);
         $sign = $diffNs <=> 0;
         $outputSign = $operation === 'since' ? -$sign : $sign;
-        $effectiveMode = $outputSign < 0 ? self::negateRoundingMode($roundingMode) : $roundingMode;
+        $effectiveMode = $outputSign < 0 ? EpochRounding::negateMode($roundingMode) : $roundingMode;
 
         if (!$isCalendarLargest) {
             return self::timeOnlyDifference(
@@ -938,21 +938,6 @@ final class ZonedDifference
             return $diffSec > 0 ? PHP_INT_MAX : PHP_INT_MIN;
         }
         return ($diffSec * EpochLimits::NS_PER_SECOND) + ($bSubNs - $aSubNs);
-    }
-
-    /**
-     * Mirrors directional rounding modes so they keep their meaning once the sign is
-     * reapplied to an absolute value. Symmetric modes are returned unchanged.
-     */
-    private static function negateRoundingMode(string $mode): string
-    {
-        return match ($mode) {
-            'floor' => 'ceil',
-            'ceil' => 'floor',
-            'halfFloor' => 'halfCeil',
-            'halfCeil' => 'halfFloor',
-            default => $mode,
-        };
     }
 
     /**

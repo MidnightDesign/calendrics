@@ -8,6 +8,7 @@ use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
@@ -921,7 +922,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         // TC39: for "since", GetDifferenceSettings negates the rounding mode.
         $sinceSign = $operation === 'since' ? -1 : 1;
         if ($operation === 'since') {
-            $roundingMode = self::negateRoundingMode($roundingMode);
+            $roundingMode = EpochRounding::negateMode($roundingMode);
         }
 
         if ($normLargest === 'month') {
@@ -1029,20 +1030,6 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         // inside it. A re-check of the rounded result can therefore never fail.
 
         return $sign * $roundedAbs;
-    }
-
-    /**
-     * Inverts a rounding mode for negative diffs.
-     */
-    private static function negateRoundingMode(string $mode): string
-    {
-        return match ($mode) {
-            'floor' => 'ceil',
-            'ceil' => 'floor',
-            'halfFloor' => 'halfCeil',
-            'halfCeil' => 'halfFloor',
-            default => $mode,
-        };
     }
 
     private static function roundCalendarYearsYM(

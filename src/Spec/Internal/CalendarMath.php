@@ -266,13 +266,7 @@ final class CalendarMath
         // For negative diffs, flip floor/ceil so they retain their directional meaning.
         $effectiveMode = $mode;
         if ($sign < 0) {
-            $effectiveMode = match ($mode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $mode,
-            };
+            $effectiveMode = EpochRounding::negateMode($mode);
         }
         return match ($effectiveMode) {
             'trunc', 'floor' => false,
@@ -316,13 +310,7 @@ final class CalendarMath
 
         $effectiveMode = $mode;
         if ($sign < 0) {
-            $effectiveMode = match ($mode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $mode,
-            };
+            $effectiveMode = EpochRounding::negateMode($mode);
         }
         return match ($effectiveMode) {
             'trunc', 'floor' => false,

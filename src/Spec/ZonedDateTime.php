@@ -809,23 +809,8 @@ final class ZonedDateTime implements Stringable
             $calendarName = $cn;
         }
 
-        // Compute rounding increment in nanoseconds.
-        if ($isMinute) {
-            $increment = 60_000_000_000;
-        } else {
-            $increment = match ($digits) {
-                0 => 1_000_000_000,
-                1 => 100_000_000,
-                2 => 10_000_000,
-                3 => 1_000_000,
-                4 => 100_000,
-                5 => 10_000,
-                6 => 1_000,
-                7 => 100,
-                8 => 10,
-                default => 1,
-            };
-        }
+        /** @var int<1, 1000000000>|60000000000 $increment */
+        $increment = $isMinute ? 60_000_000_000 : ($digits < 0 ? 1 : 10 ** (9 - $digits));
 
         // Round using RoundNumberToIncrementAsIfPositive, operating on the TRUE
         // epoch parts (sentinel-aware) so out-of-int64 instants render their real

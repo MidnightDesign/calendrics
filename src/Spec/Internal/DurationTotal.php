@@ -200,15 +200,7 @@ final class DurationTotal
             );
             $totalSec = $daysSec + $timeOnlySec;
 
-            $result = match ($unit) {
-                'hours' => $totalSec / 3_600.0,
-                'minutes' => $totalSec / 60.0,
-                'seconds' => $totalSec,
-                'milliseconds' => $totalSec * 1_000.0,
-                'microseconds' => $totalSec * 1_000_000.0,
-                'nanoseconds' => $totalSec * 1_000_000_000.0,
-            };
-            return self::toIntIfWhole($result);
+            return self::totalTimeSeconds($totalSec, $unit);
         }
 
         // Total on the exact value, carried as a (whole seconds, sub-second nanoseconds)
@@ -407,15 +399,7 @@ final class DurationTotal
                 return self::toIntIfWhole($result);
             }
 
-            $result = match ($unit) {
-                'hours' => $totalActualSec / 3_600.0,
-                'minutes' => $totalActualSec / 60.0,
-                'seconds' => $totalActualSec,
-                'milliseconds' => $totalActualSec * 1_000.0,
-                'microseconds' => $totalActualSec * 1_000_000.0,
-                'nanoseconds' => $totalActualSec * 1_000_000_000.0,
-            };
-            return self::toIntIfWhole($result);
+            return self::totalTimeSeconds($totalActualSec, $unit);
         }
 
         return match ($unit) {
@@ -683,5 +667,19 @@ final class DurationTotal
             substr(string: $digits, offset: 0, length: -$pointFromRight),
             substr(string: $digits, offset: -$pointFromRight),
         ));
+    }
+
+    /** @param 'hours'|'minutes'|'seconds'|'milliseconds'|'microseconds'|'nanoseconds' $unit */
+    private static function totalTimeSeconds(float $seconds, string $unit): int|float
+    {
+        $result = match ($unit) {
+            'hours' => $seconds / 3_600.0,
+            'minutes' => $seconds / 60.0,
+            'seconds' => $seconds,
+            'milliseconds' => $seconds * 1_000.0,
+            'microseconds' => $seconds * 1_000_000.0,
+            'nanoseconds' => $seconds * 1_000_000_000.0,
+        };
+        return self::toIntIfWhole($result);
     }
 }

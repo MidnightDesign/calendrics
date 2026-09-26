@@ -22,6 +22,24 @@ use Calendrics\Exception\RangeError;
 final class EpochRounding
 {
     /**
+     * Reverses directed rounding when a signed value is rounded as a magnitude.
+     *
+     * @template T of string
+     * @param T $mode
+     * @return T|'ceil'|'floor'|'halfCeil'|'halfFloor'
+     */
+    public static function negateMode(string $mode): string
+    {
+        return match ($mode) {
+            'floor' => 'ceil',
+            'ceil' => 'floor',
+            'halfFloor' => 'halfCeil',
+            'halfCeil' => 'halfFloor',
+            default => $mode,
+        };
+    }
+
+    /**
      * Rounds a true (epochSec, subNs) pair to the nearest multiple of $increment
      * nanoseconds. $subNs must be in [0, 1e9), and a sub-second $increment must divide
      * a second evenly — as every TC39 rounding increment does, since each is validated

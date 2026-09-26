@@ -175,7 +175,7 @@ final class DateDifference
         // duration. Negating the mode here makes ceil/floor behave correctly in
         // the user-facing direction. (Symmetric modes like halfExpand are unaffected.)
         if ($operation === 'since') {
-            $roundingMode = self::negateRoundingMode($roundingMode);
+            $roundingMode = EpochRounding::negateMode($roundingMode);
         }
 
         // Weeks and days: purely mathematical (no calendar-awareness for months/years).
@@ -272,21 +272,6 @@ final class DateDifference
     }
 
     /**
-     * Mirrors a directed rounding mode (floor/ceil, halfFloor/halfCeil) across zero;
-     * symmetric modes pass through unchanged.
-     */
-    private static function negateRoundingMode(string $mode): string
-    {
-        return match ($mode) {
-            'floor' => 'ceil',
-            'ceil' => 'floor',
-            'halfFloor' => 'halfCeil',
-            'halfCeil' => 'halfFloor',
-            default => $mode,
-        };
-    }
-
-    /**
      * Rounds totalDays (possibly negative) to the nearest multiple of $increment
      * using the given rounding mode.
      *
@@ -302,7 +287,7 @@ final class DateDifference
         $absDays = abs($totalDays);
         $effectiveMode = $mode;
         if ($sign < 0) {
-            $effectiveMode = self::negateRoundingMode($mode);
+            $effectiveMode = EpochRounding::negateMode($mode);
         }
         return $sign * EpochRounding::roundAsIfPositive($absDays, $increment, $effectiveMode);
     }

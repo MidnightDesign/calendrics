@@ -294,29 +294,8 @@ final class RelativeTo
      */
     public static function zdtToPlainDateBag(ZonedDateTime $zdt): array
     {
-        // Compute local date from the TRUE epoch parts (sentinel-aware) + timezone
-        // offset. Reading the clamped epochNanoseconds field would anchor over-int64
-        // relativeTo instants at the year-2262 clamp instead of their real date.
-        [$epochSec] = $zdt->epochParts();
-        $tzId = $zdt->timeZoneId;
-        $m = null;
-        if ($tzId === 'UTC') {
-            $offsetSec = 0;
-        } elseif (preg_match('/^([+\-])(\d{2}):(\d{2})$/', $tzId, $m) === 1) {
-            $sign = $m[1] === '+' ? 1 : -1;
-            $offsetSec = $sign * (((int) $m[2] * 3600) + ((int) $m[3] * 60));
-        } else {
-            assert($tzId !== '', description: 'caller guarantees a non-empty timezone id for this branch');
-            $tz = new \DateTimeZone($tzId);
-            $offsetSec = $tz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
-        }
-        $localSec = $epochSec + $offsetSec;
-        $dt = new \DateTimeImmutable(sprintf('@%d', $localSec));
-        return [
-            'year' => (int) $dt->format('Y'),
-            'month' => (int) $dt->format('n'),
-            'day' => (int) $dt->format('j'),
-        ];
+        $local = $zdt->localComponents();
+        return ['year' => $local['year'], 'month' => $local['month'], 'day' => $local['day']];
     }
 
     /**

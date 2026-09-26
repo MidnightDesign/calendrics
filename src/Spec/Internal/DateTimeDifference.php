@@ -467,13 +467,7 @@ final class DateTimeDifference
             // For negative output diffs, flip floor/ceil.
             $effTimeMode = $roundingMode;
             if ($outputSign < 0) {
-                $effTimeMode = match ($roundingMode) {
-                    'floor' => 'ceil',
-                    'ceil' => 'floor',
-                    'halfFloor' => 'halfCeil',
-                    'halfCeil' => 'halfFloor',
-                    default => $roundingMode,
-                };
+                $effTimeMode = EpochRounding::negateMode($roundingMode);
             }
             $absTimeNs = EpochRounding::roundAsIfPositive($timeDiffNs, $nsIncrement, $effTimeMode);
 
@@ -554,13 +548,7 @@ final class DateTimeDifference
         // For negative output diffs, flip floor/ceil so they retain their directional meaning.
         $effectiveRoundMode = $roundingMode;
         if ($outputSign < 0) {
-            $effectiveRoundMode = match ($roundingMode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $roundingMode,
-            };
+            $effectiveRoundMode = EpochRounding::negateMode($roundingMode);
         }
         $roundedAbsNs = EpochRounding::roundAsIfPositive($totalAbsNs, $nsIncrement, $effectiveRoundMode);
 
