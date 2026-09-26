@@ -83,32 +83,43 @@ final class DateParse
         }
         $year = (int) $yearRaw;
 
-        // Validate the time portion if present (groups 3-6 from the regex).
-        // Hour must be 0-23, minute 0-59, second 0-60 (60 = leap second → mapped).
-        // Groups are always present in the match array (as empty strings when not matched).
-        if ($m[3] !== '') {
-            $hour = (int) $m[3];
-            if ($hour > 23) {
-                throw new RangeError("PlainDate::from() cannot parse \"{$s}\": hour {$hour} out of range.");
-            }
-            if ($m[4] !== '') {
-                $minute = (int) $m[4];
-                if ($minute > 59) {
-                    throw new RangeError("PlainDate::from() cannot parse \"{$s}\": minute {$minute} out of range.");
-                }
-                if ($m[5] !== '') {
-                    $second = (int) $m[5];
-                    if ($second > 60) {
-                        throw new RangeError("PlainDate::from() cannot parse \"{$s}\": second {$second} out of range.");
-                    }
-                }
-            }
-        }
+        self::validateOptionalTime($m[3], $m[4], $m[5], $s, 'PlainDate');
 
         // Validate bracket annotations and extract calendar ID.
         $annotationSection = $m[7];
         $calendarId = CalendarMath::validateAnnotations($annotationSection, $s);
 
         return new PlainDate($year, $month, $day, $calendarId ?? 'iso8601');
+    }
+
+    public static function validateOptionalTime(
+        string $hourText,
+        string $minuteText,
+        string $secondText,
+        string $input,
+        string $context,
+    ): void {
+        if ($hourText !== '') {
+            $hour = (int) $hourText;
+            if ($hour > 23) {
+                throw new RangeError("{$context}::from() cannot parse \"{$input}\": hour {$hour} out of range.");
+            }
+            if ($minuteText !== '') {
+                $minute = (int) $minuteText;
+                if ($minute > 59) {
+                    throw new RangeError(
+                        "{$context}::from() cannot parse \"{$input}\": minute {$minute} out of range.",
+                    );
+                }
+                if ($secondText !== '') {
+                    $second = (int) $secondText;
+                    if ($second > 60) {
+                        throw new RangeError(
+                            "{$context}::from() cannot parse \"{$input}\": second {$second} out of range.",
+                        );
+                    }
+                }
+            }
+        }
     }
 }

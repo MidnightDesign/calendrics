@@ -8,6 +8,7 @@ use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DateParse;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
@@ -575,29 +576,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             }
         }
 
-        // Validate time portion if present.
-        if ($m[3] !== '') {
-            $hour = (int) $m[3];
-            if ($hour > 23) {
-                throw new RangeError("PlainYearMonth::from() cannot parse \"{$s}\": hour {$hour} out of range.");
-            }
-            if ($m[4] !== '') {
-                $minute = (int) $m[4];
-                if ($minute > 59) {
-                    throw new RangeError(
-                        "PlainYearMonth::from() cannot parse \"{$s}\": minute {$minute} out of range.",
-                    );
-                }
-                if ($m[5] !== '') {
-                    $second = (int) $m[5];
-                    if ($second > 60) {
-                        throw new RangeError(
-                            "PlainYearMonth::from() cannot parse \"{$s}\": second {$second} out of range.",
-                        );
-                    }
-                }
-            }
-        }
+        DateParse::validateOptionalTime($m[3], $m[4], $m[5], $s, 'PlainYearMonth');
 
         // Validate bracket annotations and extract calendar ID.
         $annotationSection = $m[7];

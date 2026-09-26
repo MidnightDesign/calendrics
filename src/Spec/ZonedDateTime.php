@@ -1286,24 +1286,7 @@ final class ZonedDateTime implements Stringable
             $us = max(0, min(999, $us));
             $ns = max(0, min(999, $ns));
         } else {
-            if ($h < 0 || $h > 23) {
-                throw new RangeError("Invalid hour {$h}: must be 0–23.");
-            }
-            if ($min < 0 || $min > 59) {
-                throw new RangeError("Invalid minute {$min}: must be 0–59.");
-            }
-            if ($sec < 0 || $sec > 59) {
-                throw new RangeError("Invalid second {$sec}: must be 0–59.");
-            }
-            if ($ms < 0 || $ms > 999) {
-                throw new RangeError("Invalid millisecond {$ms}: must be 0–999.");
-            }
-            if ($us < 0 || $us > 999) {
-                throw new RangeError("Invalid microsecond {$us}: must be 0–999.");
-            }
-            if ($ns < 0 || $ns > 999) {
-                throw new RangeError("Invalid nanosecond {$ns}: must be 0–999.");
-            }
+            CalendarMath::validateTimeFields($h, $min, $sec, $ms, $us, $ns, 'Invalid %s %d: must be 0–%d.');
         }
 
         $date = PartialDateFields::prepare(
