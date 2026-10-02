@@ -562,7 +562,18 @@ docker compose exec php composer check
 | PHPStan (level 9) | `composer phpstan` |
 | Psalm (level 1) | `composer psalm` |
 | Mago lint | `composer mago` |
-| Mutation testing | `composer infection` |
+| Mutation gate (porcelain) | `composer infection:porcelain` |
+| Mutation baseline (all source) | `composer infection` |
+
+### Mutation testing scope
+
+`infection.json5` targets all of `src/` with both MSI and covered MSI thresholds set to **100%**. Full-source mutation testing remains the goal tracked in [#14](https://github.com/MidnightDesign/calendrics/issues/14).
+
+The current CI gate (PHP 8.4) and `composer check` run `composer infection:porcelain`, which selects ten files: `Calendar`, `Duration`, `Instant`, `Now`, `PlainDate`, `PlainDateTime`, `PlainMonthDay`, `PlainTime`, `PlainYearMonth`, and `ZonedDateTime` directly under `src/`. That gate requires 100% MSI and covered MSI for its selected mutants; it does not establish a 100% score for traits, other enums, the spec layer, or internal helpers.
+
+Infection's default scoring counts timed-out mutants as detected. Its reports distinguish mutants killed by tests from timeouts, so a 100% score does not mean every mutant was killed by an assertion.
+
+Run `composer infection` to measure all source files with the same thresholds. Inspect `build/infection.txt` and `build/infection-summary.txt` for escaped and uncovered mutants. The plan is to widen the enforced scope incrementally until the file filter can be removed, using upstream test262 fixtures for spec behavior and porcelain tests for PHP affordances. The full-source baseline may fail the thresholds while that work remains open.
 
 ### test262 conformance
 
@@ -581,7 +592,7 @@ Currently **11,074 test262 scripts passing** (0 failures, 296 incomplete — mos
 
 This codebase is written with [Claude Code](https://claude.ai/claude-code). All production code and tests are AI-generated.
 
-Quality is enforced by PHPStan (level 9), Psalm (error level 1), Mago, PHPUnit, and Infection with a 100% mutation kill threshold. None of that is negotiable -- every change must pass the full suite before it counts.
+Quality is enforced by PHPStan (level 9), Psalm (error level 1), Mago, PHPUnit, and Infection with a 100% mutation score threshold for the [current porcelain scope](#mutation-testing-scope). Every change must pass these gates. A passing mutation gate is not a claim of 100% mutation coverage across the whole library.
 
 ## License
 
