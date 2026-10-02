@@ -170,9 +170,9 @@ final class IntlCalendarBridge implements CalendarProtocol
         $this->setIsoDate($isoYear, $isoMonth, $isoDay);
 
         $v = match (true) {
-            $this->calendarId === 'coptic',
-            $this->calendarId === 'ethiopic',
-                => $this->intlCal->get(self::FIELD_EXTENDED_YEAR),
+            $this->calendarId === 'coptic', $this->calendarId === 'ethiopic' => $this->intlCal->get(
+                self::FIELD_EXTENDED_YEAR,
+            ),
             $this->calendarId === 'chinese' => $this->intlCal->get(self::FIELD_EXTENDED_YEAR)
                 - self::CHINESE_YEAR_OFFSET,
             $this->calendarId === 'dangi' => $this->intlCal->get(self::FIELD_EXTENDED_YEAR) - self::DANGI_YEAR_OFFSET,
@@ -419,11 +419,9 @@ final class IntlCalendarBridge implements CalendarProtocol
 
         $v = match ($this->calendarId) {
             'chinese', 'dangi' => $this->hasChineseLeapMonth(),
-            'coptic',
-            'ethiopic',
-            'ethioaa',
-            'persian',
-                => $this->intlCal->getActualMaximum(\IntlCalendar::FIELD_DAY_OF_YEAR) > 365,
+            'coptic', 'ethiopic', 'ethioaa', 'persian' => $this->intlCal->getActualMaximum(
+                \IntlCalendar::FIELD_DAY_OF_YEAR,
+            ) > 365,
             default => $this->intlCal->getActualMaximum(\IntlCalendar::FIELD_DAY_OF_YEAR) > 354, // Islamic variants: leap year has 355 days, non-leap 354
         };
         if (count($this->inLeapYearCache) >= self::FIELD_CACHE_CAP) {
