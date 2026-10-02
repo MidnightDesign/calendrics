@@ -31,7 +31,7 @@ Most application code should use the porcelain layer. The spec layer is a fully 
 
 ### Deliberate deviations from TC39
 
-The porcelain layer adapts TC39 semantics to PHP-native conventions rather than mirroring the JavaScript API shape 1:1. The spec layer (`Calendrics\Spec\`) remains TC39-faithful for anyone needing that, with one small exception (see `valueOf()` below).
+The porcelain layer adapts TC39 semantics to PHP-native conventions rather than mirroring the JavaScript API shape 1:1. The spec layer (`Calendrics\Spec\`) follows TC39 semantics subject to the PHP-specific deviations documented below.
 
 Notable differences:
 
@@ -41,7 +41,7 @@ Notable differences:
 - **`toLocaleString()` takes typed named arguments, not an options bag** — and each type exposes only the options that apply to it, so `$plainDate->toLocaleString(timeStyle: …)` is a compile error rather than the runtime `TypeError` ECMA-402 specifies. See [Localized formatting](#localized-formatting).
 - **Time zones and calendars are first-class.** `ZonedDateTime::fromFields()` takes `timeZone` as a required positional parameter; all calendar fields accept the `Calendar` enum rather than an identifier string.
 - **No `valueOf()` on spec-layer types.** The TC39 spec defines `valueOf()` to throw `TypeError` so that `<`, `>`, `+`, etc. fail loudly rather than silently coercing. PHP has no equivalent hook — relational operators on objects walk declared properties, arithmetic operators raise `TypeError` from the engine itself, and there is no language path that calls `valueOf()`. A throw-only method that the runtime never invokes is just dead surface, so the spec layer does not expose it. Use `compare()` (or, for `Instant` / `ZonedDateTime`, the underlying `epochNanoseconds`) when you need ordering. Test262 fixtures that target `valueOf()` are emitted as incomplete by the transpiler.
-- **`Duration` field values are exact integers, not float64-narrowed.** TC39's spec performs all internal arithmetic in BigInt and then materializes Duration fields into JS `Number` (= float64), which loses precision past 2⁵³. PHP's `int` is 64-bit, so we keep the exact integer representation: a 584-year microsecond delta lands as `microseconds = 18_446_744_073_709_551, nanoseconds = 616` (reconstructible to the original nanosecond span exactly), where JS would store `microseconds = 18_446_744_073_709_552, nanoseconds = 616` — off by 1 µs because `18_446_744_073_709_551` rounds up to the next float64-representable integer. Practical impact: any Duration produced from sub-second arithmetic across a multi-century span is more accurate than its JS counterpart by up to 1 ULP at the largestUnit. Test262 fixtures that pin down the JS-narrowing behavior verbatim (`PlainDateTime/prototype/{since,until}/float64-representable-integer*`) are emitted as incomplete by the transpiler.
+- **Instant differences retain exact integer fields.** `Instant::until()` and `since()` preserve int64 Duration field values where JavaScript narrows them to float64; values above 2^53 can therefore differ. This is not a general precision guarantee: Duration arithmetic/rounding and PlainDateTime differences use float64-representable field values. The existing int64 epoch limitation also applies to ZonedDateTime fixtures. Test262 fixtures that pin JS narrowing are skipped only for `Instant` and `ZonedDateTime` `since()`/`until()` float64-representable cases.
 
 ## Usage
 
@@ -502,6 +502,7 @@ From 1.0.0 onward, both API layers are supported under the same contract:
 - **Porcelain (`Calendrics\`, excluding `Calendrics\Internal\`)** — public methods, property names and types, enum cases, and constructor parameters are stable within a major version.
 - **Spec (`Calendrics\Spec\`)** — same contract as porcelain. This layer tracks the TC39 Temporal specification; if an upstream Stage 4 change alters observable semantics, that change ships only in a major version of this library.
 - **Seam** — for every porcelain class, `X::fromSpec($x->toSpec())` equals `$x` within a major version. You can move values between layers without lossy conversion.
+- **Porcelain string and JSON serialization** — `(string) $value` and `json_encode($value)` output is stable within a major version, including default precision and calendar/time-zone annotations. Every parseable porcelain value implements `Stringable` and `JsonSerializable`, encoding as a JSON string. Its `parse()` factory continues to accept previously emitted default strings and decoded JSON strings within that major version. Bug fixes that correct incorrect serialization remain subject to the bug-fix exception below. Localized `toLocaleString()` output depends on ICU and locale data and is outside this format guarantee.
 - **Exceptions (`Calendrics\Exception\`)** — every porcelain throw is a `Calendrics\Exception\CalendricsException` (marker interface) and also extends a stable SPL parent (e.g. `Calendrics\Exception\InvalidArgument extends \InvalidArgumentException`). The marker interface and the SPL parent of each concrete exception class are stable within a major version, so both `catch (CalendricsException)` and `catch (\InvalidArgumentException)` keep working. The spec layer throws through the same hierarchy; the only remaining bare SPL throws are internal invariant guards in `Calendrics\Spec\Internal\`, which are not reachable through the public API.
 - **Internal (`Calendrics\Internal\`, `Calendrics\Spec\Internal\`)** — genuine implementation detail (porcelain adapters, calendar bridges, serde, arithmetic helpers). May change at any time without a major version bump. Do not import from it.
 
@@ -562,7 +563,16 @@ docker compose exec php composer check
 | PHPStan (level 9) | `composer phpstan` |
 | Psalm (level 1) | `composer psalm` |
 | Mago lint | `composer mago` |
-| Mutation testing | `composer infection` |
+| Mutation gate (porcelain) | `composer infection:porcelain` |
+| Mutation baseline (all source) | `composer infection` |
+
+### Mutation testing scope
+
+`infection.json5` targets all of `src/` with both MSI and covered MSI thresholds set to **100%**. Full-source mutation testing remains the goal tracked in [#14](https://github.com/MidnightDesign/calendrics/issues/14).
+
+The current CI gate (PHP 8.4) and `composer check` run `composer infection:porcelain`, which selects ten files: `Calendar`, `Duration`, `Instant`, `Now`, `PlainDate`, `PlainDateTime`, `PlainMonthDay`, `PlainTime`, `PlainYearMonth`, and `ZonedDateTime` directly under `src/`. That gate requires 100% MSI and covered MSI for its selected mutants; it does not establish a 100% score for traits, other enums, the spec layer, or internal helpers.
+
+Run `composer infection` to measure all source files with the same thresholds. Inspect `build/infection.txt` and `build/infection-summary.txt` for escaped and uncovered mutants. The plan is to widen the enforced scope incrementally until the file filter can be removed, using upstream test262 fixtures for spec behavior and porcelain tests for PHP affordances. The full-source baseline may fail the thresholds while that work remains open.
 
 ### test262 conformance
 
@@ -573,7 +583,7 @@ docker compose exec php composer test262:build
 docker compose exec php composer test262:run
 ```
 
-Currently **11,074 test262 scripts passing** (0 failures, 296 incomplete — mostly JS-only features like Symbol, Proxy, and property descriptor access, plus a handful of Chinese-calendar fixtures that need ICU ≥ 76).
+On PHP 8.4.25 with ICU 76.1, **11,150 test262 scripts pass** (0 failures, 360 incomplete). Incomplete cases include JS-only features such as Symbol, Proxy, and property descriptor access, plus unsupported harness paths. Counts can vary with ICU: some Chinese-calendar fixtures require ICU ≥ 76.
 
 ---
 
@@ -581,7 +591,7 @@ Currently **11,074 test262 scripts passing** (0 failures, 296 incomplete — mos
 
 This codebase is written with [Claude Code](https://claude.ai/claude-code). All production code and tests are AI-generated.
 
-Quality is enforced by PHPStan (level 9), Psalm (error level 1), Mago, PHPUnit, and Infection with a 100% mutation kill threshold. None of that is negotiable -- every change must pass the full suite before it counts.
+Quality is enforced by PHPStan (level 9), Psalm (error level 1), Mago, PHPUnit, and Infection with a 100% mutation kill threshold for the [current porcelain scope](#mutation-testing-scope). Every change must pass these gates. A passing mutation gate is not a claim of 100% mutation coverage across the whole library.
 
 ## License
 
