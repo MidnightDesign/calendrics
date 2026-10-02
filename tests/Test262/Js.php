@@ -121,6 +121,12 @@ final class Js
         return in_array($needle, $haystack, strict: true);
     }
 
+    /** Returns the current Unix time in whole milliseconds, like JS Date.now(). */
+    public static function dateNow(): int
+    {
+        return (int) floor(microtime(as_float: true) * 1_000.0);
+    }
+
     /**
      * Implements JS Date.UTC(year, month, day, hours, minutes, seconds, ms).
      *
