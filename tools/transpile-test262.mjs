@@ -2585,6 +2585,11 @@ class Emitter {
       return 'false';
     }
 
+    // Date.now() returns an integer epoch-millisecond reading independent of Temporal.Now.
+    if (isMember(callee, 'Date', 'now')) {
+      return `${HARNESS_NS}Js::dateNow()`;
+    }
+
     // Date.UTC(year, month0, day, h, min, s, ms) → \Calendrics\Tests\Test262\Js::dateUTC(...)
     // JS month is 0-indexed; our PHP helper mirrors this convention.
     if (isMember(callee, 'Date', 'UTC')) {
@@ -3279,6 +3284,13 @@ class Emitter {
     const right = this.transpileExpr(node.right);
     if (left === null || right === null) return null;
     const op = phpOperator(node);
+    // epochNanoseconds is a BigInt in JS. Division by a BigInt literal truncates
+    // toward zero; PHP / would retain a fractional millisecond in the Now fixture.
+    if (op === '/' && node.left.type === 'MemberExpression' && !node.left.computed
+        && node.left.property.name === 'epochNanoseconds'
+        && node.right.type === 'Literal' && node.right.bigint !== undefined) {
+      return `intdiv(${left}, ${right})`;
+    }
     // JS `%` is a floating-point remainder; when the left operand involves
     // division (producing a float), use fmod() to match JS semantics
     // (PHP `%` coerces operands to int, losing the fractional part).
