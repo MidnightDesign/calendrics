@@ -62,7 +62,7 @@ final class DateDifference
         ];
 
         $largestUnit = 'day';
-        $largestUnitExplicit = false; // whether largestUnit was explicitly specified
+        $largestUnitFixed = false; // whether largestUnit names a fixed unit
         $smallestUnit = null; // null = not specified
         $roundingMode = 'trunc';
         $roundingIncrement = 1;
@@ -86,7 +86,7 @@ final class DateDifference
                     throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
                 }
                 $largestUnit = $lu;
-                $largestUnitExplicit = true;
+                $largestUnitFixed = $lu !== 'auto';
             }
         }
 
@@ -119,7 +119,7 @@ final class DateDifference
                 $su = Options::coerceEnumOption($su, 'smallestUnit');
             }
             if (is_string($su)) {
-                if (!in_array($su, $validUnits, strict: true)) {
+                if ($su === 'auto' || !in_array($su, $validUnits, strict: true)) {
                     throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
                 }
                 $smallestUnit = $su;
@@ -135,13 +135,13 @@ final class DateDifference
         $luRank = $unitRank[$largestUnit];
 
         if ($suRank > $luRank) {
-            if ($largestUnitExplicit) {
+            if ($largestUnitFixed) {
                 // Both explicitly set and smallestUnit > largestUnit: throw per spec.
                 throw new RangeError(
                     "smallestUnit \"{$smallestUnit}\" cannot be larger than largestUnit \"{$largestUnit}\".",
                 );
             }
-            // Only smallestUnit was explicitly set; bump largestUnit up to match.
+            // An absent or auto largestUnit widens to match smallestUnit.
             $largestUnit = $smallestUnit;
         }
 
