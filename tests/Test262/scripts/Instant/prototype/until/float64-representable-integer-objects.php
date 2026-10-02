@@ -8,4 +8,4 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-Assert::incomplete('PHP keeps Duration fields as exact int64; the fixture pins JS BigInt → Number float64 narrowing (see README deviation)');
+Assert::incomplete('Instant differences keep exact int64 Duration fields instead of JS float64 narrowing (see README deviation)');

@@ -109,6 +109,17 @@ final class IntlDateTimeFormat
     }
 
     /**
+     * Literal-oracle comparison for numbering-system.js. ICU/CLDR versions use
+     * ordinary, no-break, or narrow no-break spaces before the day period. Only
+     * those separators are equivalent; digits, padding and fractions stay exact.
+     */
+    public static function includesLocaleString(string $actual, string $expected): bool
+    {
+        $spaces = ["\u{00A0}" => ' ', "\u{202F}" => ' '];
+        return str_contains(strtr($actual, $spaces), strtr($expected, $spaces));
+    }
+
+    /**
      * ECMA-402 DateTimeFormat.prototype.formatToParts ( date ), reconstructed from
      * the resolved ICU pattern (ext-intl exposes no parts API).
      *
