@@ -104,7 +104,7 @@ final class DateTimeDifference
         ];
 
         $largestUnit = 'day'; // default per TC39 PlainDateTime spec
-        $largestUnitExplicit = false;
+        $largestUnitFixed = false;
         $smallestUnit = null;
         $roundingMode = 'trunc';
         $roundingIncrement = 1;
@@ -127,7 +127,7 @@ final class DateTimeDifference
                     throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
                 }
                 $largestUnit = $lu;
-                $largestUnitExplicit = true;
+                $largestUnitFixed = $lu !== 'auto';
             }
         }
 
@@ -157,7 +157,7 @@ final class DateTimeDifference
                 $su = Options::coerceEnumOption($su, 'smallestUnit');
             }
             if (is_string($su)) {
-                if (!in_array($su, $validUnits, strict: true)) {
+                if ($su === 'auto' || !in_array($su, $validUnits, strict: true)) {
                     throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
                 }
                 $smallestUnit = $su;
@@ -200,7 +200,7 @@ final class DateTimeDifference
         $luRank = $unitRank[$normLargest];
 
         if ($suRank > $luRank) {
-            if ($largestUnitExplicit) {
+            if ($largestUnitFixed) {
                 throw new RangeError(
                     "smallestUnit \"{$normSmallest}\" cannot be larger than largestUnit \"{$normLargest}\".",
                 );
@@ -518,74 +518,20 @@ final class DateTimeDifference
             );
         }
 
-        // largestUnit is a time unit (hour or smaller): accumulate all days into ns.
-        $totalAbsNs = ($dateDiff * EpochLimits::NS_PER_DAY) + $timeDiffNs;
+        // Keep long differences exact without forming an over-int64 nanosecond total.
+        // Duration rounding already carries seconds and sub-second nanoseconds separately
+        // and converts the final fields to the float64 representation required by TC39.
+        $seconds = ($dateDiff * 86_400) + intdiv($timeDiffNs, EpochLimits::NS_PER_SECOND);
+        $nanoseconds = $timeDiffNs % EpochLimits::NS_PER_SECOND;
 
-        $nsPerSmallest = match ($normSmallest) {
-            'hour' => EpochLimits::NS_PER_HOUR,
-            'minute' => EpochLimits::NS_PER_MINUTE,
-            'second' => EpochLimits::NS_PER_SECOND,
-            'millisecond' => EpochLimits::NS_PER_MILLISECOND,
-            'microsecond' => EpochLimits::NS_PER_MICROSECOND,
-            default => 1,
-        };
-        /** @psalm-var int<1, 1000> $roundingIncrement */
-        $nsIncrement = $nsPerSmallest * $roundingIncrement;
-        // For negative output diffs, flip floor/ceil so they retain their directional meaning.
-        $effectiveRoundMode = $roundingMode;
-        if ($outputSign < 0) {
-            $effectiveRoundMode = EpochRounding::negateMode($roundingMode);
-        }
-        $roundedAbsNs = EpochRounding::roundAsIfPositive($totalAbsNs, $nsIncrement, $effectiveRoundMode);
-
-        // Decompose based on largest unit (no conversion to higher units).
-        /** @var array<string, int> $timeUnitNs */
-        static $timeUnitNs = [
-            'hour' => 3_600_000_000_000,
-            'minute' => 60_000_000_000,
-            'second' => 1_000_000_000,
-            'millisecond' => 1_000_000,
-            'microsecond' => 1_000,
-            'nanosecond' => 1,
-        ];
-        /** @var list<'hour'|'minute'|'second'|'millisecond'|'microsecond'|'nanosecond'> $timeUnitOrder */
-        static $timeUnitOrder = ['hour', 'minute', 'second', 'millisecond', 'microsecond', 'nanosecond'];
-
-        $rem = $roundedAbsNs;
-        $h = 0;
-        $min = 0;
-        $sec = 0;
-        $ms = 0;
-        $us = 0;
-        $ns = 0;
-        $started = false;
-        foreach ($timeUnitOrder as $unit) {
-            if ($unit === $normLargest) {
-                $started = true;
-            }
-            if (!$started) {
-                continue;
-            }
-            $perUnit = $timeUnitNs[$unit];
-            $val = intdiv(num1: $rem, num2: $perUnit);
-            $rem %= $perUnit;
-            match ($unit) {
-                'hour' => $h = $val,
-                'minute' => $min = $val,
-                'second' => $sec = $val,
-                'millisecond' => $ms = $val,
-                'microsecond' => $us = $val,
-                'nanosecond' => $ns = $val,
-            };
-        }
-
-        return new Duration(
-            hours: $outputSign * $h,
-            minutes: $outputSign * $min,
-            seconds: $outputSign * $sec,
-            milliseconds: $outputSign * $ms,
-            microseconds: $outputSign * $us,
-            nanoseconds: $outputSign * $ns,
+        return DurationRounding::round(
+            new Duration(seconds: $outputSign * $seconds, nanoseconds: $outputSign * $nanoseconds),
+            [
+                'largestUnit' => $normLargest,
+                'smallestUnit' => $normSmallest,
+                'roundingIncrement' => $roundingIncrement,
+                'roundingMode' => $roundingMode,
+            ],
         );
     }
 
