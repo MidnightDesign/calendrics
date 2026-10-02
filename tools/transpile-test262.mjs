@@ -2381,12 +2381,12 @@ class Emitter {
     }
 
     // arr.find(cb) / arr.some(cb) → Js::arrayFind / Js::arraySome with a PHP
-    // closure. Only arrow callbacks are supported (the only form in the corpus);
-    // anything else falls out as incomplete.
+    // closure. Both function expressions and arrows use the existing closure
+    // emitter; other callback shapes remain incomplete.
     if (callee.type === 'MemberExpression' && !callee.computed
         && (callee.property.name === 'find' || callee.property.name === 'some')) {
       const cb = node.arguments[0];
-      if (!cb || cb.type !== 'ArrowFunctionExpression') {
+      if (!cb || (cb.type !== 'ArrowFunctionExpression' && cb.type !== 'FunctionExpression')) {
         this.emitIncomplete(`untranslatable: Array.prototype.${callee.property.name}()`);
         return null;
       }
@@ -2588,6 +2588,18 @@ class Emitter {
     // Date.now() returns an integer epoch-millisecond reading independent of Temporal.Now.
     if (isMember(callee, 'Date', 'now')) {
       return `${HARNESS_NS}Js::dateNow()`;
+    }
+
+    // Formatter parts are PHP lists in both property-bag modes.
+    if (isMember(callee, 'Array', 'isArray')) {
+      const input = node.arguments[0];
+      // Array-mode object bags are an implementation detail, not JS arrays.
+      if (input?.type === 'ObjectExpression'
+          || (input?.type === 'Identifier' && this.objectVars.has(input.name))) {
+        return 'false';
+      }
+      const arg = node.arguments.length > 0 ? this.transpileExpr(node.arguments[0]) : 'null';
+      return arg === null ? null : `is_array(${arg})`;
     }
 
     // Date.UTC(year, month0, day, h, min, s, ms) → \Calendrics\Tests\Test262\Js::dateUTC(...)
