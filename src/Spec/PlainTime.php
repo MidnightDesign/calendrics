@@ -7,6 +7,7 @@ namespace Calendrics\Spec;
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DateParse;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
@@ -674,7 +675,8 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         );
 
         $fullDatetimePattern = sprintf(
-            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})[T ](\d{2}):?(\d{2})(?::?(\d{2})([.,]\d+)?)?(?:Z|%s)?((?:\[[^\]]*\])*)$/i',
+            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})[T ]%s(?:Z|%s)?((?:\[[^\]]*\])*)$/i',
+            DateParse::TIME_PATTERN,
             $offsetPattern,
         );
 

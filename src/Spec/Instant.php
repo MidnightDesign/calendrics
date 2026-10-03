@@ -7,6 +7,7 @@ namespace Calendrics\Spec;
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DateParse;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\EpochValue;
@@ -254,7 +255,10 @@ final class Instant implements Stringable
          *   ±HH:MM | ±HH:MM:SS | ±HH:MM:SS[.,]frac  (colon-separated)
          *   ±HHMM  | ±HHMMSS  | ±HHMMSS[.,]frac     (no separators)
          */
-        $pattern = '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})[T ](\d{2})(?::?(\d{2})(?::?(\d{2}))?)?([.,]\d+)?(Z|[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)((?:\[[^\]]*\])*)$/i';
+        $pattern = sprintf(
+            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})[T ]%s(Z|[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)((?:\[[^\]]*\])*)$/i',
+            DateParse::TIME_PATTERN,
+        );
 
         /** @var list<string> $m */
         $m = [];
@@ -300,7 +304,7 @@ final class Instant implements Stringable
             throw new RangeError("Invalid Instant string \"{$text}\": minute out of range.");
         }
 
-        // Leap second: 60 is valid and maps to the last nanosecond of :59 (spec §8.5.6).
+        // Leap second: 60 maps to second 59 while retaining the fractional part.
         $sec60 = $secNum === 60;
         $normalSec = $sec60 ? 59 : $secNum;
         if (!$sec60 && $secNum > 59) {
