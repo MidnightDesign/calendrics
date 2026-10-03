@@ -159,15 +159,15 @@ final class Js
      * Returns the first element for which the callback is truthy, or null
      * (standing in for JS `undefined`) when none matches.
      *
-     * @param iterable<mixed> $items
-     * @param callable(mixed): mixed $callback
+     * @param list<mixed> $items
+     * @param callable(mixed, int, list<mixed>): mixed $callback
      * @psalm-api used by dynamically-required test262 scripts in tests/Test262/scripts/
      */
-    public static function arrayFind(iterable $items, callable $callback): mixed
+    public static function arrayFind(array $items, callable $callback): mixed
     {
         /** @var mixed $item */
-        foreach ($items as $item) {
-            if ((bool) $callback($item)) {
+        foreach ($items as $index => $item) {
+            if (self::truthy($callback($item, $index, $items))) {
                 return $item;
             }
         }
@@ -190,6 +190,21 @@ final class Js
             }
         }
         return false;
+    }
+
+    /** JavaScript ToBoolean, including truthy empty arrays and the string "0". */
+    public static function truthy(mixed $value): bool
+    {
+        if ($value === null || $value instanceof JsUndefined || $value === false || $value === '') {
+            return false;
+        }
+        if (is_int($value)) {
+            return $value !== 0;
+        }
+        if (is_float($value)) {
+            return $value !== 0.0 && !is_nan($value);
+        }
+        return true;
     }
 
     /**

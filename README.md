@@ -31,7 +31,7 @@ Most application code should use the porcelain layer. The spec layer is a fully 
 
 ### Deliberate deviations from TC39
 
-The porcelain layer adapts TC39 semantics to PHP-native conventions rather than mirroring the JavaScript API shape 1:1. The spec layer (`Calendrics\Spec\`) remains TC39-faithful for anyone needing that, with one small exception (see `valueOf()` below).
+The porcelain layer adapts TC39 semantics to PHP-native conventions rather than mirroring the JavaScript API shape 1:1. The spec layer (`Calendrics\Spec\`) follows TC39 semantics subject to the PHP-specific deviations documented below.
 
 Notable differences:
 
@@ -41,7 +41,7 @@ Notable differences:
 - **`toLocaleString()` takes typed named arguments, not an options bag** — and each type exposes only the options that apply to it, so `$plainDate->toLocaleString(timeStyle: …)` is a compile error rather than the runtime `TypeError` ECMA-402 specifies. See [Localized formatting](#localized-formatting).
 - **Time zones and calendars are first-class.** `ZonedDateTime::fromFields()` takes `timeZone` as a required positional parameter; all calendar fields accept the `Calendar` enum rather than an identifier string.
 - **No `valueOf()` on spec-layer types.** The TC39 spec defines `valueOf()` to throw `TypeError` so that `<`, `>`, `+`, etc. fail loudly rather than silently coercing. PHP has no equivalent hook — relational operators on objects walk declared properties, arithmetic operators raise `TypeError` from the engine itself, and there is no language path that calls `valueOf()`. A throw-only method that the runtime never invokes is just dead surface, so the spec layer does not expose it. Use `compare()` (or, for `Instant` / `ZonedDateTime`, the underlying `epochNanoseconds`) when you need ordering. Test262 fixtures that target `valueOf()` are emitted as incomplete by the transpiler.
-- **`Duration` field values are exact integers, not float64-narrowed.** TC39's spec performs all internal arithmetic in BigInt and then materializes Duration fields into JS `Number` (= float64), which loses precision past 2⁵³. PHP's `int` is 64-bit, so we keep the exact integer representation: a 584-year microsecond delta lands as `microseconds = 18_446_744_073_709_551, nanoseconds = 616` (reconstructible to the original nanosecond span exactly), where JS would store `microseconds = 18_446_744_073_709_552, nanoseconds = 616` — off by 1 µs because `18_446_744_073_709_551` rounds up to the next float64-representable integer. Practical impact: any Duration produced from sub-second arithmetic across a multi-century span is more accurate than its JS counterpart by up to 1 ULP at the largestUnit. Test262 fixtures that pin down the JS-narrowing behavior verbatim (`PlainDateTime/prototype/{since,until}/float64-representable-integer*`) are emitted as incomplete by the transpiler.
+- **Instant differences retain exact integer fields.** `Instant::until()` and `since()` preserve int64 Duration field values where JavaScript narrows them to float64; values above 2^53 can therefore differ. This is not a general precision guarantee: Duration arithmetic/rounding and PlainDateTime differences use float64-representable field values. The existing int64 epoch limitation also applies to ZonedDateTime fixtures. Test262 fixtures that pin JS narrowing are skipped only for `Instant` and `ZonedDateTime` `since()`/`until()` float64-representable cases.
 
 ## Usage
 
@@ -584,7 +584,7 @@ docker compose exec php composer test262:build
 docker compose exec php composer test262:run
 ```
 
-Currently **11,074 test262 scripts passing** (0 failures, 296 incomplete — mostly JS-only features like Symbol, Proxy, and property descriptor access, plus a handful of Chinese-calendar fixtures that need ICU ≥ 76).
+The test262 suite reports passing and incomplete cases separately. Incomplete cases include JS-only features such as Symbol, Proxy, and property descriptor access, plus unsupported harness paths. Counts vary with the synced corpus and ICU version: some Chinese-calendar fixtures require ICU ≥ 76.
 
 ---
 
