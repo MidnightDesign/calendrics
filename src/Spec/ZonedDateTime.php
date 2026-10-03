@@ -1437,9 +1437,7 @@ final class ZonedDateTime implements Stringable
             for ($i = 1; $i < $nTransitions; $i++) {
                 $curOffset = $transitions[$i]['offset'];
                 if ($curOffset !== $prevOffset) {
-                    // A transition whose whole-second nanoseconds would overflow the int64
-                    // epochNanoseconds field is not representable: transitionAt() returns
-                    // null per spec (and avoids the int64 overflow $ts * NS_PER_SECOND hits).
+                    // Only transitions within the full Temporal instant range are returned.
                     return $this->transitionAt($transitions[$i]['ts']);
                 }
                 $prevOffset = $curOffset;
@@ -1476,28 +1474,19 @@ final class ZonedDateTime implements Stringable
         if ($candidateTs === null) {
             return null;
         }
-        // Symmetric with the 'next' branch: a transition that would overflow the int64
-        // epochNanoseconds field is not representable (the field would clamp to
-        // PHP_INT_MAX/MIN and become indistinguishable from the anchor), so there is no
-        // in-range previous transition and transitionAt() returns null.
+        // Apply the same full Temporal instant range as the 'next' branch.
         return $this->transitionAt($candidateTs);
     }
 
     /**
-     * Builds the ZonedDateTime for a whole-second timezone-transition timestamp, or null
-     * when that timestamp's nanoseconds would overflow the int64 epochNanoseconds field.
-     *
-     * Shared by the 'next' and 'previous' branches of {@see getTimeZoneTransition()}. The
-     * bound is the bare int64 field limit (a whole-second transition carries no sub-second
-     * remainder), not the spec-max instant in seconds: a transition below the spec max can
-     * still clamp the field and become indistinguishable from the anchor, so it is rejected.
+     * Builds a whole-second transition within the full Temporal instant range.
      */
     private function transitionAt(int $ts): ?self
     {
-        if (abs($ts) > EpochLimits::MAX_EPOCH_SECONDS_FOR_INT64_NS_FIELD) {
+        if (abs($ts) > EpochLimits::MAX_EPOCH_SECONDS) {
             return null;
         }
-        return new self($ts * EpochLimits::NS_PER_SECOND, $this->timeZoneId, $this->calendarId);
+        return self::fromEpochParts($ts, 0, $this->timeZoneId, $this->calendarId);
     }
 
     // -------------------------------------------------------------------------
