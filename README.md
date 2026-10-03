@@ -82,8 +82,8 @@ Options use enums such as `Overflow::Reject`, `Unit::Month`, and `RoundingMode::
 
 ## Precision and portability
 
-- Times can represent nine fractional digits. PHP `DateTimeInterface` has microsecond precision, so converting to it drops the last three digits.
-- Keep `Instant` and `ZonedDateTime` values within the 64-bit nanosecond epoch range (roughly September 1677–April 2262). Their PHP-oriented factories and native date-time conversions use integer nanosecond timestamps. Wider Spec-layer values can lose their date when converted to the PHP-oriented layer; see [timestamp range limits](docs/compatibility.md#timestamp-range-limits).
+- Times can represent nine fractional digits. PHP `DateTimeInterface` has microsecond precision; epoch conversions truncate toward zero to microsecond precision.
+- `Instant` and `ZonedDateTime` preserve timestamps beyond the 64-bit nanosecond epoch range when parsing, converting from Spec values, and converting to native PHP date-time objects. Integer nanosecond properties and native date-time input still have range limits; see [timestamp range limits](docs/compatibility.md#timestamp-range-limits).
 - Duration results can follow JavaScript's floating-point Number semantics. Instant differences retain exact integer fields in some cases where JavaScript rounds them. See [PHP and Temporal differences](docs/compatibility.md#php-and-temporal-differences).
 - Localized strings and non-ISO calendar behavior depend on ICU data from `ext-intl`. Use the ISO-style `toString()`/`parse()` pair for storage and interchange; do not parse `toLocaleString()` output.
 
