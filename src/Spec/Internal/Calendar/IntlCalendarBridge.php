@@ -561,55 +561,31 @@ final class IntlCalendarBridge implements CalendarProtocol
         int $days,
         string $overflow,
     ): array {
-        // Gregorian-based fast path: skip every intlCal round-trip when both
-        // the input and the resulting ISO year are >= 1583 (past the 1582
-        // Julian cutover that japanese/buddhist/roc still honor in ICU). For
-        // bare 'gregory' the cutover was disabled in the constructor, so the
-        // fast path always applies. Within this window the calendar fields
-        // equal the ISO fields, daysInMonth is pure ISO math, and monthsInYear
-        // is 12.
+        // Gregorian-based calendars use the proleptic ISO month/day structure,
+        // including dates before ICU's historical Julian/Gregorian cutover.
         if ($this->isGregorianBased) {
             $totalMonths = $isoMonth + $months - 1;
             $yearAdd = CalendarMath::floorDiv($totalMonths, 12);
             $calMonth = $totalMonths - ($yearAdd * 12) + 1;
             $finalIsoYear = $isoYear + $years + $yearAdd;
-            $cutoverSafe = $this->calendarId === 'gregory' || $isoYear >= 1583 && $finalIsoYear >= 1583;
-            if ($cutoverSafe) {
-                $newMaxDay = CalendarMath::calcDaysInMonth($finalIsoYear, $calMonth);
-                if ($overflow === 'reject' && $isoDay > $newMaxDay) {
-                    throw new RangeError(
-                        "Day {$isoDay} exceeds maximum {$newMaxDay} for the resulting calendar month.",
-                    );
-                }
-                $finalDay = $isoDay > $newMaxDay ? $newMaxDay : $isoDay;
-                $jdn = CalendarMath::toJulianDay($finalIsoYear, $calMonth, $finalDay) + ($weeks * 7) + $days;
-                return CalendarMath::fromJulianDay($jdn);
+            $newMaxDay = CalendarMath::calcDaysInMonth($finalIsoYear, $calMonth);
+            if ($overflow === 'reject' && $isoDay > $newMaxDay) {
+                throw new RangeError("Day {$isoDay} exceeds maximum {$newMaxDay} for the resulting calendar month.");
             }
+            $finalDay = $isoDay > $newMaxDay ? $newMaxDay : $isoDay;
+            $jdn = CalendarMath::toJulianDay($finalIsoYear, $calMonth, $finalDay) + ($weeks * 7) + $days;
+            return CalendarMath::fromJulianDay($jdn);
         }
 
         if ($years !== 0 || $months !== 0) {
-            // Capture the original calendar day and year/month. Use field-level
-            // arithmetic: read calendar fields, add to year/month, resolve back.
-            // This avoids Julian cutover issues in ICU for the gregorian path
-            // (japanese/buddhist/roc retain ICU's 1582 cutover; only the bare
-            // gregorian IntlCalendar was made proleptic in the constructor).
-            if ($this->isGregorianBased) {
-                // Fallback path only runs pre-1583 for buddhist/roc/japanese; the
-                // ICU state is needed to read the Julian-adjusted FIELD_DAY_OF_MONTH.
+            $originalCalDay = $this->day($isoYear, $isoMonth, $isoDay);
+            $calYear = $this->year($isoYear, $isoMonth, $isoDay);
+            $calMonth = $this->month($isoYear, $isoMonth, $isoDay);
+            // chinese/dangi year-addition reads ICU fields directly below.
+            // setCalendarFields later calls intlCal->clear() which wipes state,
+            // so other non-gregorian calendars don't need setIsoDate at all.
+            if ($years !== 0 && ($this->calendarId === 'chinese' || $this->calendarId === 'dangi')) {
                 $this->setIsoDate($isoYear, $isoMonth, $isoDay);
-                $originalCalDay = $this->intlCal->get(\IntlCalendar::FIELD_DAY_OF_MONTH);
-                $calYear = $this->calendarYear();
-                $calMonth = $this->calendarMonth();
-            } else {
-                $originalCalDay = $this->day($isoYear, $isoMonth, $isoDay);
-                $calYear = $this->year($isoYear, $isoMonth, $isoDay);
-                $calMonth = $this->month($isoYear, $isoMonth, $isoDay);
-                // chinese/dangi year-addition reads ICU fields directly below.
-                // setCalendarFields later calls intlCal->clear() which wipes state,
-                // so other non-gregorian calendars don't need setIsoDate at all.
-                if ($years !== 0 && ($this->calendarId === 'chinese' || $this->calendarId === 'dangi')) {
-                    $this->setIsoDate($isoYear, $isoMonth, $isoDay);
-                }
             }
 
             // For calendars with leap months, year addition must preserve monthCode
@@ -909,19 +885,6 @@ final class IntlCalendarBridge implements CalendarProtocol
             'dangi' => $this->intlCal->get(self::FIELD_EXTENDED_YEAR) - self::DANGI_YEAR_OFFSET,
             default => $this->intlCal->get(\IntlCalendar::FIELD_YEAR),
         };
-    }
-
-    /**
-     * Returns the calendar ordinal month from the currently-set IntlCalendar state.
-     *
-     * The only caller (dateAdd's pre-1583 Gregorian fallback) is gated on
-     * {@see $isGregorianBased} and always runs setIsoDate() first, so the
-     * calendar is Gregorian-based (ordinal month == ISO month) and the ISO
-     * fields are cached.
-     */
-    private function calendarMonth(): int
-    {
-        return $this->lastSetIsoMonth;
     }
 
     /**
