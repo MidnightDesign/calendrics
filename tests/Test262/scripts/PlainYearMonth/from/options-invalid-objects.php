@@ -12,7 +12,6 @@ $items = [(object) ['year' => 2000, 'month' => 11], '2000-11', new \Calendrics\S
 $values = [null, true, 'hello', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 1];
 foreach ($items as $item) {
 foreach ($values as $badOptions) {
-if ($badOptions === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$item, &$badOptions) { return \Calendrics\Spec\PlainYearMonth::from($item, $badOptions); }, '');
 }
 }

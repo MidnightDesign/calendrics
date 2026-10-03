@@ -83,9 +83,6 @@ final class DateFields
         if (array_key_exists('year', $bag)) {
             /** @var mixed $yearRaw */
             $yearRaw = $bag['year'];
-            if ($yearRaw === null) {
-                throw new RangeError('PlainDate property bag year field must not be undefined.');
-            }
             $year = CalendarMath::toFiniteInt($yearRaw, 'PlainDate year');
         }
 
@@ -113,9 +110,6 @@ final class DateFields
         if ($hasMonth) {
             /** @var mixed $monthRaw */
             $monthRaw = $bag['month'] ?? null;
-            if ($monthRaw === null) {
-                throw new RangeError('PlainDate property bag month field must not be undefined.');
-            }
             $newMonth = CalendarMath::toFiniteInt($monthRaw, 'PlainDate month');
             if ($hasMonthCode && $newMonth !== $month) {
                 throw new RangeError('Conflicting month and monthCode fields.');
@@ -127,9 +121,6 @@ final class DateFields
 
         /** @var mixed $dayRaw */
         $dayRaw = $bag['day'];
-        if ($dayRaw === null) {
-            throw new RangeError('PlainDate property bag day field must not be undefined.');
-        }
         $day = CalendarMath::toFiniteInt($dayRaw, 'PlainDate day');
 
         // month < 1 and day < 1 are always invalid (cannot constrain below minimum of 1).

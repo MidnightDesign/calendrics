@@ -10,6 +10,5 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $badOptions = [null, true, 'some string', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 2];
 foreach ($badOptions as $value) {
-if ($value === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$value) { return \Calendrics\Spec\Duration::compare((object) ['hours' => 1], (object) ['hours' => 1], $value); }, "TypeError on wrong options type " . (gettype($value)) . "");
 }

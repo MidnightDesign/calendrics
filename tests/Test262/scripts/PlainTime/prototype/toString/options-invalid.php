@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $instance = \Calendrics\Spec\PlainTime::from('12:56:32');
 $values = [null, true, 'hello', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 1];
 foreach ($values as $badOptions) {
-if ($badOptions === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$instance, &$badOptions) { return $instance->toString($badOptions); }, '');
 }

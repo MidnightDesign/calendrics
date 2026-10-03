@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $fields = (object) ['month' => 2, 'day' => 31];
 $values = [null, true, 'hello', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 1];
 foreach ($values as $badOptions) {
-if ($badOptions === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$fields, &$badOptions) { return \Calendrics\Spec\PlainMonthDay::from($fields, $badOptions); }, '');
 }

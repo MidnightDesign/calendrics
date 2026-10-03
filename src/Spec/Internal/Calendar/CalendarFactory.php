@@ -6,6 +6,11 @@ namespace Calendrics\Spec\Internal\Calendar;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
+use Calendrics\Spec\PlainDate;
+use Calendrics\Spec\PlainDateTime;
+use Calendrics\Spec\PlainMonthDay;
+use Calendrics\Spec\PlainYearMonth;
+use Calendrics\Spec\ZonedDateTime;
 
 /**
  * Singleton factory for calendar protocol instances.
@@ -105,9 +110,7 @@ final class CalendarFactory
      */
     public static function resolveConstructorCalendar(mixed $value, string $context): string
     {
-        if ($value === null) {
-            $value = 'iso8601';
-        } elseif (!is_string($value)) {
+        if (!is_string($value)) {
             throw new TypeError("{$context} calendar argument must be a string.");
         }
         return self::canonicalize($value);
@@ -125,14 +128,18 @@ final class CalendarFactory
      * PlainYearMonth, ZonedDateTime) may be passed directly; their `calendarId`
      * is extracted in place of calling the public calendar getter.
      *
-     * @throws TypeError if $value is not a string and does not carry a calendarId.
+     * @throws TypeError if $value is neither a string nor a date-bearing Temporal object.
      * @throws RangeError if $value is malformed or names an unknown calendar.
      */
     public static function resolveBagCalendar(mixed $value, string $context): string
     {
-        // Fast path: Temporal objects with an internal calendar slot carry a
-        // `calendarId` string — extract it directly (mirrors spec step 1.a).
-        if (is_object($value) && property_exists($value, 'calendarId') && is_string($value->calendarId)) {
+        if (
+            $value instanceof PlainDate
+            || $value instanceof PlainDateTime
+            || $value instanceof PlainMonthDay
+            || $value instanceof PlainYearMonth
+            || $value instanceof ZonedDateTime
+        ) {
             return self::canonicalize($value->calendarId);
         }
         if (!is_string($value)) {
@@ -200,9 +207,6 @@ final class CalendarFactory
      */
     private static function looksLikeIsoDateOrTime(string $s): bool
     {
-        if ($s === '') {
-            return false;
-        }
         // Date / datetime.
         if (
             preg_match(pattern: '/^\d{2}-\d{2}|^\d{4}-\d{2}|^[+-]\d{6}-/', subject: $s) === 1

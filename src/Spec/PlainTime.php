@@ -556,17 +556,9 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         // digits=-1 ('minute'): minute precision.
         // digits=0..9: second or sub-second precision.
         $nsIncrement = match ($digits) {
-            -2, 9 => 1, // nanosecond precision; rounding=trunc is a no-op when -2
+            -2 => 1,
             -1 => self::NS_PER_MINUTE,
-            0 => 1_000_000_000,
-            1 => 100_000_000,
-            2 => 10_000_000,
-            3 => 1_000_000,
-            4 => 100_000,
-            5 => 10_000,
-            6 => 1_000,
-            7 => 100,
-            default => 10, // only remaining case is 8
+            default => 10 ** (9 - $digits),
         };
 
         // Round the nanoseconds (always non-negative).
@@ -704,22 +696,10 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             $hourNum = (int) $m[3];
             $minNum = (int) $m[4];
             $secNum = $m[5] !== '' ? (int) $m[5] : 0;
-            // Leap second 60 maps to 59.
-            if ($secNum === 60) {
-                $secNum = 59;
-            }
             $fracRaw = $m[6] !== '' ? $m[6] : '';
             $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
 
-            CalendarMath::validateTimeFields($hourNum, $minNum, $secNum, 0, 0, 0);
-
-            $totalNs =
-                ($hourNum * self::NS_PER_HOUR)
-                + ($minNum * self::NS_PER_MINUTE)
-                + ($secNum * EpochLimits::NS_PER_SECOND)
-                + $subNs;
-
-            return self::fromNs($totalNs);
+            return self::fromParsedTime($hourNum, $minNum, $secNum, $subNs);
         }
 
         // Try pure time string (with optional T prefix and optional offset/annotations).
@@ -772,21 +752,10 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             $hourNum = (int) $m2[1];
             $minNum = (int) $m2[2];
             $secNum = $m2[3] !== '' ? (int) $m2[3] : 0;
-            if ($secNum === 60) {
-                $secNum = 59;
-            }
             $fracRaw = $m2[4] !== '' ? $m2[4] : '';
             $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
 
-            CalendarMath::validateTimeFields($hourNum, $minNum, $secNum, 0, 0, 0);
-
-            $totalNs =
-                ($hourNum * self::NS_PER_HOUR)
-                + ($minNum * self::NS_PER_MINUTE)
-                + ($secNum * EpochLimits::NS_PER_SECOND)
-                + $subNs;
-
-            return self::fromNs($totalNs);
+            return self::fromParsedTime($hourNum, $minNum, $secNum, $subNs);
         }
 
         /** @var list<string> $m3 */
@@ -796,9 +765,6 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             $hourNum = (int) $m3[1];
             $minNum = $m3[2] !== '' ? (int) $m3[2] : 0;
             $secNum = $m3[3] !== '' ? (int) $m3[3] : 0;
-            if ($secNum === 60) {
-                $secNum = 59;
-            }
             $fracRaw = $m3[4] !== '' ? $m3[4] : '';
             $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
             $annotationSection = $m3[5] !== '' ? $m3[5] : '';
@@ -810,18 +776,22 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
                 throw new RangeError("PlainTime::from() cannot parse \"{$s}\": invalid ISO 8601 time string.");
             }
 
-            CalendarMath::validateTimeFields($hourNum, $minNum, $secNum, 0, 0, 0);
-
-            $totalNs =
-                ($hourNum * self::NS_PER_HOUR)
-                + ($minNum * self::NS_PER_MINUTE)
-                + ($secNum * EpochLimits::NS_PER_SECOND)
-                + $subNs;
-
-            return self::fromNs($totalNs);
+            return self::fromParsedTime($hourNum, $minNum, $secNum, $subNs);
         }
 
         throw new RangeError("PlainTime::from() cannot parse \"{$s}\": invalid ISO 8601 time string.");
+    }
+
+    private static function fromParsedTime(int $hour, int $minute, int $second, int $subNs): self
+    {
+        if ($second === 60) {
+            $second = 59;
+        }
+        CalendarMath::validateTimeFields($hour, $minute, $second, 0, 0, 0);
+        return self::fromNs(($hour * self::NS_PER_HOUR)
+        + ($minute * self::NS_PER_MINUTE)
+        + ($second * EpochLimits::NS_PER_SECOND)
+        + $subNs);
     }
 
     /**
@@ -1112,15 +1082,13 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         ];
 
         $sign = $diffNs >= 0 ? 1 : -1;
-        $absNs = abs($diffNs);
 
-        // Round diffNs to the nearest multiple of nsIncrement.
-        // For floor/ceil/halfFloor/halfCeil, the direction depends on the sign of diffNs.
         $nsIncrement = ($nsPerUnit[$smallestUnit] ?? 1) * $roundingIncrement;
-        $roundedAbsNs = self::roundSignedNs($diffNs, $nsIncrement, $roundingMode);
-        // roundSignedNs returns a signed value; take abs for balancing, sign already captured.
-        unset($absNs); // avoid accidental use
-        $roundedAbsNs = abs($roundedAbsNs);
+        $roundedAbsNs = EpochRounding::roundAsIfPositive(
+            abs($diffNs),
+            $nsIncrement,
+            $diffNs < 0 ? EpochRounding::negateMode($roundingMode) : $roundingMode,
+        );
 
         // Balance the rounded absolute value up to largestUnit.
         $remaining = $roundedAbsNs;
@@ -1161,113 +1129,5 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             microseconds: $sign * $us,
             nanoseconds: $sign * $ns,
         );
-    }
-
-    /**
-     * Rounds a signed nanosecond diff to the nearest multiple of $increment,
-     * correctly handling directional modes (floor, ceil, halfFloor, halfCeil) for
-     * negative values.
-     *
-     * Returns a signed result (may be negative).
-     *
-     * @throws RangeError for unknown rounding modes.
-     */
-    private static function roundSignedNs(int $ns, int $increment, string $mode): int
-    {
-        // PHP's intdiv truncates toward zero.
-        $q = intdiv(num1: $ns, num2: $increment);
-        $rem = $ns - ($q * $increment); // same sign as $ns (or 0)
-        $trunc = $q * $increment; // truncated toward zero
-        $absRem = abs($rem);
-
-        $expand = $ns >= 0 ? $trunc + $increment : $trunc - $increment;
-
-        switch ($mode) {
-            case 'trunc':
-                return $trunc;
-            case 'floor':
-                return $rem < 0 ? $trunc - $increment : $trunc;
-            case 'ceil':
-                return $rem > 0 ? $trunc + $increment : $trunc;
-            case 'expand':
-                if ($rem < 0) {
-                    return $trunc - $increment;
-                }
-                return $rem > 0 ? $trunc + $increment : $trunc;
-            case 'halfExpand':
-                return ($absRem * 2) >= $increment ? $expand : $trunc;
-            case 'halfTrunc':
-                return ($absRem * 2) > $increment ? $expand : $trunc;
-            case 'halfFloor':
-                $cmp = $absRem * 2;
-                if ($cmp < $increment) {
-                    return $trunc;
-                }
-                if ($cmp > $increment) {
-                    return $expand;
-                }
-                // tie: toward -∞
-                return $ns >= 0 ? $trunc : $trunc - $increment;
-            case 'halfCeil':
-                $cmp = $absRem * 2;
-                if ($cmp < $increment) {
-                    return $trunc;
-                }
-                if ($cmp > $increment) {
-                    return $expand;
-                }
-                // tie: toward +∞
-                return $ns >= 0 ? $trunc + $increment : $trunc;
-            case 'halfEven':
-                $cmp = $absRem * 2;
-                if ($cmp < $increment) {
-                    return $trunc;
-                }
-                if ($cmp > $increment) {
-                    return $expand;
-                }
-                return ($q % 2) === 0 ? $trunc : $expand;
-            default:
-                throw new RangeError("Invalid roundingMode \"{$mode}\".");
-        }
-    }
-
-    #[\Override]
-    protected function localeDefaultComponents(): string
-    {
-        return 'time';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return true;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): null
-    {
-        return null;
-    }
-
-    #[\Override]
-    protected function toLocaleTimestamp(): int|float
-    {
-        // Use Unix epoch date (1970-01-01) with the given time
-        $dt = new \DateTime(
-            sprintf('1970-01-01T%02d:%02d:%02d', $this->hour, $this->minute, $this->second),
-            new \DateTimeZone('UTC'),
-        );
-        $subNs = ($this->millisecond * 1_000_000) + ($this->microsecond * 1_000) + $this->nanosecond;
-        if ($subNs === 0) {
-            return $dt->getTimestamp();
-        }
-        return (float) $dt->getTimestamp() + ((float) $subNs / 1e9);
     }
 }

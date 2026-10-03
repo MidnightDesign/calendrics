@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $zdt = new \Calendrics\Spec\ZonedDateTime(0, 'UTC');
 $badValues = [false, 42, 55, \Calendrics\Tests\Test262\JsSymbol::singleton(), null];
 foreach ($badValues as $badValue) {
-if ($badValue === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$zdt, &$badValue) { return $zdt->getTimeZoneTransition($badValue); }, '');
 }

@@ -11,7 +11,6 @@ use Calendrics\Tests\Test262\JsUndefined;
 $primitiveTests = [[null, 'null'], [true, 'boolean'], ['', 'empty string'], [1, 'number that doesn\'t convert to a valid ISO string'], [19_761_118, 'number that would convert to a valid ISO string in other contexts'], [1, 'bigint']];
 foreach ($primitiveTests as $__entry__) {
 [$timeZone, $description] = array_pad($__entry__, 2, null);
-if ($timeZone === null) { continue; }
 Assert::throws((is_string($timeZone) ? \RangeException::class : \TypeError::class), function () use (&$timeZone) { return \Calendrics\Spec\ZonedDateTime::from(JsUndefined::strip(['year' => 2000, 'month' => 5, 'day' => 2, 'timeZone' => $timeZone])); }, "{$description} does not convert to a valid ISO string");
 }
 $typeErrorTests = [[\Calendrics\Tests\Test262\JsSymbol::singleton(), 'symbol'], [[], 'object'], [new \Calendrics\Spec\Duration(), 'duration instance']];

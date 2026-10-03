@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $jan31 = new \Calendrics\Spec\PlainDateTime(2020, 1, 31, 15, 0);
 $badOptions = [null, 1, 'hello', true, \Calendrics\Tests\Test262\JsSymbol::singleton(), 1];
 foreach ($badOptions as $bad) {
-if ($bad === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$jan31, &$bad) { return $jan31->subtract((object) ['years' => 1], $bad); }, "invalid options (" . (gettype($bad)) . ")");
 }

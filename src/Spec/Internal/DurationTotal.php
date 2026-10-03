@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Calendrics\Spec\Internal;
 
 use Calendrics\Exception\RangeError;
-use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Duration;
 use Calendrics\Spec\PlainDate;
 use Calendrics\Spec\ZonedDateTime;
@@ -32,125 +31,29 @@ use Calendrics\Spec\ZonedDateTime;
  */
 final class DurationTotal
 {
-    /**
-     * Computes the total of $d expressed in $unit.
-     *
-     * $unit has already been normalized by the caller; $totalOf is the original
-     * options bag, still needed here because the `relativeTo` anchor is read from it.
-     *
-     * @param 'years'|'months'|'weeks'|'days'|'hours'|'minutes'|'seconds'|'milliseconds'|'microseconds'|'nanoseconds' $unit
-     * @param string|array<array-key, mixed>|object $totalOf
-     * @throws RangeError if the unit is unavailable without relativeTo.
-     * @throws TypeError if relativeTo is present but not a valid anchor.
-     */
-    public static function compute(Duration $d, string $unit, string|array|object $totalOf): int|float
+    /** @param 'years'|'months'|'weeks'|'days'|'hours'|'minutes'|'seconds'|'milliseconds'|'microseconds'|'nanoseconds' $unit */
+    public static function compute(Duration $d, string $unit, PlainDate|ZonedDateTime|null $anchor): int|float
     {
-        if ($unit === 'years' || $unit === 'months' || $unit === 'weeks') {
-            [$rt, $zdtInfoCal] = self::resolveRelativeTo(
-                $totalOf,
-                "total() with unit \"{$unit}\" requires a relativeTo option.",
-            );
-            return self::calendar($d, $unit, $rt, $zdtInfoCal);
+        $zdtInfo = $anchor !== null ? RelativeTo::resolveZdt($anchor) : null;
+        if (
+            $unit === 'years'
+            || $unit === 'months'
+            || $unit === 'weeks'
+            || $d->years !== 0
+            || $d->months !== 0
+            || $d->weeks !== 0
+        ) {
+            if ($anchor === null) {
+                throw new RangeError('Calendar duration totals require a relativeTo option.');
+            }
+            return self::calendar($d, $unit, RelativeTo::toPlainDateBag($anchor), $zdtInfo);
         }
-
-        if ($d->years !== 0 || $d->months !== 0 || $d->weeks !== 0) {
-            [$rt, $zdtInfoCal] = self::resolveRelativeTo(
-                $totalOf,
-                'total() on a duration with years, months, or weeks requires a relativeTo option.',
-            );
-            return self::calendar($d, $unit, $rt, $zdtInfoCal);
-        }
-
-        // Validate relativeTo if provided (even for pure-time unit computations).
-        if (is_array($totalOf) && array_key_exists('relativeTo', $totalOf)) {
-            /** @var mixed $rtRaw */
-            $rtRaw = $totalOf['relativeTo'];
-            if (is_string($rtRaw)) {
-                $parsedRt = RelativeTo::parseString($rtRaw);
-                $rtIsZDT = $parsedRt['_isZDT'] === true;
-                // For total('days') with ZDT in UTC/fixed-offset: local time must be midnight.
-                // This ensures the start-of-next-day is within the representable instant range.
-                // (IANA timezones skip this check because DST-aware total legitimately uses non-midnight.)
-                if ($unit === 'days' && $rtIsZDT && $parsedRt['_localTimeSec'] !== 0) {
-                    // Check if the timezone is IANA (not UTC/fixed-offset).
-                    $tzBracket = null;
-                    $_m = null;
-                    if (preg_match('/\[([^\]=]+)\]\s*$/', $rtRaw, $_m) === 1) {
-                        $tzBracket = $_m[1];
-                    }
-                    $isIanaTz =
-                        $tzBracket !== null
-                        && $tzBracket !== 'UTC'
-                        && preg_match('/^[+\-]\d{2}:\d{2}$/', $tzBracket) !== 1;
-                    if (!$isIanaTz) {
-                        throw new RangeError("relativeTo ZonedDateTime for total('days') must be at local midnight.");
-                    }
-                }
-                // For non-blank duration: check epoch overflow.
-                if (!$d->blank) {
-                    $rtTotalSec =
-                        ((float) $d->days * 86_400.0)
-                        + ((float) $d->hours * 3_600.0)
-                        + ((float) $d->minutes * 60.0)
-                        + (float) $d->seconds
-                        + (
-                            (
-                                ((float) $d->milliseconds * 1_000_000.0)
-                                + ((float) $d->microseconds * 1_000.0)
-                                + (float) $d->nanoseconds
-                            )
-                            / 1_000_000_000.0
-                        );
-                    if ($rtIsZDT) {
-                        if (
-                            ((float) $parsedRt['_utcSec'] + $rtTotalSec) > EpochLimits::MAX_EPOCH_SECONDS
-                            || ((float) $parsedRt['_utcSec'] + $rtTotalSec) < -EpochLimits::MAX_EPOCH_SECONDS
-                        ) {
-                            throw new RangeError(
-                                'relativeTo ZonedDateTime is outside the representable range after applying duration.',
-                            );
-                        }
-                    } else {
-                        // PlainDate: epoch days must be within ±100 000 000.
-                        if (abs((int) $parsedRt['_epochDays']) > 100_000_000) {
-                            throw new RangeError(
-                                'relativeTo PlainDate is outside the representable range after applying duration.',
-                            );
-                        }
-                    }
-                }
-            } elseif ($rtRaw instanceof PlainDate) {
-                // PlainDate objects are always valid for pure-time computations; no extra validation needed.
-            } elseif ($rtRaw instanceof ZonedDateTime) {
-                // ZonedDateTime objects are valid relativeTo values for pure-time computations.
-                // For a non-blank duration, the target instant (anchor epoch + duration) must
-                // stay within the representable Temporal range (±8.64e21 ns ≙ ±8.64e12 s).
-                // Read the TRUE epoch seconds via epochParts() (sentinel-aware), not the clamped
-                // public epochNanoseconds field.
-                if (!$d->blank) {
-                    [$rtTrueSec, $rtSubNs] = $rtRaw->epochParts();
-                    if (RelativeTo::zdtTargetOutOfRange($rtTrueSec, $rtSubNs, $d)) {
-                        throw new RangeError(
-                            'relativeTo ZonedDateTime is outside the representable range after applying duration.',
-                        );
-                    }
-                }
-            } elseif ($rtRaw !== null) {
-                if (is_object($rtRaw)) {
-                    $rtForVal = RelativeTo::normalizeBag($rtRaw);
-                } elseif (is_array($rtRaw)) {
-                    $rtForVal = $rtRaw;
-                } else {
-                    throw new TypeError('relativeTo must be a string or property bag array.');
-                }
-                RelativeTo::validatePropertyBag($rtForVal);
+        if ($anchor !== null && !$d->blank) {
+            $range = RelativeTo::resolveAnchor($anchor);
+            if ($range->zoned ? $range->targetOutOfRange($d) : $range->midnightOutOfRange()) {
+                throw new RangeError('relativeTo is outside the representable range after applying duration.');
             }
         }
-
-        // DST-aware computation when relativeTo is a ZDT with IANA timezone.
-        /** @var mixed $rtForZdt */
-        $rtForZdt = is_array($totalOf) ? $totalOf['relativeTo'] ?? null : null;
-        $zdtInfo = $rtForZdt !== null ? RelativeTo::resolveZdt($rtForZdt) : null;
 
         if ($zdtInfo !== null) {
             // Time-only fields in seconds (sub-second precision preserved).
@@ -209,41 +112,18 @@ final class DurationTotal
             );
             $totalSec = $daysSec + $timeOnlySec;
 
-            $result = match ($unit) {
-                'hours' => $totalSec / 3_600.0,
-                'minutes' => $totalSec / 60.0,
-                'seconds' => $totalSec,
-                'milliseconds' => $totalSec * 1_000.0,
-                'microseconds' => $totalSec * 1_000_000.0,
-                'nanoseconds' => $totalSec * 1_000_000_000.0,
-            };
-            return self::toIntIfWhole($result);
+            return self::totalTimeSeconds($totalSec, $unit);
         }
 
-        // Total on the exact value, carried as a (whole seconds, sub-second nanoseconds)
-        // pair the way DurationRounding does. The combined nanosecond count passes int64
-        // long before MaxTimeDuration, and float64's ulp up there is milliseconds wide,
-        // so summing into a float first and scaling afterwards drops digits the spec
-        // keeps — 8692288669465520513 ms came back a whole ulp out. Both halves of the
-        // pair stay inside int64, and the single conversion at the end is the one
-        // rounding TC39 allows.
-        $absNs = (int) abs((float) $d->nanoseconds);
-        $absUs = (int) abs((float) $d->microseconds);
-        $absMs = (int) abs((float) $d->milliseconds);
-        $absSec =
-            ((int) abs((float) $d->days) * 86_400)
-            + ((int) abs((float) $d->hours) * 3_600)
-            + ((int) abs((float) $d->minutes) * 60)
-            + (int) abs((float) $d->seconds);
+        [$seconds, $nanoseconds] = DurationTime::parts($d);
+        $absSec = abs($seconds) + (abs((int) $d->days) * 86_400);
+        $subNs = abs($nanoseconds);
 
-        // Carry each sub-second field up separately: a single milliseconds field may hold
-        // enough to overflow int64 once multiplied out to nanoseconds.
-        $absUs += intdiv(num1: $absNs, num2: 1_000_000_000) * 1_000_000;
-        $absMs += intdiv(num1: $absUs, num2: 1_000_000) * 1_000;
-        $absSec += intdiv(num1: $absMs, num2: 1_000);
-        $subNs = (($absMs % 1_000) * 1_000_000) + (($absUs % 1_000_000) * 1_000) + ($absNs % 1_000_000_000);
-        $absSec += intdiv(num1: $subNs, num2: 1_000_000_000);
-        $subNs %= 1_000_000_000;
+        if ($unit === 'days' && $anchor instanceof ZonedDateTime) {
+            // Even an exact total needs the next day boundary to define its fraction.
+            $sign = $d->sign < 0 ? -1 : 1;
+            $anchor->add(new Duration(days: $sign * (intdiv($absSec, num2: 86_400) + 1)));
+        }
 
         $result = (float) $d->sign * self::exactTotal($absSec, $subNs, $unit);
 
@@ -253,70 +133,16 @@ final class DurationTotal
     }
 
     /**
-     * Validates and resolves the `relativeTo` option for `Duration::total()`'s
-     * calendar paths. Returns the property-bag form of the anchor — one
-     * {@see RelativeTo::anchorYmd()} can read a year, month and day out of —
-     * plus the ZonedDateTime info record when the original input was a ZDT.
-     *
-     * @param mixed  $totalOf  the options bag passed to `total()` (string-form
-     *     totalOf is invalid here — calendar units require an options object,
-     *     never a bare smallestUnit string).
-     * @param string $missingMsg  message for RangeError when the
-     *     `relativeTo` key is absent. The TypeError thrown for an explicit null
-     *     and the field-shape errors are spec-mandated and identical across
-     *     calling sites.
-     * @return array{0: array<array-key, mixed>, 1: array{epochSec: int, subNs: int, tzId: string, year: int, month: int, day: int, hour: int, minute: int, second: int}|null}
-     *     [resolvedBag, zdtInfo].
-     * @throws RangeError if relativeTo is absent.
-     * @throws \TypeError if relativeTo is null, not String/Object, or the
-     *     resolved bag names no year, month/monthCode, or day.
-     */
-    private static function resolveRelativeTo(mixed $totalOf, string $missingMsg): array
-    {
-        if (!is_array($totalOf) || !array_key_exists('relativeTo', $totalOf)) {
-            throw new RangeError($missingMsg);
-        }
-        // Per TC39 GetTemporalRelativeToOption: present-but-null relativeTo is
-        // not a String or Object → TypeError. (Distinct from the absent case,
-        // which is RangeError above.) test262
-        // Duration/prototype/total/does-not-accept-non-string-primitives-for-relativeTo
-        // pins this distinction.
-        if ($totalOf['relativeTo'] === null) {
-            throw new TypeError('relativeTo must be a string, property bag, or Temporal date/datetime.');
-        }
-        /** @var mixed $rt */
-        $rt = $totalOf['relativeTo'];
-        // PlainDate and ZonedDateTime objects are valid relativeTo values; convert to property bag.
-        if ($rt instanceof ZonedDateTime) {
-            $rt = RelativeTo::zdtToPlainDateBag($rt);
-        } elseif ($rt instanceof PlainDate) {
-            $rt = ['year' => $rt->isoYear, 'month' => $rt->isoMonth, 'day' => $rt->isoDay];
-        } elseif (is_string($rt)) {
-            $rt = RelativeTo::parseString($rt);
-        } else {
-            if (is_object($rt)) {
-                $rt = RelativeTo::normalizeBag($rt);
-            }
-            if (is_array($rt)) {
-                RelativeTo::validatePropertyBag($rt);
-            } else {
-                throw new TypeError('relativeTo must be a string or property bag.');
-            }
-        }
-        return [$rt, RelativeTo::resolveZdt($totalOf['relativeTo'])];
-    }
-
-    /**
      * Implements total() for calendar units (years/months/weeks) given an ISO PlainDate
      * relativeTo bag. Unknown keys in the bag are silently ignored per TC39.
      *
      * @param 'years'|'months'|'weeks'|'days'|'hours'|'minutes'|'seconds'|'milliseconds'|'microseconds'|'nanoseconds' $unit
-     * @param array<array-key,mixed> $relativeTo Validated plain-date property bag.
+     * @param array{year: int, month: int, day: int} $relativeTo
      * @param null|array{epochSec: int, subNs: int, tzId: string, year: int, month: int, day: int, hour: int, minute: int, second: int} $zdtInfo Optional ZDT info for DST-aware day lengths.
      */
     private static function calendar(Duration $d, string $unit, array $relativeTo, ?array $zdtInfo = null): int|float
     {
-        [$year, $month, $day] = RelativeTo::anchorYmd($relativeTo);
+        ['year' => $year, 'month' => $month, 'day' => $day] = $relativeTo;
 
         $tz = new \DateTimeZone('UTC');
         $start = new \DateTimeImmutable('now', $tz)
@@ -409,15 +235,7 @@ final class DurationTotal
                 return self::toIntIfWhole($result);
             }
 
-            $result = match ($unit) {
-                'hours' => $totalActualSec / 3_600.0,
-                'minutes' => $totalActualSec / 60.0,
-                'seconds' => $totalActualSec,
-                'milliseconds' => $totalActualSec * 1_000.0,
-                'microseconds' => $totalActualSec * 1_000_000.0,
-                'nanoseconds' => $totalActualSec * 1_000_000_000.0,
-            };
-            return self::toIntIfWhole($result);
+            return self::totalTimeSeconds($totalActualSec, $unit);
         }
 
         return match ($unit) {
@@ -685,5 +503,19 @@ final class DurationTotal
             substr(string: $digits, offset: 0, length: -$pointFromRight),
             substr(string: $digits, offset: -$pointFromRight),
         ));
+    }
+
+    /** @param 'hours'|'minutes'|'seconds'|'milliseconds'|'microseconds'|'nanoseconds' $unit */
+    private static function totalTimeSeconds(float $seconds, string $unit): int|float
+    {
+        $result = match ($unit) {
+            'hours' => $seconds / 3_600.0,
+            'minutes' => $seconds / 60.0,
+            'seconds' => $seconds,
+            'milliseconds' => $seconds * 1_000.0,
+            'microseconds' => $seconds * 1_000_000.0,
+            'nanoseconds' => $seconds * 1_000_000_000.0,
+        };
+        return self::toIntIfWhole($result);
     }
 }

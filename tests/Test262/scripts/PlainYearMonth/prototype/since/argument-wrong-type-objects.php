@@ -12,7 +12,6 @@ $instance = new \Calendrics\Spec\PlainYearMonth(2000, 5);
 $primitiveTests = [[JsUndefined::singleton(), 'undefined'], [null, 'null'], [true, 'boolean'], ['', 'empty string'], [1, 'number that doesn\'t convert to a valid ISO string'], [1, 'bigint']];
 foreach ($primitiveTests as $__entry__) {
 [$arg, $description] = array_pad($__entry__, 2, null);
-if ($arg === null) { continue; }
 Assert::throws((is_string($arg) ? \RangeException::class : \TypeError::class), function () use (&$instance, &$arg) { return $instance->since($arg); }, "{$description} does not convert to a valid ISO string");
 }
 $typeErrorTests = [[\Calendrics\Tests\Test262\JsSymbol::singleton(), 'symbol'], [(object) [], 'plain object'], [new \stdClass(), 'Temporal.PlainYearMonth, object'], [new \stdClass(), 'Temporal.PlainYearMonth.prototype, object']];

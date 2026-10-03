@@ -542,32 +542,22 @@ function arrowBigIntArgIsAlwaysTypeError(fnNode) {
   return body.arguments.some(a => a.type === 'Literal' && a.bigint !== undefined && !overflowsInt64(BigInt(a.bigint)));
 }
 
-/** Returns true if the arrow body directly calls methodName with a plain number literal arg. */
-function arrowCallsWithNumber(fnNode, methodName) {
-  if (!fnNode || fnNode.type !== 'ArrowFunctionExpression') return false;
-  const body = fnNode.body;
-  if (body.type !== 'CallExpression') return false;
-  const callee = body.callee;
-  if (!callee || callee.type !== 'MemberExpression' || callee.property.name !== methodName) return false;
-  return body.arguments.some(a => a.type === 'Literal' && typeof a.value === 'number');
-}
+/** Temporal constructors whose first argument is an epochNanoseconds converted with ToBigInt. */
+const EPOCH_NANOSECONDS_CTORS = new Set(['Instant', 'ZonedDateTime']);
 
 /**
- * Returns true if the arrow body is `new Temporal.Instant(arg)` where arg is a
- * plain Number literal (not a BigInt). PHP int64 can't replicate JS BigInt-vs-Number
- * type distinction, so these TypeError assertions are untranslatable.
+ * Renders a JS Number literal sitting in a ToBigInt argument position as a PHP float
+ * literal, or null if the node is not one. The spec layer models a JS BigInt as a PHP
+ * int and a JS Number as a PHP float, so `new Temporal.Instant(42)` must reach it as
+ * `42.0` to be rejected the way ToBigInt(Number) rejects it; emitting int `42` would
+ * make it a BigInt and construct successfully.
  */
-function arrowInstantCtorWithNumberArg(fnNode) {
-  if (!fnNode || fnNode.type !== 'ArrowFunctionExpression') return false;
-  const body = fnNode.body;
-  if (body.type !== 'NewExpression') return false;
-  const callee = body.callee;
-  if (!callee || callee.type !== 'MemberExpression') return false;
-  if (callee.object?.name !== 'Temporal' || callee.property?.name !== 'Instant') return false;
-  return body.arguments.some(a => a.type === 'Literal' && typeof a.value === 'number');
+function toBigIntArgAsPhpFloat(argNode) {
+  if (argNode?.type !== 'Literal' || typeof argNode.value !== 'number') return null;
+  const digits = String(argNode.value);
+  return /[.eE]/.test(digits) ? digits : `${digits}.0`;
 }
 
-/** Operator precedence table (higher = binds tighter). */
 /**
  * Translate `typeof $arg === 'jsType'` to a PHP boolean expression.
  * Returns null if the jsType has no meaningful PHP equivalent.
@@ -593,14 +583,72 @@ function typeofToPhp(phpArg, jsType) {
   }
 }
 
-const OP_PREC = {
-  '**': 15, '*': 14, '/': 14, '%': 14,
-  '+': 13, '-': 13,
-  '<<': 12, '>>': 12, '>>>': 12,
+/** PHP operator precedence (higher binds tighter). */
+const PHP_OP_PREC = {
+  '**': 16,
+  '*': 15, '/': 15, '%': 15,
+  '+': 14, '-': 14,
+  '<<': 13, '>>': 13, '>>>': 13,
+  '.': 12,
   '<': 11, '<=': 11, '>': 11, '>=': 11,
   '==': 10, '!=': 10, '===': 10, '!==': 10,
-  '&': 9, '^': 8, '|': 7, '&&': 6, '||': 5, '??': 5,
+  '&': 9, '^': 8, '|': 7,
+  '&&': 6, '||': 5, '??': 4,
 };
+
+const PHP_RIGHT_ASSOCIATIVE_OPS = new Set(['**', '??']);
+const PHP_NON_ASSOCIATIVE_OPS = new Set(['<', '<=', '>', '>=', '==', '!=', '===', '!==']);
+const PHP_LOGICAL_OPS = new Set(['&&', '||', '??']);
+
+function phpOperator(node) {
+  if (node.type === 'LogicalExpression') return node.operator;
+  if (node.type !== 'BinaryExpression') return null;
+  return node.operator === '+' && hasStringInPlusChain(node) ? '.' : node.operator;
+}
+
+function parenthesizeOperand(php, node, parentOp, side) {
+  if (node.type === 'ConditionalExpression') return `(${php})`;
+  if (parentOp === 'unary') {
+    return ['BinaryExpression', 'LogicalExpression', 'UnaryExpression'].includes(node.type)
+      ? `(${php})`
+      : php;
+  }
+
+  const childOp = phpOperator(node);
+  if (childOp === null) return php;
+
+  const childPrec = PHP_OP_PREC[childOp];
+  const parentPrec = PHP_OP_PREC[parentOp];
+  if (childPrec === undefined || parentPrec === undefined) return php;
+  if (childPrec < parentPrec) return `(${php})`;
+  if (childPrec > parentPrec) {
+    return side === 'right' && node.type === 'BinaryExpression' && !PHP_LOGICAL_OPS.has(parentOp)
+      ? `(${php})`
+      : php;
+  }
+
+  if (childOp === parentOp && PHP_LOGICAL_OPS.has(parentOp)) return php;
+  if (PHP_NON_ASSOCIATIVE_OPS.has(parentOp)) return `(${php})`;
+  if (PHP_RIGHT_ASSOCIATIVE_OPS.has(parentOp)) return side === 'left' ? `(${php})` : php;
+  return side === 'right' ? `(${php})` : php;
+}
+
+function objectPatternKey(prop) {
+  if (prop.type !== 'Property') return null;
+  if (!prop.computed && prop.key?.type === 'Identifier') return prop.key.name;
+  if (prop.key?.type === 'Literal'
+      && (typeof prop.key.value === 'string' || typeof prop.key.value === 'number')) {
+    return String(prop.key.value);
+  }
+  return null;
+}
+
+function isSupportedObjectPatternProperty(prop) {
+  if (prop.type === 'RestElement') return prop.argument?.type === 'Identifier';
+  if (objectPatternKey(prop) === null) return false;
+  return prop.value?.type === 'Identifier'
+    || (prop.value?.type === 'AssignmentPattern' && prop.value.left?.type === 'Identifier');
+}
 
 class Emitter {
   constructor(source, objectMode = false) {
@@ -617,12 +665,16 @@ class Emitter {
     // Used to generate the `<name>-objects.php` companion variants that exercise
     // the `is_object($x)` branches of Spec\* property-bag consumers.
     this.objectMode = objectMode;
+    this.logicalTemporary = 0;
+    this.requiresCompactDateTimeRange = false;
     // Variables known to hold PHP arrays (assigned from JS object literals).
     // Member access on these uses ['key'] instead of ->key.
     this.objectVars = new Set();
     // Variables known to hold arrays-of-object-literals.
     // When a for-of loop iterates such a variable, the loop var is added to objectVars.
     this.objectArrayVars = new Set();
+    this.objectResultFunctions = new Set();
+    this.calendarConsistencyFixture = false;
     // Variables that may hold PHP arrays (loop over mixed arrays with some objects).
     // These are safe-stringified in template literals using json_encode().
     this.maybeArrayVars = new Set();
@@ -914,8 +966,17 @@ class Emitter {
         continue;
       }
       if (decl.id.type === 'ObjectPattern') {
+        if (!decl.id.properties.every(isSupportedObjectPatternProperty)) {
+          this.emitIncomplete('untranslatable: destructuring assignment (unsupported property pattern)');
+          return;
+        }
+        const hasRest = decl.id.properties.some(prop => prop.type === 'RestElement');
         // const { X } = Temporal; → track alias, emit nothing
         if (decl.init?.type === 'Identifier' && decl.init.name === 'Temporal') {
+          if (hasRest) {
+            this.emitIncomplete('untranslatable: rest destructuring of the Temporal namespace');
+            return;
+          }
           for (const prop of decl.id.properties) {
             if (prop.type === 'Property' && !prop.computed
                 && prop.key?.type === 'Identifier' && prop.value?.type === 'Identifier') {
@@ -928,6 +989,10 @@ class Emitter {
         if (decl.init?.type === 'MemberExpression' && !decl.init.computed
             && decl.init.object?.type === 'Identifier' && decl.init.object.name === 'Temporal'
             && decl.init.property?.type === 'Identifier') {
+          if (hasRest) {
+            this.emitIncomplete('untranslatable: rest destructuring of a Temporal class');
+            return;
+          }
           const className = decl.init.property.name;
           for (const prop of decl.id.properties) {
             if (prop.type === 'Property' && !prop.computed && prop.key?.type === 'Identifier') {
@@ -957,15 +1022,26 @@ class Emitter {
         const rhsVarName = rhsIsSimpleVar ? rhsPhp.slice(1) : null;
         // In array mode,  objectVars are PHP arrays    → use ['key'] access.
         // In object mode, objectVars are stdClass       → use ->key access.
-        const rhsIsObjectVar = rhsVarName !== null && this.objectVars.has(rhsVarName);
+        const rhsIsObjectValue = decl.init.type === 'ObjectExpression'
+          || (rhsVarName !== null && this.objectVars.has(rhsVarName));
+        const taken = decl.id.properties
+          .filter(prop => prop.type === 'Property')
+          .map(prop => phpStr(objectPatternKey(prop)));
         for (const prop of decl.id.properties) {
-          if (prop.type !== 'Property' || prop.computed || prop.key?.type !== 'Identifier') continue;
-          const keyName = prop.key.name;
+          // Rest: const { a, ...others } = expr → everything the named properties left over.
+          if (prop.type === 'RestElement' && prop.argument?.type === 'Identifier') {
+            this.emit(`$${prop.argument.name} = ${HARNESS_NS}Js::destructureRest(${objPhp}, [${taken.join(', ')}]);`);
+            continue;
+          }
+          if (prop.type !== 'Property') continue;
+          const keyName = objectPatternKey(prop);
           // Determine access pattern: objectVars in array mode → ['key'], in object mode → ->key.
           // Variables NOT in objectVars are Temporal instances / primitives → ->key.
-          const access_plain = rhsIsObjectVar
-            ? (this.objectMode ? `${objPhp}->${keyName}` : `${objPhp}['${keyName}']`)
-            : `${objPhp}->${keyName}`;
+          const access_plain = prop.key.type === 'Identifier'
+            ? (rhsIsObjectValue
+              ? (this.objectMode ? `${objPhp}->${keyName}` : `${objPhp}['${keyName}']`)
+              : `${objPhp}->${keyName}`)
+            : `${HARNESS_NS}Js::destructure(${objPhp}, ${phpStr(keyName)})`;
           // Simple: { foo } or { foo: foo }
           if (prop.value?.type === 'Identifier') {
             const varName = prop.value.name;
@@ -983,11 +1059,27 @@ class Emitter {
         }
         continue;
       }
+      // `const options = undefined;` binds the JsUndefined sentinel rather than PHP
+      // null. The sentinel reaches GetOptionsObject as an ordinary object and
+      // snapshots empty, which is what the spec's "OrdinaryObjectCreate for
+      // undefined" step does; PHP null is JS null and must stay a TypeError.
+      // transpileArgs trims a literal trailing `undefined`, but a binding survives
+      // to the call site, so the two rules have to agree.
+      if (decl.id.type === 'Identifier'
+          && decl.init?.type === 'Identifier' && decl.init.name === 'undefined') {
+        this.emit(`$${decl.id.name} = JsUndefined::singleton();`);
+        continue;
+      }
       // Track object literals: in array mode they become PHP arrays ['key' => val]
       // and use ['key'] access; in objectMode they become (object) [...] (stdClass)
       // and use ->key access. The objectMode flag on the emitter governs which one
       // is emitted at MemberExpression time.
       if (decl.id.type === 'Identifier' && decl.init?.type === 'ObjectExpression') {
+        this.objectVars.add(decl.id.name);
+      }
+      if (decl.id.type === 'Identifier' && decl.init?.type === 'CallExpression'
+          && decl.init.callee.type === 'Identifier'
+          && this.objectResultFunctions.has(decl.init.callee.name)) {
         this.objectVars.add(decl.id.name);
       }
       // Track arrays whose every element is a non-empty object literal.
@@ -1194,6 +1286,19 @@ class Emitter {
     if (!name) {
       this.emitIncomplete('untranslatable: anonymous FunctionDeclaration');
       return;
+    }
+    // Preserve property-bag access for the calendar fixtures' field helpers.
+    // Only a sole, unconditional final object-literal return is recognized.
+    if (this.calendarConsistencyFixture) {
+      const returns = [];
+      forEachNode(node.body, n => {
+        if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(n.type)) return false;
+        if (n.type === 'ReturnStatement') returns.push(n);
+      });
+      if (returns.length === 1 && node.body.body.at(-1) === returns[0]
+          && returns[0].argument?.type === 'ObjectExpression') {
+        this.objectResultFunctions.add(name);
+      }
     }
     const destructured = this.destructureParams(node.params);
     if (destructured === null) return;
@@ -1563,7 +1668,7 @@ class Emitter {
   // and `N` both become PHP int — so a throw assertion that depends on it can't
   // be reproduced. Returns one of:
   //   'incomplete' — the loop can't be faithfully lowered; emit incomplete.
-  //   'skip-null'  — lowering is safe, but `null` elements must be skipped.
+  //   'lower'      — lowering is safe; transpile the whole table.
   //   null         — the BigInt-table rule does not apply; transpile normally.
   classifyBigIntTableForOf(node) {
     // Only applies to a for-of over a BigInt-containing data table (inline, or a
@@ -1604,7 +1709,7 @@ class Emitter {
       // The lookalike `with/options-wrong-type` field-validation ordering gap (RangeError
       // from a non-string property bag) is rejected by isStringParseFromOptionsWrongTypeBody.
       if (tableHasNumberLiteral && isStringParseFromOptionsWrongTypeBody(node.body)) {
-        return 'skip-null';
+        return 'lower';
       }
       // The `with/options-wrong-type` property-bag family: RangeError comes from the
       // partial-field coercion, which the PHP spec layer now performs BEFORE the
@@ -1617,12 +1722,11 @@ class Emitter {
       }
       return 'incomplete';
     }
-    // A `null` table element may be an OMITTED positional argument (e.g. a
-    // positional calendar → ISO, no throw) rather than a wrong-type value, which
-    // would fail an `assert.throws`. Skip the null iteration in the lowered loop;
-    // the remaining elements still cover the throw path. (A property-bag null
-    // that DOES throw is merely left untested here — never red.)
-    return 'skip-null';
+    // A `null` table element is JS null wherever it lands — a value the algorithms
+    // reject, positional slot or option key alike. Nothing to skip: PHP null now
+    // means JS null everywhere, and JS undefined arrives as the JsUndefined
+    // sentinel or as an omitted argument.
+    return 'lower';
   }
 
   transpileForOf(node) {
@@ -1669,12 +1773,6 @@ class Emitter {
       this.emitIncomplete('BigInt literal in wrong-type for-of data table; Number-vs-BigInt distinction not representable in PHP');
       return;
     }
-    // `null` data-table elements must be skipped when the BigInt table is lowered as
-    // 'skip-null' (a null may be an omitted-positional sentinel). The 'lower' signal
-    // (with/options-wrong-type property-bag family) keeps null — there it is a genuine
-    // wrong-type options value — so it falls through to the normal null-keeping foreach.
-    const nullSkipForOf = bigIntTable === 'skip-null';
-
     // Special case: for (const [k, v] of Object.entries(obj)) → foreach ($obj as $k => $v)
     // Also handles: for (const [k, {a, b, c}] of Object.entries(obj)) where the value slot
     // is an ObjectPattern — the properties are bound inside the loop body.
@@ -1773,9 +1871,6 @@ class Emitter {
       this.emit(`foreach (${iter2} as ${tmpVar2}) {`);
       const opened2 = this.lines.length > before2;
       this.emit(`${pat} = array_pad(${tmpVar2}, ${n}, null);`);
-      if (nullSkipForOf) {
-        this.emit(`if (${parts[0]} === null) { continue; }`);
-      }
       // Emit default assignments for elements with AssignmentPattern defaults.
       for (let i = 0; i < patNode2.elements.length; i++) {
         const el = patNode2.elements[i];
@@ -1866,9 +1961,6 @@ class Emitter {
     const before = this.lines.length;
     this.emit(`foreach (${iter} as ${pat}) {`);
     const opened = this.lines.length > before;
-    if (nullSkipForOf) {
-      this.emit(`if (${pat} === null) { continue; }`);
-    }
     // A `{ toString: () => <non-String> }` entry only belongs in a wrong-type table
     // under JS semantics; in PHP it is an ordinary stringifiable value, so skip it
     // rather than assert a rejection the language cannot produce.
@@ -1930,6 +2022,7 @@ class Emitter {
       case 'TemplateLiteral':   return this.transpileTemplate(node);
       case 'ArrayExpression':   return this.transpileArray(node);
       case 'MemberExpression':  return this.transpileMember(node);
+      case 'ChainExpression':   return this.transpileChain(node);
       case 'CallExpression':    return this.transpileCall(node);
       case 'NewExpression':     return this.transpileNew(node);
       case 'ArrowFunctionExpression':
@@ -2211,11 +2304,9 @@ class Emitter {
       if (node.object.type === 'Identifier' && node.object.name === 'Number') {
         switch (node.property.name) {
           case 'MAX_SAFE_INTEGER': return '9_007_199_254_740_991';
-          case 'MAX_VALUE':
-            // Number.MAX_VALUE ≈ 1.8e308 has no PHP int equivalent; PHP_INT_MAX µs/ns
-            // is within the valid Duration range, so this test cannot be faithfully translated.
-            this.emitIncomplete('Number.MAX_VALUE exceeds PHP_INT_MAX; no exact PHP int equivalent');
-            return null;
+          // PHP_FLOAT_MAX is bit-for-bit Number.MAX_VALUE; the fixtures that use it
+          // pass it where a JS Number is expected, which the spec layer takes as a float.
+          case 'MAX_VALUE':        return 'PHP_FLOAT_MAX';
           case 'MIN_SAFE_INTEGER': return '-9_007_199_254_740_991';
           case 'MIN_VALUE':        return '5.0E-324';
           case 'EPSILON':          return '2.220446049250313E-16';
@@ -2259,6 +2350,17 @@ class Emitter {
 
   transpileCall(node) {
     const callee = node.callee;
+
+    // ext-intl exposes no interval formatter. Our range shim can join full
+    // endpoints, but this fixture additionally requires collapsing a shared
+    // date. Keep its earlier plain-date assertion, then report that gap.
+    if (this.requiresCompactDateTimeRange && callee.type === 'MemberExpression'
+        && !callee.computed && callee.property.name === 'formatRange'
+        && node.arguments[0]?.type === 'Identifier'
+        && this.instanceVarClasses.get(node.arguments[0].name) === 'PlainDateTime') {
+      this.emitIncomplete('Intl range harness does not support compact shared-date intervals');
+      return null;
+    }
 
     // Computed method call: obj["methodName"](args) → $obj->{$method}($args)
     // In PHP, $obj["method"]($args) tries to dereference an array element, which
@@ -2313,12 +2415,12 @@ class Emitter {
     }
 
     // arr.find(cb) / arr.some(cb) → Js::arrayFind / Js::arraySome with a PHP
-    // closure. Only arrow callbacks are supported (the only form in the corpus);
-    // anything else falls out as incomplete.
+    // closure. Both function expressions and arrows use the existing closure
+    // emitter; other callback shapes remain incomplete.
     if (callee.type === 'MemberExpression' && !callee.computed
         && (callee.property.name === 'find' || callee.property.name === 'some')) {
       const cb = node.arguments[0];
-      if (!cb || cb.type !== 'ArrowFunctionExpression') {
+      if (!cb || (cb.type !== 'ArrowFunctionExpression' && cb.type !== 'FunctionExpression')) {
         this.emitIncomplete(`untranslatable: Array.prototype.${callee.property.name}()`);
         return null;
       }
@@ -2449,6 +2551,15 @@ class Emitter {
       this.emitIncomplete('untranslatable: BigInt()');
       return null;
     }
+    // These calendar fixtures consume ICU part strings, not JS object coercion
+    // or BigInts. Keep this numeric lowering within that supported scope.
+    if (this.calendarConsistencyFixture
+        && isMember(callee, 'Number', 'isInteger')
+        && node.arguments.length === 1) {
+      const arg = this.transpileExpr(node.arguments[0]);
+      if (arg === null) return null;
+      return `${HARNESS_NS}JsNumber::${callee.property.name}(${arg})`;
+    }
     if (callee.type === 'Identifier' && callee.name === 'Number') {
       // Number(bigIntExpr) is not translatable (BigInt vs Number distinction).
       // Number(nonBigInt) → (float) cast — mirrors JS's Number() returning IEEE 754
@@ -2515,6 +2626,23 @@ class Emitter {
     // isConstructor(fn) → always false in PHP (PHP methods are not constructors)
     if (callee.type === 'Identifier' && callee.name === 'isConstructor') {
       return 'false';
+    }
+
+    // Date.now() returns an integer epoch-millisecond reading independent of Temporal.Now.
+    if (isMember(callee, 'Date', 'now')) {
+      return `${HARNESS_NS}Js::dateNow()`;
+    }
+
+    // Formatter parts are PHP lists in both property-bag modes.
+    if (isMember(callee, 'Array', 'isArray')) {
+      const input = node.arguments[0];
+      // Array-mode object bags are an implementation detail, not JS arrays.
+      if (input?.type === 'ObjectExpression'
+          || (input?.type === 'Identifier' && this.objectVars.has(input.name))) {
+        return 'false';
+      }
+      const arg = node.arguments.length > 0 ? this.transpileExpr(node.arguments[0]) : 'null';
+      return arg === null ? null : `is_array(${arg})`;
     }
 
     // Date.UTC(year, month0, day, h, min, s, ms) → \Calendrics\Tests\Test262\Js::dateUTC(...)
@@ -2689,6 +2817,12 @@ class Emitter {
             if (a === null) return null;
             args.push(a);
           }
+          // This literal-oracle fixture includes a locale-dependent day-period
+          // separator. ICU versions vary only in its breaking-space category;
+          // retain digit/width/fraction assertions without changing upstream JS.
+          if (methodName === 'includes' && this.localeSpaceComparison) {
+            return `${HARNESS_NS}IntlDateTimeFormat::includesLocaleString(${recv}, ${args[0]})`;
+          }
           return entry.build(recv, args);
         }
       }
@@ -2750,6 +2884,8 @@ class Emitter {
         if (epNsBig !== null && overflowsInt64(epNsBig)) {
           return emitOverInt64Ctor('Instant', epNsBig, '');
         }
+        const epNsFloat = toBigIntArgAsPhpFloat(node.arguments[0]);
+        if (epNsFloat !== null) return `${SPEC_NS}Instant::fromEpochNanoseconds(${epNsFloat})`;
       }
       // JS auto-coerces objects to strings; PHP does not. If an objectVars variable
       // is passed to a string-accepting method, the test relies on JS-specific behaviour.
@@ -2899,6 +3035,35 @@ class Emitter {
     return null;
   }
 
+  /**
+   * Emits `new Temporal.<cls>(…)`. The epochNanoseconds argument of the Instant and
+   * ZonedDateTime constructors is ToBigInt-converted, which gives it two lowerings of
+   * its own: an over-int64 BigInt carries its true epoch parts through
+   * {@link emitOverInt64Ctor}, and a Number literal becomes a PHP float.
+   */
+  transpileTemporalCtor(cls, argNodes) {
+    if (!IMPLEMENTED_CTORS.has(cls)) {
+      this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
+      return null;
+    }
+    if (EPOCH_NANOSECONDS_CTORS.has(cls) && argNodes.length > 0) {
+      const epNsBig = this.evalBigInt(argNodes[0]);
+      if (epNsBig !== null && overflowsInt64(epNsBig)) {
+        const rest = this.transpileArgs(argNodes.slice(1));
+        return rest === null ? null : emitOverInt64Ctor(cls, epNsBig, rest);
+      }
+      const epNsFloat = toBigIntArgAsPhpFloat(argNodes[0]);
+      if (epNsFloat !== null) {
+        const rest = this.transpileArgs(argNodes.slice(1));
+        if (rest === null) return null;
+        return `new ${SPEC_NS}${cls}(${rest === '' ? epNsFloat : `${epNsFloat}, ${rest}`})`;
+      }
+    }
+    const args = this.transpileArgs(argNodes, CONSTRUCTOR_PARAM_NAMES[cls] ?? null);
+    if (args === null) return null;
+    return `new ${SPEC_NS}${cls}(${args})`;
+  }
+
   transpileNew(node) {
     // new Temporal.X(…)
     const callee = node.callee;
@@ -2917,41 +3082,11 @@ class Emitter {
     }
     // new X(…) where X is a Temporal class alias (from const { X } = Temporal;)
     if (callee.type === 'Identifier' && this.temporalClassAliases.has(callee.name)) {
-      const cls = this.temporalClassAliases.get(callee.name);
-      if (!IMPLEMENTED_CTORS.has(cls)) {
-        this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
-        return null;
-      }
-      if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
-        const epNsBig = this.evalBigInt(node.arguments[0]);
-        if (epNsBig !== null && overflowsInt64(epNsBig)) {
-          const rest = node.arguments.length > 1 ? this.transpileArgs(node.arguments.slice(1)) : '';
-          if (rest === null) return null;
-          return emitOverInt64Ctor(cls, epNsBig, rest);
-        }
-      }
-      const args = this.transpileArgs(node.arguments);
-      if (args === null) return null;
-      return `new ${SPEC_NS}${cls}(${args})`;
+      return this.transpileTemporalCtor(this.temporalClassAliases.get(callee.name), node.arguments);
     }
     if (callee.type === 'MemberExpression' && !callee.computed
         && callee.object.type === 'Identifier' && callee.object.name === 'Temporal') {
-      const cls = callee.property.name;
-      if (!IMPLEMENTED_CTORS.has(cls)) {
-        this.emitIncomplete(`${SPEC_NS}${cls} is not yet implemented`);
-        return null;
-      }
-      if ((cls === 'ZonedDateTime' || cls === 'Instant') && node.arguments.length > 0) {
-        const epNsBig = this.evalBigInt(node.arguments[0]);
-        if (epNsBig !== null && overflowsInt64(epNsBig)) {
-          const rest = node.arguments.length > 1 ? this.transpileArgs(node.arguments.slice(1)) : '';
-          if (rest === null) return null;
-          return emitOverInt64Ctor(cls, epNsBig, rest);
-        }
-      }
-      const args = this.transpileArgs(node.arguments);
-      if (args === null) return null;
-      return `new ${SPEC_NS}${cls}(${args})`;
+      return this.transpileTemporalCtor(callee.property.name, node.arguments);
     }
     // new Temporal.X.method() or new Temporal.X.prototype.method() → TypeError
     const deepTarget = parseVerifyPropertyTarget(callee);
@@ -2972,9 +3107,8 @@ class Emitter {
       this.emitIncomplete(`untranslatable: Intl.${callee.property.name} has no harness shim`);
       return null;
     }
-    // new Date(epochMs) → the harness's legacy-Date shim. Non-numeric constructions
-    // (date strings, field lists) don't appear in the corpus; JsDate's int|float
-    // parameter type rejects them loudly if one ever does.
+    // new Date(epochMs) and new Date(year, monthIndex, ...) use the legacy-Date
+    // shim. String parsing is deliberately outside this harness's scope.
     if (callee.type === 'Identifier' && callee.name === 'Date') {
       const args = this.transpileArgs(node.arguments);
       if (args === null) return null;
@@ -3132,15 +3266,19 @@ class Emitter {
       this.emitIncomplete('untranslatable: typeof');
       return null;
     }
+    // PHP parses `-0` as the int 0, which has no sign bit, so a fixture written to check
+    // that -0 normalizes to +0 would assert nothing. The float literal carries the sign.
+    if (node.operator === '-' && node.argument.type === 'Literal' && node.argument.value === 0) {
+      return '-0.0';
+    }
     const arg = this.transpileExpr(node.argument);
     if (arg === null) return null;
+    if (this.calendarConsistencyFixture && node.operator === '+') {
+      return `${HARNESS_NS}JsNumber::fromString(${arg})`;
+    }
     // Word operators (void) need a space; symbol operators (!, -, +, ~) do not.
     const space = /^[a-z]/.test(node.operator) ? ' ' : '';
-    // Parenthesise complex arguments so that e.g. -(a - b) is not mis-parsed
-    // as (-a) - b by PHP's operator-precedence rules.
-    const complex = node.argument.type === 'BinaryExpression'
-      || node.argument.type === 'UnaryExpression';
-    const wrapped = complex ? `(${arg})` : arg;
+    const wrapped = parenthesizeOperand(arg, node.argument, 'unary', 'right');
     return `${node.operator}${space}${wrapped}`;
   }
 
@@ -3205,12 +3343,16 @@ class Emitter {
     if (combinedBig !== null && overflowsInt64(combinedBig)) {
       return null; // caller handles: variable decl → emitIncomplete, array → sentinel
     }
-    let left  = this.transpileExpr(node.left);
-    let right = this.transpileExpr(node.right);
+    const left = this.transpileExpr(node.left);
+    const right = this.transpileExpr(node.right);
     if (left === null || right === null) return null;
-    let op = node.operator === '===' ? '===' : node.operator;
-    if (op === '+') {
-      if (hasStringInPlusChain(node)) op = '.';
+    const op = phpOperator(node);
+    // epochNanoseconds is a BigInt in JS. Division by a BigInt literal truncates
+    // toward zero; PHP / would retain a fractional millisecond in the Now fixture.
+    if (op === '/' && node.left.type === 'MemberExpression' && !node.left.computed
+        && node.left.property.name === 'epochNanoseconds'
+        && node.right.type === 'Literal' && node.right.bigint !== undefined) {
+      return `intdiv(${left}, ${right})`;
     }
     // JS `%` is a floating-point remainder; when the left operand involves
     // division (producing a float), use fmod() to match JS semantics
@@ -3218,21 +3360,7 @@ class Emitter {
     if (op === '%' && containsDivision(node.left)) {
       return `fmod(num1: ${left}, num2: ${right})`;
     }
-    // Wrap right if it's a binary expression (preserves explicit parenthesisation
-    // from the JS AST, e.g. a / (b * c) → a / (b * c) in PHP).
-    if (node.right.type === 'BinaryExpression') {
-      right = `(${right})`;
-    }
-    // Wrap left if it has lower precedence than the outer operator
-    // e.g. (a + b) * c → left is BinaryExpr with prec 13, outer '*' has prec 14 → wrap
-    if (node.left.type === 'BinaryExpression') {
-      const leftPrec  = OP_PREC[node.left.operator]  ?? 0;
-      const outerPrec = OP_PREC[op] ?? 0;
-      if (leftPrec < outerPrec) {
-        left = `(${left})`;
-      }
-    }
-    return `${left} ${op} ${right}`;
+    return `${parenthesizeOperand(left, node.left, op, 'left')} ${op} ${parenthesizeOperand(right, node.right, op, 'right')}`;
   }
 
   transpileAssignment(node) {
@@ -3242,16 +3370,41 @@ class Emitter {
     return `${left} ${node.operator} ${right}`;
   }
 
+  transpileChain(node) {
+    // The Intl fixtures optionally read a field of Array.find's parts result.
+    // The helper represents a missing match as null; PHP's nullsafe access
+    // therefore preserves both that result and single receiver evaluation.
+    const member = node.expression;
+    const find = member.object;
+    const parts = find?.callee?.object;
+    if (member.type !== 'MemberExpression' || !member.optional || member.computed
+        || !['type', 'value', 'source'].includes(member.property.name)
+        || find?.type !== 'CallExpression' || find.optional
+        || find.callee.type !== 'MemberExpression' || find.callee.computed || find.callee.optional
+        || find.callee.property.name !== 'find'
+        || parts?.type !== 'CallExpression' || parts.optional
+        || parts.callee.type !== 'MemberExpression' || parts.callee.computed || parts.callee.optional
+        || !['formatToParts', 'formatRangeToParts'].includes(parts.callee.property.name)) {
+      this.emitIncomplete('untranslatable: optional chain beyond an Intl parts find result field');
+      return null;
+    }
+    const receiver = this.transpileExpr(member.object);
+    return receiver === null ? null : `${receiver}?->${member.property.name}`;
+  }
+
   transpileLogical(node) {
     const left  = this.transpileExpr(node.left);
     const right = this.transpileExpr(node.right);
     if (left === null || right === null) return null;
-    // JS logical operators (||, &&, ??) map directly to PHP
-    const op = node.operator === '??' ? '??' : node.operator;
-    // Wrap operands that have lower precedence (e.g. ternary inside logical)
-    const wrapIf = (php, n) =>
-      n.type === 'ConditionalExpression' ? `(${php})` : php;
-    return `${wrapIf(left, node.left)} ${op} ${wrapIf(right, node.right)}`;
+    const op = node.operator;
+    // Optional-field fallbacks carry a value, not a PHP boolean. Preserve JS
+    // truthiness (notably "0" and empty arrays), evaluate the left once, and
+    // leave the right in the lazy branch of the conditional.
+    if (op === '||' && node.left.type === 'ChainExpression') {
+      const temporary = `$__logical${this.logicalTemporary++}`;
+      return `(${HARNESS_NS}Js::truthy(${temporary} = ${left}) ? ${temporary} : ${right})`;
+    }
+    return `${parenthesizeOperand(left, node.left, op, 'left')} ${op} ${parenthesizeOperand(right, node.right, op, 'right')}`;
   }
 
   transpileConditional(node) {
@@ -3652,28 +3805,15 @@ class Emitter {
       return null;
     }
 
-    // TypeError tests relying on JS BigInt-vs-Number type distinction can't be replicated in PHP.
-    if (classExpr.includes('TypeError') && fnNode) {
-      // X.add/subtract/with(7n): a BigInt arg throws the SAME TypeError as a Number
-      // arg would (the param rejects all primitives), so lower 7n → 7 and emit the
-      // assertion faithfully — fall through to the generic path below. Must run
-      // before arrowHasBigIntArg, which would otherwise skip it.
-      if (!arrowBigIntArgIsAlwaysTypeError(fnNode)) {
-        if (arrowHasBigIntArg(fnNode)) {
-          // BigInt arg where a Number would NOT throw (e.g. fromEpochMilliseconds(42n)):
-          // drop just this assertion but keep the rest of the fixture running.
-          this.emitSkipAndDefer(node, 'BigInt literal in TypeError assertion; BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-        if (arrowCallsWithNumber(fnNode, 'fromEpochNanoseconds')) {
-          this.emitSkipAndDefer(node, 'Number passed to fromEpochNanoseconds; BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-        if (arrowInstantCtorWithNumberArg(fnNode)) {
-          this.emitSkipAndDefer(node, 'Number literal passed to new Temporal.Instant(); BigInt vs Number distinction not replicable in PHP');
-          return null;
-        }
-      }
+    // A BigInt arg where a Number would NOT throw (e.g. fromEpochMilliseconds(42n)):
+    // the distinction is not replicable, so drop just this assertion and keep the rest
+    // of the fixture running. X.add/subtract/with(7n) is exempt — its param rejects
+    // every primitive, so a BigInt throws the SAME TypeError a Number would and the
+    // assertion lowers faithfully (7n → 7) through the generic path below.
+    if (classExpr.includes('TypeError') && fnNode
+        && !arrowBigIntArgIsAlwaysTypeError(fnNode) && arrowHasBigIntArg(fnNode)) {
+      this.emitSkipAndDefer(node, 'BigInt literal in TypeError assertion; BigInt vs Number distinction not replicable in PHP');
+      return null;
     }
 
     // PHP comparison operators (<, <=, >, >=) do not call valueOf() and thus cannot
@@ -3822,16 +3962,12 @@ class Emitter {
     const feHasNumber =
       (arrNode.type === 'ArrayExpression' && hasNumberLiteral(arrNode))
       || (arrNode.type === 'Identifier' && this.numberLiteralArrayVars.has(arrNode.name));
-    if (feHasBigInt && feHasNumber && subtreeHasAssertThrows(feCbBody)
-        && uniformAssertThrowsErrorClass(feCbBody) !== null) {
-      this.emit(`if (${param} === null) { continue; }`);
-    }
     this.transpileStatement(cbBody);
     if (opened) this.lines.push('}');
     return null; // already emitted
   }
 
-  transpileArgs(argNodes) {
+  transpileArgs(argNodes, paramNames = null) {
     // Trim trailing `undefined` identifier arguments: omitting them achieves the
     // same result in PHP as passing `undefined` in JS (the callee uses its default).
     // This allows PHP to distinguish "no argument" from explicit null.
@@ -3843,6 +3979,25 @@ class Emitter {
       } else {
         break;
       }
+    }
+    // A non-trailing `undefined` cannot be trimmed away positionally, but PHP names
+    // its parameters: `new PlainMonthDay(1, 1, undefined, 1972)` becomes
+    // `new PlainMonthDay(1, 1, referenceISOYear: 1972)`. Omission is the PHP spelling
+    // of JS undefined in either position; passing null instead would say JS null.
+    if (paramNames !== null
+        && effectiveArgs.some(a => a.type === 'Identifier' && a.name === 'undefined')) {
+      const parts = [];
+      for (let i = 0; i < effectiveArgs.length; i++) {
+        const a = effectiveArgs[i];
+        if (a.type === 'Identifier' && a.name === 'undefined') continue;
+        const php = this.transpileExpr(a);
+        if (php === null) return null;
+        const skipped = effectiveArgs
+          .slice(0, i)
+          .some(p => p.type === 'Identifier' && p.name === 'undefined');
+        parts.push(skipped && paramNames[i] ? `${paramNames[i]}: ${php}` : php);
+      }
+      return parts.join(', ');
     }
 
     const parts = [];
@@ -4509,6 +4664,13 @@ function uniformAssertThrowsErrorClass(node) {
  * RangeError) on `ZonedDateTime.from("…", value)` — a genuine ordering gap that the
  * PlainX classes do not have (they string-parse first). Verified live.
  */
+// Constructor parameter names of the spec classes, so a non-trailing `undefined`
+// argument can be dropped and the ones after it passed by name.
+const CONSTRUCTOR_PARAM_NAMES = {
+  PlainMonthDay: ['isoMonth', 'isoDay', 'calendar', 'referenceISOYear'],
+  PlainYearMonth: ['year', 'month', 'calendar', 'referenceISODay'],
+};
+
 const STRING_PARSE_FIRST_FROM_CLASSES = new Set([
   'PlainDate', 'PlainDateTime', 'PlainTime', 'PlainMonthDay', 'PlainYearMonth',
 ]);
@@ -5109,12 +5271,11 @@ function processFile(jsPath, dataDir, scriptsDir) {
   // running and producing spurious failures.
   const dynamicToString = ast && hasDynamicToStringAssignment(ast);
 
-  // Whole-script bail: fixtures that pin down JS BigInt → Number narrowing for
-  // Duration field values. PHP's int is 64-bit, so we keep the exact integer
-  // representation rather than rounding through float64 — see the "Duration
-  // field values are exact integers" deviation in README. The fixture asserts
-  // the JS-narrowed value verbatim, which a more-precise PHP impl never matches.
-  const float64NarrowingTest = /float64-representable\b/i.test(description);
+  // Only Instant differences retain exact int64 fields, while ZonedDateTime's
+  // fixture needs epochs outside int64. Duration operations and PlainDateTime
+  // differences exercise supported behavior and must not be hidden by a broad
+  // description match.
+  const float64NarrowingTest = /^(Instant|ZonedDateTime)\/prototype\/(since|until)\/float64-representable-integer\.js$/.test(relPath);
 
   // Cheap source-text scan for observer helpers and inline ToPrimitive
   // observers (`{ valueOf() {} }` / `{ toString() {} }`). Either form means
@@ -5147,7 +5308,10 @@ function processFile(jsPath, dataDir, scriptsDir) {
 
   const renderPass = (objectMode) => {
     const emitter = new Emitter(stripped, objectMode);
+    emitter.requiresCompactDateTimeRange = relPath === 'intl402/DateTimeFormat/prototype/formatRange/temporal-objects-resolved-time-zone.js';
+    emitter.localeSpaceComparison = relPath === 'intl402/DateTimeFormat/prototype/format/numbering-system.js';
     emitter.observersInUse = observersInUse;
+    emitter.calendarConsistencyFixture = relPath === 'intl402/DateTimeFormat/prototype/formatToParts/compare-to-temporal.js';
     emitter.observerTrackers = new Set(observerTrackers);
     if (unsupportedIncludes.length > 0) {
       emitter.emitIncomplete(`needs TemporalHelpers (includes: ${includes.join(', ')})`);
@@ -5155,8 +5319,15 @@ function processFile(jsPath, dataDir, scriptsDir) {
       emitter.emitIncomplete(`parse error: ${parseError}`);
     } else if (dynamicToString) {
       emitter.emitIncomplete('JS dynamic .toString assignment has no PHP equivalent (test exercises ToPrimitive("string") coercion which neither array nor stdClass supports)');
+    } else if (relPath === 'intl402/DateTimeFormat/prototype/formatToParts/compare-to-temporal-lunisolar.js') {
+      // Raw ICU is not yet a verified oracle for the project's Chinese calendar
+      // corrections: ICU 76.1 calls 1987-08-24 M07L, while Temporal uses M07.
+      // Do not substitute Temporal's field values into the independent oracle.
+      emitter.emitIncomplete('lunisolar consistency needs an independently validated ICU oracle; Chinese 1987 monthCode differs with ICU 76.1');
     } else if (float64NarrowingTest) {
-      emitter.emitIncomplete('PHP keeps Duration fields as exact int64; the fixture pins JS BigInt → Number float64 narrowing (see README deviation)');
+      emitter.emitIncomplete(relPath.startsWith('Instant/')
+        ? 'Instant differences keep exact int64 Duration fields instead of JS float64 narrowing (see README deviation)'
+        : 'ZonedDateTime fixture requires epoch nanoseconds outside PHP int64 range');
     } else if (ast) {
       emitter.transpileProgram(ast);
     }

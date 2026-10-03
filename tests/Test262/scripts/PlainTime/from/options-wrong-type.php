@@ -10,7 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $badOptions = [null, true, 'some string', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 2];
 foreach ($badOptions as $value) {
-if ($value === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$value) { return \Calendrics\Spec\PlainTime::from(['hour' => 12, 'minute' => 34], $value); }, "TypeError on wrong options type " . (gettype($value)) . "");
 Assert::throws(\TypeError::class, function () use (&$value) { return \Calendrics\Spec\PlainTime::from(new \Calendrics\Spec\PlainTime(12, 34), $value); }, 'TypeError thrown before cloning PlainTime instance');
 Assert::throws(\TypeError::class, function () use (&$value) { return \Calendrics\Spec\PlainTime::from(new \Calendrics\Spec\ZonedDateTime(0, 'UTC'), $value); }, 'TypeError thrown before converting ZonedDateTime instance');

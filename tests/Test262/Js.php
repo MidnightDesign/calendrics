@@ -121,6 +121,12 @@ final class Js
         return in_array($needle, $haystack, strict: true);
     }
 
+    /** Returns the current Unix time in whole milliseconds, like JS Date.now(). */
+    public static function dateNow(): int
+    {
+        return (int) floor(microtime(as_float: true) * 1_000.0);
+    }
+
     /**
      * Implements JS Date.UTC(year, month, day, hours, minutes, seconds, ms).
      *
@@ -153,15 +159,15 @@ final class Js
      * Returns the first element for which the callback is truthy, or null
      * (standing in for JS `undefined`) when none matches.
      *
-     * @param iterable<mixed> $items
-     * @param callable(mixed): mixed $callback
+     * @param list<mixed> $items
+     * @param callable(mixed, int, list<mixed>): mixed $callback
      * @psalm-api used by dynamically-required test262 scripts in tests/Test262/scripts/
      */
-    public static function arrayFind(iterable $items, callable $callback): mixed
+    public static function arrayFind(array $items, callable $callback): mixed
     {
         /** @var mixed $item */
-        foreach ($items as $item) {
-            if ((bool) $callback($item)) {
+        foreach ($items as $index => $item) {
+            if (self::truthy($callback($item, $index, $items))) {
                 return $item;
             }
         }
@@ -186,6 +192,21 @@ final class Js
         return false;
     }
 
+    /** JavaScript ToBoolean, including truthy empty arrays and the string "0". */
+    public static function truthy(mixed $value): bool
+    {
+        if ($value === null || $value instanceof JsUndefined || $value === false || $value === '') {
+            return false;
+        }
+        if (is_int($value)) {
+            return $value !== 0;
+        }
+        if (is_float($value)) {
+            return $value !== 0.0 && !is_nan($value);
+        }
+        return true;
+    }
+
     /**
      * Reads one field of a destructured JS function parameter — the PHP lowering
      * of `({ field }) => …` arrow parameters. Handles the shapes such a parameter
@@ -206,6 +227,25 @@ final class Js
             return get_object_vars($value)[$field] ?? null;
         }
         throw new \TypeError('Js::destructure(): cannot destructure a non-object value.');
+    }
+
+    /**
+     * The rest of a destructuring pattern: `const { a, ...others } = value` binds
+     * `others` to a new object carrying every own property except the named ones.
+     *
+     * @param list<string> $taken The property names the pattern bound individually.
+     */
+    public static function destructureRest(mixed $value, array $taken): object
+    {
+        $props = match (true) {
+            is_array($value) => $value,
+            is_object($value) => get_object_vars($value),
+            default => throw new \TypeError('Js::destructureRest(): cannot destructure a non-object value.'),
+        };
+        foreach ($taken as $name) {
+            unset($props[$name]);
+        }
+        return (object) $props;
     }
 
     // -------------------------------------------------------------------------

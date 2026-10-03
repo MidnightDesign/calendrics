@@ -10,5 +10,6 @@ parameters:
     excludePaths:
         - tests/Test262/scripts
     stubFiles:
+        - tools/phpstan-stubs/Locale.stub
         - tools/phpstan-stubs/IntlTimeZone.stub
         - tools/phpstan-stubs/DateTimeZone.stub

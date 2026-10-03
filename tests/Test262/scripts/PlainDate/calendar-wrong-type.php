@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $wrongTypeTests = [[null, 'null'], [true, 'boolean'], [1, 'number'], [1, 'bigint'], [-19_761_118, 'negative number'], [19_761_118, 'large positive number'], [1_234_567_890, 'large integer'], [\Calendrics\Tests\Test262\JsSymbol::singleton(), 'symbol'], [[], 'object'], [new \Calendrics\Spec\Duration(), 'duration instance']];
 foreach ($wrongTypeTests as $__entry__) {
 [$arg, $description] = array_pad($__entry__, 2, null);
-if ($arg === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$arg) { return new \Calendrics\Spec\PlainDate(2000, 5, 2, $arg); }, "{$description} is not a valid calendar");
 }

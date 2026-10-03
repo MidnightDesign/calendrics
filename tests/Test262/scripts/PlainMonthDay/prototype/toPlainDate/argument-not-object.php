@@ -9,7 +9,6 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 foreach ([null, JsUndefined::singleton(), true, 3.1_416, 'a string', \Calendrics\Tests\Test262\JsSymbol::singleton(), 7] as $primitive) {
-if ($primitive === null) { continue; }
 $plainMonthDay = new \Calendrics\Spec\PlainMonthDay(5, 2);
 Assert::throws(\TypeError::class, function () use (&$plainMonthDay, &$primitive) { return $plainMonthDay->toPlainDate($primitive); }, '');
 }

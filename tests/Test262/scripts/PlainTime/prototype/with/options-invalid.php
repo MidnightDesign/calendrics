@@ -10,6 +10,5 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $plainTime = new \Calendrics\Spec\PlainTime(12);
 foreach ([null, true, 'hello', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 1] as $badOptions) {
-if ($badOptions === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$plainTime, &$badOptions) { return $plainTime->with(['hour' => 3], $badOptions); }, '');
 }

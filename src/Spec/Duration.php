@@ -6,9 +6,10 @@ namespace Calendrics\Spec;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
-use Calendrics\Spec\Internal\AnchorMath;
 use Calendrics\Spec\Internal\DurationRounding;
+use Calendrics\Spec\Internal\DurationTime;
 use Calendrics\Spec\Internal\DurationTotal;
+use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\RelativeTo;
@@ -20,6 +21,12 @@ use Stringable;
  * All non-zero fields must share the same sign. Calendar fields (years,
  * months, weeks) cannot be converted to nanoseconds without a reference date,
  * so no internal nanosecond total is maintained.
+ *
+ * A field holds a float only when its magnitude reaches PHP_INT_MAX, where int64 cannot carry
+ * it; every smaller value is stored as an exact int. TC39 has no int/float split — every field
+ * is a Number, where 1 and 1.0 are one value — so without that narrowing the `===` field
+ * comparisons in equals() would separate two equal Durations, and the `!== 0` emptiness tests
+ * throughout this class and its collaborators would read a float zero as a set field.
  *
  * @see https://tc39.es/proposal-temporal/#sec-temporal-duration-objects
  */
@@ -81,32 +88,42 @@ final class Duration implements Stringable
         get => $this->sign === 0;
     }
 
+    public readonly int|float $years;
+
+    public readonly int|float $months;
+
+    public readonly int|float $weeks;
+
+    public readonly int|float $days;
+
+    public readonly int|float $hours;
+
+    public readonly int|float $minutes;
+
+    public readonly int|float $seconds;
+
+    public readonly int|float $milliseconds;
+
+    public readonly int|float $microseconds;
+
+    public readonly int|float $nanoseconds;
+
     /**
-     * @throws RangeError when fields are out of range or non-zero fields do not all share the same sign.
+     * @throws RangeError when a field is not a finite integer, is out of range, or when non-zero
+     *   fields do not all share the same sign.
      */
     public function __construct(
-        public readonly int|float $years = 0,
-        public readonly int|float $months = 0,
-        public readonly int|float $weeks = 0,
-        public readonly int|float $days = 0,
-        public readonly int|float $hours = 0,
-        public readonly int|float $minutes = 0,
-        public readonly int|float $seconds = 0,
-        public readonly int|float $milliseconds = 0,
-        public readonly int|float $microseconds = 0,
-        public readonly int|float $nanoseconds = 0,
+        int|float $years = 0,
+        int|float $months = 0,
+        int|float $weeks = 0,
+        int|float $days = 0,
+        int|float $hours = 0,
+        int|float $minutes = 0,
+        int|float $seconds = 0,
+        int|float $milliseconds = 0,
+        int|float $microseconds = 0,
+        int|float $nanoseconds = 0,
     ) {
-        $years = $this->years;
-        $months = $this->months;
-        $weeks = $this->weeks;
-        $days = $this->days;
-        $hours = $this->hours;
-        $minutes = $this->minutes;
-        $seconds = $this->seconds;
-        $milliseconds = $this->milliseconds;
-        $microseconds = $this->microseconds;
-        $nanoseconds = $this->nanoseconds;
-
         $allInt =
             is_int($years)
             && is_int($months)
@@ -119,33 +136,31 @@ final class Duration implements Stringable
             && is_int($microseconds)
             && is_int($nanoseconds);
 
-        // TC39: each Duration field must be finite and integer-valued.
-        // Skip validation entirely in the common all-int case.
+        // normalizeField() returns an int unchanged, so this guard is a fast path, not a
+        // correctness gate: it keeps ten calls off the all-int case every construction takes.
         if (!$allInt) {
-            foreach ([
-                $years,
-                $months,
-                $weeks,
-                $days,
-                $hours,
-                $minutes,
-                $seconds,
-                $milliseconds,
-                $microseconds,
-                $nanoseconds,
-            ] as $field) {
-                if (!is_float($field)) {
-                    continue;
-                }
-
-                if (!is_finite($field)) {
-                    throw new RangeError('Duration fields must be finite; Infinity and NaN are not allowed.');
-                }
-                if (fmod(num1: $field, num2: 1.0) !== 0.0) {
-                    throw new RangeError('Duration fields must be integer-valued; fractional values are not allowed.');
-                }
-            }
+            $years = self::normalizeField($years);
+            $months = self::normalizeField($months);
+            $weeks = self::normalizeField($weeks);
+            $days = self::normalizeField($days);
+            $hours = self::normalizeField($hours);
+            $minutes = self::normalizeField($minutes);
+            $seconds = self::normalizeField($seconds);
+            $milliseconds = self::normalizeField($milliseconds);
+            $microseconds = self::normalizeField($microseconds);
+            $nanoseconds = self::normalizeField($nanoseconds);
         }
+
+        $this->years = $years;
+        $this->months = $months;
+        $this->weeks = $weeks;
+        $this->days = $days;
+        $this->hours = $hours;
+        $this->minutes = $minutes;
+        $this->seconds = $seconds;
+        $this->milliseconds = $milliseconds;
+        $this->microseconds = $microseconds;
+        $this->nanoseconds = $nanoseconds;
 
         // TC39 §7.5.10 IsValidDuration — calendar fields capped at 2^32.
         /** @infection-ignore-all GreaterThanOrEqual |x| >= 2^32 vs > 2^32-1 are identical for integers */
@@ -154,12 +169,13 @@ final class Duration implements Stringable
         }
 
         // TC39 §7.5.11 IsValidDuration: the combined total of days + time fields must not
-        // exceed MaxTimeDuration = 2^53 × 10^9 - 1 nanoseconds.
-        /** @infection-ignore-all */
-        $secI = is_int($seconds) ? $seconds : (int) $seconds;
-        if ($secI > 9_007_199_254_740_991 || $secI < -9_007_199_254_740_991) {
+        // exceed MaxTimeDuration = 2^53 × 10^9 - 1 nanoseconds. The bound is checked on
+        // $seconds itself rather than on an int cast of it: a float beyond int64 range
+        // casts to 0, which would pass the check and then balance as zero seconds.
+        if (abs($seconds) > 9_007_199_254_740_991) {
             throw new RangeError('Duration time fields exceed the maximum representable range.');
         }
+        $secI = (int) $seconds;
 
         if (
             is_int($nanoseconds)
@@ -210,7 +226,7 @@ final class Duration implements Stringable
             $microseconds,
             $nanoseconds,
         ] as $v) {
-            if ($v === 0 || $v === 0.0) {
+            if ($v === 0) {
                 continue;
             }
             /** @infection-ignore-all GreaterThan > 0 ≡ >= 0 when $v is guaranteed non-zero (guarded above) */
@@ -481,20 +497,6 @@ final class Duration implements Stringable
      */
     public function with(array|object $fields): self
     {
-        // Reject Temporal objects (IsPartialTemporalObject step 2).
-        if (
-            $fields instanceof self
-            || $fields instanceof PlainDate
-            || $fields instanceof PlainDateTime
-            || $fields instanceof PlainTime
-            || $fields instanceof PlainYearMonth
-            || $fields instanceof PlainMonthDay
-            || $fields instanceof ZonedDateTime
-            || $fields instanceof Instant
-        ) {
-            throw new TypeError('Duration::with() argument must not be a Temporal object.');
-        }
-
         $fields = FieldBag::forFields($fields, self::PLURAL_FIELDS);
 
         // TC39 ToTemporalPartialDurationRecord: at least one recognized plural field required.
@@ -538,7 +540,7 @@ final class Duration implements Stringable
      *   - smallestUnit: 'second[s]'|'millisecond[s]'|'microsecond[s]'|'nanosecond[s]' (overrides fractionalSecondDigits)
      *   - roundingMode: 'trunc' (default) | 'floor' | 'ceil' | 'expand' | 'halfExpand' | 'halfTrunc' | 'halfFloor' | 'halfCeil' | 'halfEven'
      *
-     * @param array<array-key, mixed>|object|null $options an array of options, or any object (treated as empty options bag).
+     * @param array<array-key, mixed>|object $options an array of options, or any object (treated as empty options bag).
      * @throws RangeError if options are invalid or rounding causes overflow.
      * @throws \TypeError if $options is an explicit null or a non-array, non-object scalar.
      */
@@ -620,7 +622,7 @@ final class Duration implements Stringable
             $frac = $subNs !== 0 ? sprintf('.%s', rtrim(sprintf('%09d', $subNs), characters: '0')) : '';
         } else {
             // Exact digit count with rounding.
-            [$roundedFrac, $carrySecond] = self::roundSubSecond($subNs, $digits, $roundingMode, $sign);
+            [$roundedFrac, $carrySecond] = self::roundSubSecond($totalSeconds, $subNs, $digits, $roundingMode, $sign);
             $totalSeconds += $carrySecond;
 
             // Range check: rounding might push totalSeconds beyond TC39's limit (2^53).
@@ -709,7 +711,7 @@ final class Duration implements Stringable
      * The TC39 spec permits implementations to choose locale behavior.
      *
      * @param string|array<array-key, mixed>|null $locales BCP 47 locale string or array (ignored in PHP).
-     * @param array<array-key, mixed>|object|null $options Intl.DateTimeFormat options bag (ignored in PHP).
+     * @param array<array-key, mixed>|object $options Intl.DateTimeFormat options bag (ignored in PHP).
      * @psalm-suppress UnusedParam
      * @psalm-api
      */
@@ -735,6 +737,7 @@ final class Duration implements Stringable
      */
     public function total(string|array|object $totalOf): int|float
     {
+        $anchor = null;
         // A string totalOf is the smallestUnit shorthand; an array/object is an options
         // bag normalized via GetOptionsObject (a Symbol sentinel object => TypeError).
         // TC39: if totalOf is undefined, throw TypeError (required arg).
@@ -746,6 +749,10 @@ final class Duration implements Stringable
                 }
             }
             $totalOf = Options::requireObject($totalOf, ['relativeTo', 'unit']);
+            // GetTemporalRelativeToOption runs before the unit is read (steps 6 and 9),
+            // and unconditionally: a malformed anchor is rejected even when the unit
+            // that follows would never have needed one.
+            $anchor = RelativeTo::readOption($totalOf);
         }
 
         if (is_array($totalOf)) {
@@ -759,7 +766,7 @@ final class Duration implements Stringable
         }
         $unit = Options::normalizeUnit($unit);
 
-        return DurationTotal::compute($this, $unit, $totalOf);
+        return DurationTotal::compute($this, $unit, $anchor);
     }
 
     /**
@@ -841,6 +848,29 @@ final class Duration implements Stringable
     // -------------------------------------------------------------------------
 
     /**
+     * Returns a field in the class's storage form: an exact int unless int64 cannot carry it.
+     *
+     * `-0.0 === 0.0` holds in PHP, so negative zero narrows to the int 0 as well, matching
+     * TC39's normalization of -0 to +0.
+     *
+     * @throws RangeError if the value is not a finite integer.
+     */
+    private static function normalizeField(int|float $value): int|float
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+        // TC39: each Duration field must be finite and integer-valued.
+        if (!is_finite($value)) {
+            throw new RangeError('Duration fields must be finite; Infinity and NaN are not allowed.');
+        }
+        if (fmod(num1: $value, num2: 1.0) !== 0.0) {
+            throw new RangeError('Duration fields must be integer-valued; fractional values are not allowed.');
+        }
+        return abs($value) >= (float) PHP_INT_MAX ? $value : (int) $value;
+    }
+
+    /**
      * Distributes a decimal fraction of a time unit into smaller units.
      *
      * Uses float64 arithmetic (same precision as JS) to match TC39 test262 expected values.
@@ -899,12 +929,9 @@ final class Duration implements Stringable
         foreach (self::PLURAL_FIELDS as $field) {
             /** @var mixed $v */
             $v = $item[$field] ?? 0;
-            // Coerce per the universal numeric contract: a numeric value (int /
-            // float / numeric string) is accepted; a Stringable is cast first
-            // (a Symbol-like sentinel's __toString throws Calendrics\Exception\TypeError);
-            // any other value — null, bool, array, plain object, non-numeric
-            // string — is out of range and yields a RangeError. (Previously such
-            // values were silently (int)-cast to 0 / kept the prior field value.)
+            if (is_bool($v)) {
+                $v = (int) $v;
+            }
             if ($v instanceof Stringable) {
                 $v = (string) $v;
             }
@@ -912,8 +939,8 @@ final class Duration implements Stringable
                 if (!is_numeric($v)) {
                     throw new RangeError("Duration field \"{$field}\" must be a finite integer.");
                 }
-                // Numeric string → number. Cast to float; the integer-value check
-                // and the large-float guard below normalise it back to int when exact.
+                // Numeric string → number. Cast to float; the constructor normalizes it
+                // back to int when the value fits.
                 $v = (float) $v;
             }
             if (!is_int($v) && !is_float($v)) {
@@ -927,9 +954,9 @@ final class Duration implements Stringable
                     throw new RangeError("Duration field \"{$field}\" must be an integer, got non-integer {$v}.");
                 }
             }
-            // Keep large floats (> PHP_INT_MAX) as float; cast the rest to int.
-            // Values within int64 range are cast for exact integer semantics.
-            $values[] = is_float($v) && abs($v) >= (float) PHP_INT_MAX ? $v : (int) $v;
+            // The constructor repeats the finite and integer-valued checks; they are made here
+            // too because only this method knows which field is at fault.
+            $values[] = $v;
         }
 
         return new self(...$values);
@@ -979,9 +1006,8 @@ final class Duration implements Stringable
             }
             return [$sign * $q, $sign * $rem];
         }
-        $q = (int) $fq;
-        $r = (int) round($n - ((float) $q * (float) $divisor));
-        return [$q, $r];
+        $integer = (int) $n;
+        return [intdiv($integer, $divisor), $integer % $divisor];
     }
 
     /**
@@ -1130,108 +1156,17 @@ final class Duration implements Stringable
         return new self(0, 0, 0, (int) $d, (int) $h, (int) $min, (int) $s, (int) $ms, (int) $us, (int) $ns);
     }
 
-    /**
-     * Rounds/truncates sub-second nanoseconds to the given number of decimal digits.
-     *
-     * For negative durations the rounding direction is inverted (floor ↔ expand).
-     *
-     * @param int    $subNs       Sub-second nanoseconds (0–999_999_999).
-     * @param int    $digits      Number of fractional seconds digits (0–9).
-     * @param string $roundingMode TC39 rounding mode name.
-     * @param int    $sign        Duration sign (1 or -1; 0 treated as 1).
-     * @return array{0: int, 1: int} [roundedFrac, carrySecond]
-     *   $roundedFrac: the integer to format as $digits decimal digits (0 when $digits=0).
-     *   $carrySecond: 0 or 1, to add to the whole-seconds total.
-     */
-    private static function roundSubSecond(int $subNs, int $digits, string $roundingMode, int $sign): array
+    /** @return array{int, int} Formatted fractional digits and carry into whole seconds. */
+    private static function roundSubSecond(int $seconds, int $subNs, int $digits, string $mode, int $sign): array
     {
-        if ($digits === 0) {
-            $carry = self::applyRounding($subNs, 1_000_000_000, $roundingMode, 0, $sign);
-            return [0, $carry];
+        if ($sign < 0) {
+            $mode = EpochRounding::negateMode($mode);
         }
-
-        $unitNs = (int) round(10 ** (9 - $digits));
-        $quotient = intdiv(num1: $subNs, num2: $unitNs);
-        $remainder = $subNs % $unitNs;
-        $carry = self::applyRounding($remainder, $unitNs, $roundingMode, $quotient, $sign);
-        $rounded = $quotient + $carry;
-
-        $maxFrac = (int) round(10 ** $digits);
-        if ($rounded >= $maxFrac) {
-            return [0, 1]; // overflow into next second
-        }
-        return [$rounded, 0];
-    }
-
-    /**
-     * Determines the increment (0 or 1) to add to the quotient when rounding.
-     *
-     * @param int    $remainder   Fractional part (0 ≤ remainder < $unitNs).
-     * @param int    $unitNs      Size of the rounding unit in nanoseconds.
-     * @param string $mode        TC39 rounding mode.
-     * @param int    $quotient    Truncated quotient (used by halfEven).
-     * @param int    $sign        Duration sign (1 or -1).
-     * @return int<0, 1>
-     */
-    private static function applyRounding(int $remainder, int $unitNs, string $mode, int $quotient, int $sign): int
-    {
-        if ($remainder === 0) {
-            return 0;
-        }
-        $positive = $sign >= 0;
-        $doubled = $remainder * 2;
-        // Half toward -∞: tie rounds up only for the negative branch.
-        if ($mode === 'halfFloor') {
-            if ($positive) {
-                return $doubled > $unitNs ? 1 : 0;
-            }
-            return $doubled >= $unitNs ? 1 : 0;
-        }
-        // Half toward +∞: tie rounds up only for the positive branch.
-        if ($mode === 'halfCeil') {
-            if ($positive) {
-                return $doubled >= $unitNs ? 1 : 0;
-            }
-            return $doubled > $unitNs ? 1 : 0;
-        }
-        return match ($mode) {
-            // Toward zero
-            'trunc' => 0,
-            // Floor = toward -∞: expand for negative, trunc for positive.
-            'floor' => $positive ? 0 : 1,
-            // Ceil = toward +∞: expand for positive, trunc for negative.
-            'ceil' => $positive ? 1 : 0,
-            // Always away from zero.
-            'expand' => 1,
-            // Half away from zero (standard rounding).
-            'halfExpand' => $doubled >= $unitNs ? 1 : 0,
-            // Half toward zero.
-            'halfTrunc' => $doubled > $unitNs ? 1 : 0,
-            // Half to even.
-            'halfEven' => self::halfEvenRound($remainder, $unitNs, $quotient),
-            default => throw new RangeError("Unknown rounding mode \"{$mode}\"."),
-        };
-    }
-
-    /**
-     * Half-to-even (banker's rounding) helper.
-     *
-     * @param int $remainder 0 ≤ remainder < $unitNs.
-     * @param int $unitNs    Size of the rounding unit.
-     * @param int $quotient  Truncated quotient (to check parity).
-     * @return int<0, 1>
-     */
-    private static function halfEvenRound(int $remainder, int $unitNs, int $quotient): int
-    {
-        $double = $remainder * 2;
-        if ($double < $unitNs) {
-            return 0;
-        }
-        if ($double > $unitNs) {
-            return 1;
-        }
-        // Exactly half — round to even.
-        return ($quotient % 2) !== 0 ? 1 : 0;
+        $unitNs = (int) 10 ** (9 - $digits);
+        // Whole-second parity is needed for half-even ties at zero fractional digits.
+        $parity = $seconds % 2;
+        [$roundedSeconds, $roundedSubNs] = EpochRounding::round($parity, $subNs, $unitNs, $mode);
+        return [intdiv($roundedSubNs, $unitNs), $roundedSeconds - $parity];
     }
 
     // -------------------------------------------------------------------------
@@ -1241,24 +1176,21 @@ final class Duration implements Stringable
     /**
      * Compares two durations by total elapsed time.
      *
-     * For time-only durations (no calendar fields): convert to nanoseconds and compare.
+     * For time-only durations: compare whole seconds and nanosecond remainders exactly.
      * For calendar fields without relativeTo: throws RangeError.
      * For calendar fields with valid relativeTo: normalizes both sides via the relative
      * anchor (DST-aware when relativeTo is a ZonedDateTime with an IANA timezone).
      *
      * @param self|string|array<array-key, mixed>|object $one     Duration, ISO 8601 string, or property-bag array.
      * @param self|string|array<array-key, mixed>|object $two     Duration, ISO 8601 string, or property-bag array.
-     * @param array<array-key, mixed>|object|null $options null or options array (may contain 'relativeTo').
+     * @param array<array-key, mixed>|object $options null or options array (may contain 'relativeTo').
      * @return int -1, 0, or 1.
      * @throws RangeError when calendar units are present without relativeTo.
      * @psalm-api
      */
-    public static function compare(
-        string|array|object $one,
-        string|array|object $two,
-        array|object|null $options = null,
-    ): int {
-        $opts = Options::normalizeOptions($options, ['relativeTo']);
+    public static function compare(string|array|object $one, string|array|object $two, mixed $options = []): int
+    {
+        $opts = Options::requireObject($options, ['relativeTo']);
 
         $d1 = self::from($one);
         $d2 = self::from($two);
@@ -1271,112 +1203,86 @@ final class Duration implements Stringable
             || $d2->months !== 0
             || $d2->weeks !== 0;
 
-        // Always validate relativeTo before any early return (invalid values must throw).
-        $relativeToProvided = RelativeTo::isPresent($opts);
+        // GetTemporalRelativeToOption is step 4, ahead of the identical-slots early return
+        // in step 5, so a malformed anchor is rejected even when the two durations would
+        // have compared equal without one (Duration/compare/relativeto-string-invalid.js).
+        $anchor = RelativeTo::readOption($opts);
 
-        // TC39 §7.3.22: if both Duration records have identical internal slots, return 0.
-        // This applies even for calendar durations (relativeTo is not required for identical inputs).
-        // However, relativeTo is validated first so that invalid values still throw.
+        // Step 5, which needs no anchor even for a calendar duration.
         if ($d1->equals($d2)) {
             return 0;
         }
 
-        if ($hasCalendar && !$relativeToProvided) {
+        if ($hasCalendar && $anchor === null) {
             throw new RangeError(
                 'Duration::compare() with calendar units (years, months, or weeks) requires a relativeTo option.',
             );
         }
-        if ($hasCalendar) {
-            /** @var mixed $rt */
-            $rt = $opts['relativeTo'] ?? null;
-            $ns1 = AnchorMath::totalNsFromRelativeTo($d1, $rt);
-            $ns2 = AnchorMath::totalNsFromRelativeTo($d2, $rt);
-            return $ns1 <=> $ns2;
-        }
-
-        // When relativeTo is a ZDT with IANA timezone, compare using actual epoch offsets.
-        /** @var mixed $rtForCompare */
-        $rtForCompare = $opts['relativeTo'] ?? null;
-        $zdtInfoCompare = $rtForCompare !== null ? RelativeTo::resolveZdt($rtForCompare) : null;
-
-        if ($zdtInfoCompare !== null) {
-            $epoch1 = AnchorMath::durationToEpochOffsetSec($d1, $zdtInfoCompare);
-            $epoch2 = AnchorMath::durationToEpochOffsetSec($d2, $zdtInfoCompare);
-            return $epoch1 <=> $epoch2;
-        }
-
-        // For a ZonedDateTime anchor in a UTC/fixed-offset zone (RelativeTo::resolveZdt() returns
-        // null for those, so we never reach the DST-aware branch above), TC39 still anchors each
-        // date-category duration to the ZDT epoch via AddZonedDateTime. When either operand has a
-        // date-category largestUnit (non-zero days/weeks/months/years — calendar units are handled
-        // earlier, so days is the live case here), the resulting target instant must stay within
-        // the representable Temporal range (±8.64e12 s). Check both operands independently so the
-        // call carrying the out-of-range duration throws regardless of argument order.
-        if ($rtForCompare instanceof \Calendrics\Spec\ZonedDateTime) {
-            // years/months/weeks are known zero here ($hasCalendar was false above), so the only
-            // live date-category field is days.
-            $d1IsDateCategory = $d1->days !== 0;
-            $d2IsDateCategory = $d2->days !== 0;
-            if ($d1IsDateCategory || $d2IsDateCategory) {
-                [$rtTrueSec, $rtSubNs] = $rtForCompare->epochParts();
-                foreach ([$d1, $d2] as $dCheck) {
-                    if (RelativeTo::zdtTargetOutOfRange($rtTrueSec, $rtSubNs, $dCheck)) {
-                        throw new RangeError(
-                            'relativeTo ZonedDateTime is outside the representable range after applying duration.',
-                        );
-                    }
-                }
+        $days1 = (int) $d1->days;
+        $days2 = (int) $d2->days;
+        if ($anchor instanceof ZonedDateTime) {
+            if ($hasCalendar || $days1 !== 0 || $days2 !== 0) {
+                return ZonedDateTime::compare(
+                    self::zonedEndForComparison($d1, $anchor),
+                    self::zonedEndForComparison($d2, $anchor),
+                );
             }
+        } elseif ($hasCalendar) {
+            $days1 = self::calendarDaysForComparison($d1, $anchor);
+            $days2 = self::calendarDaysForComparison($d2, $anchor);
         }
-
-        $s1 = $d1->sign;
-        $s2 = $d2->sign;
-        if ($s1 !== $s2) {
-            return $s1 <=> $s2;
-        }
-        [$days1, $subNs1] = self::balanceToDayNs($d1);
-        [$days2, $subNs2] = self::balanceToDayNs($d2);
-        $cmp = ($days1 <=> $days2) !== 0 ? $days1 <=> $days2 : $subNs1 <=> $subNs2;
-        return $s1 * $cmp;
+        [$seconds1, $subNs1] = self::timePartsForComparison($d1, $days1);
+        [$seconds2, $subNs2] = self::timePartsForComparison($d2, $days2);
+        return $seconds1 !== $seconds2 ? $seconds1 <=> $seconds2 : $subNs1 <=> $subNs2;
     }
 
-    /**
-     * Returns absolute [days, subDayNs] for comparison purposes.
-     * Works with absolute values of the time fields.
-     *
-     * @return array{0: int, 1: int}
-     */
-    private static function balanceToDayNs(self $d): array
+    private static function calendarDaysForComparison(self $duration, PlainDate $anchor): int
     {
-        $h = (int) abs((float) $d->hours);
-        $m = (int) abs((float) $d->minutes);
-        $s = (int) abs((float) $d->seconds);
-        $ms = (int) abs((float) $d->milliseconds);
-        $us = (int) abs((float) $d->microseconds);
-        $ns = (int) abs((float) $d->nanoseconds);
+        $end = $anchor->add(
+            new self(
+                years: $duration->years,
+                months: $duration->months,
+                weeks: $duration->weeks,
+                days: $duration->days,
+            ),
+        );
+        return (int) $anchor->until($end, ['largestUnit' => 'day'])->days;
+    }
 
-        $us += intdiv(num1: $ns, num2: 1_000);
-        $ns %= 1_000;
-        $ms += intdiv(num1: $us, num2: 1_000);
-        $us %= 1_000;
-        $s += intdiv(num1: $ms, num2: 1_000);
-        $ms %= 1_000;
-        $m += intdiv(num1: $s, num2: 60);
-        $s %= 60;
-        $h += intdiv(num1: $m, num2: 60);
-        $m %= 60;
-        $days = (int) abs((float) $d->days) + intdiv(num1: $h, num2: 24);
-        $h %= 24;
+    private static function zonedEndForComparison(self $duration, ZonedDateTime $anchor): ZonedDateTime
+    {
+        $dateEnd = $anchor->add(
+            new self(
+                years: $duration->years,
+                months: $duration->months,
+                weeks: $duration->weeks,
+                days: $duration->days,
+            ),
+        );
+        [$epochSeconds, $epochSubNs] = $dateEnd->epochParts();
+        [$seconds, $subNs] = self::timePartsForComparison($duration, days: 0);
+        $subNs += $epochSubNs;
+        return ZonedDateTime::fromEpochParts(
+            $epochSeconds + $seconds + intdiv($subNs, num2: 1_000_000_000),
+            $subNs % 1_000_000_000,
+            $anchor->timeZoneId,
+            $anchor->calendarId,
+        );
+    }
 
-        $subNs =
-            ($h * 3_600_000_000_000)
-            + ($m * 60_000_000_000)
-            + ($s * 1_000_000_000)
-            + ($ms * 1_000_000)
-            + ($us * 1_000)
-            + $ns;
-
-        return [$days, $subNs];
+    /** @return array{int, int} Whole seconds and a nonnegative nanosecond remainder. */
+    private static function timePartsForComparison(self $duration, int $days): array
+    {
+        [$seconds, $subNs] = DurationTime::parts($duration);
+        $seconds += $days * 86_400;
+        if (abs($seconds) >= 9_007_199_254_740_992) {
+            throw new RangeError('Duration time fields exceed the maximum representable range.');
+        }
+        if ($subNs < 0) {
+            $seconds--;
+            $subNs += 1_000_000_000;
+        }
+        return [$seconds, $subNs];
     }
 
     /**

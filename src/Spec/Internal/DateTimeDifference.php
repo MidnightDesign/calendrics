@@ -7,6 +7,7 @@ namespace Calendrics\Spec\Internal;
 use Calendrics\Exception\RangeError;
 use Calendrics\Spec\Duration;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
+use Calendrics\Spec\Internal\Calendar\CalendarProtocol;
 use Calendrics\Spec\PlainDateTime;
 
 /**
@@ -45,13 +46,13 @@ final class DateTimeDifference
      * "since", the final result is negated.
      *
      * @param string $operation 'since' or 'until'
-     * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
+     * @param array<array-key, mixed>|object $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      */
     public static function between(
         PlainDateTime $temporalDate,
         PlainDateTime $other,
         string $operation,
-        array|object|null $options,
+        mixed $options,
     ): Duration {
         /** @var list<string> $validUnits */
         static $validUnits = [
@@ -103,65 +104,63 @@ final class DateTimeDifference
         ];
 
         $largestUnit = 'day'; // default per TC39 PlainDateTime spec
-        $largestUnitExplicit = false;
+        $largestUnitFixed = false;
         $smallestUnit = null;
         $roundingMode = 'trunc';
         $roundingIncrement = 1;
 
-        if ($options !== null) {
-            $opts = Options::requireObject($options, [
-                'largestUnit',
-                'roundingIncrement',
-                'roundingMode',
-                'smallestUnit',
-            ]);
+        $opts = Options::requireObject($options, [
+            'largestUnit',
+            'roundingIncrement',
+            'roundingMode',
+            'smallestUnit',
+        ]);
 
-            if (array_key_exists('largestUnit', $opts)) {
-                /** @var mixed $lu */
-                $lu = $opts['largestUnit'];
-                if ($lu !== null) {
-                    $lu = Options::coerceEnumOption($lu, 'largestUnit');
-                }
-                if (is_string($lu)) {
-                    if (!in_array($lu, $validUnits, strict: true)) {
-                        throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
-                    }
-                    $largestUnit = $lu;
-                    $largestUnitExplicit = true;
-                }
+        if (array_key_exists('largestUnit', $opts)) {
+            /** @var mixed $lu */
+            $lu = $opts['largestUnit'];
+            if ($lu !== null) {
+                $lu = Options::coerceEnumOption($lu, 'largestUnit');
             }
-
-            if (array_key_exists('roundingIncrement', $opts)) {
-                /** @var mixed $ri */
-                $ri = $opts['roundingIncrement'];
-                if ($ri !== null) {
-                    $roundingIncrement = CalendarMath::validateRoundingIncrement($ri);
+            if (is_string($lu)) {
+                if (!in_array($lu, $validUnits, strict: true)) {
+                    throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
                 }
+                $largestUnit = $lu;
+                $largestUnitFixed = $lu !== 'auto';
             }
+        }
 
-            if (array_key_exists('roundingMode', $opts)) {
-                /** @var mixed $rm */
-                $rm = $opts['roundingMode'];
-                if ($rm !== null) {
-                    $rm = Options::coerceEnumOption($rm, 'roundingMode');
-                }
-                if (is_string($rm)) {
-                    $roundingMode = Options::roundingMode($rm);
-                }
+        if (array_key_exists('roundingIncrement', $opts)) {
+            /** @var mixed $ri */
+            $ri = $opts['roundingIncrement'];
+            if ($ri !== null) {
+                $roundingIncrement = CalendarMath::validateRoundingIncrement($ri);
             }
+        }
 
-            if (array_key_exists('smallestUnit', $opts)) {
-                /** @var mixed $su */
-                $su = $opts['smallestUnit'];
-                if ($su !== null) {
-                    $su = Options::coerceEnumOption($su, 'smallestUnit');
+        if (array_key_exists('roundingMode', $opts)) {
+            /** @var mixed $rm */
+            $rm = $opts['roundingMode'];
+            if ($rm !== null) {
+                $rm = Options::coerceEnumOption($rm, 'roundingMode');
+            }
+            if (is_string($rm)) {
+                $roundingMode = Options::roundingMode($rm);
+            }
+        }
+
+        if (array_key_exists('smallestUnit', $opts)) {
+            /** @var mixed $su */
+            $su = $opts['smallestUnit'];
+            if ($su !== null) {
+                $su = Options::coerceEnumOption($su, 'smallestUnit');
+            }
+            if (is_string($su)) {
+                if ($su === 'auto' || !in_array($su, $validUnits, strict: true)) {
+                    throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
                 }
-                if (is_string($su)) {
-                    if (!in_array($su, $validUnits, strict: true)) {
-                        throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
-                    }
-                    $smallestUnit = $su;
-                }
+                $smallestUnit = $su;
             }
         }
 
@@ -201,7 +200,7 @@ final class DateTimeDifference
         $luRank = $unitRank[$normLargest];
 
         if ($suRank > $luRank) {
-            if ($largestUnitExplicit) {
+            if ($largestUnitFixed) {
                 throw new RangeError(
                     "smallestUnit \"{$normSmallest}\" cannot be larger than largestUnit \"{$normLargest}\".",
                 );
@@ -336,20 +335,12 @@ final class DateTimeDifference
                             $nonIsoAdjJdn = $otherJdn - $dateSign;
                         }
                     }
-                    [$adjY2b, $adjM2b, $adjD2b] = CalendarMath::fromJulianDay($nonIsoAdjJdn);
-                    [$years, $months, , $days] = $cal->dateUntil(
-                        $temporalDate->isoYear,
-                        $temporalDate->isoMonth,
-                        $temporalDate->isoDay,
-                        $adjY2b,
-                        $adjM2b,
-                        $adjD2b,
+                    [$years, $months, $days] = self::absoluteCalendarDiff(
+                        $cal,
+                        $temporalDate,
+                        $nonIsoAdjJdn,
                         $calendarUnit,
                     );
-                    // Take absolute values — the output sign is applied later.
-                    $years = abs($years);
-                    $months = abs($months);
-                    $days = abs($days);
                 } else {
                     // ISO calendar: the endpoints are already in (earlier, later) order,
                     // so which one is the receiver has to be passed explicitly for the
@@ -376,12 +367,10 @@ final class DateTimeDifference
             if ($isSmallestCalendar) {
                 // Calendar-unit rounding: zero out time and round the calendar part.
                 if ($normSmallest === 'year') {
-                    $totalMonths = ($years * 12) + $months;
                     $roundedYears = self::roundCalendarYears(
                         $years,
-                        $totalMonths,
-                        $days,
-                        $timeDiffNs,
+                        $otherJdn,
+                        $otherNs - $tdNs,
                         $temporalDate,
                         $roundingIncrement,
                         $roundingMode,
@@ -469,13 +458,7 @@ final class DateTimeDifference
             // For negative output diffs, flip floor/ceil.
             $effTimeMode = $roundingMode;
             if ($outputSign < 0) {
-                $effTimeMode = match ($roundingMode) {
-                    'floor' => 'ceil',
-                    'ceil' => 'floor',
-                    'halfFloor' => 'halfCeil',
-                    'halfCeil' => 'halfFloor',
-                    default => $roundingMode,
-                };
+                $effTimeMode = EpochRounding::negateMode($roundingMode);
             }
             $absTimeNs = EpochRounding::roundAsIfPositive($timeDiffNs, $nsIncrement, $effTimeMode);
 
@@ -492,19 +475,12 @@ final class DateTimeDifference
                 if ($calId !== 'iso8601') {
                     // Non-ISO: shift nonIsoAdjJdn by overflow in the diff direction.
                     $tc39Jdn2 = $nonIsoAdjJdn + ($sign >= 0 ? $overflowDays : -$overflowDays);
-                    [$adjY3, $adjM3, $adjD3] = CalendarMath::fromJulianDay($tc39Jdn2);
-                    [$years, $months, , $days] = $cal->dateUntil(
-                        $temporalDate->isoYear,
-                        $temporalDate->isoMonth,
-                        $temporalDate->isoDay,
-                        $adjY3,
-                        $adjM3,
-                        $adjD3,
+                    [$years, $months, $days] = self::absoluteCalendarDiff(
+                        $cal,
+                        $temporalDate,
+                        $tc39Jdn2,
                         $calendarUnit,
                     );
-                    $years = abs($years);
-                    $months = abs($months);
-                    $days = abs($days);
                 } else {
                     // ISO: add overflow to the swap-based adjOtherJdn.
                     $isoAdjJdn2 = $adjOtherJdn + $overflowDays;
@@ -540,80 +516,20 @@ final class DateTimeDifference
             );
         }
 
-        // largestUnit is a time unit (hour or smaller): accumulate all days into ns.
-        $totalAbsNs = ($dateDiff * EpochLimits::NS_PER_DAY) + $timeDiffNs;
+        // Keep long differences exact without forming an over-int64 nanosecond total.
+        // Duration rounding already carries seconds and sub-second nanoseconds separately
+        // and converts the final fields to the float64 representation required by TC39.
+        $seconds = ($dateDiff * 86_400) + intdiv($timeDiffNs, EpochLimits::NS_PER_SECOND);
+        $nanoseconds = $timeDiffNs % EpochLimits::NS_PER_SECOND;
 
-        $nsPerSmallest = match ($normSmallest) {
-            'hour' => EpochLimits::NS_PER_HOUR,
-            'minute' => EpochLimits::NS_PER_MINUTE,
-            'second' => EpochLimits::NS_PER_SECOND,
-            'millisecond' => EpochLimits::NS_PER_MILLISECOND,
-            'microsecond' => EpochLimits::NS_PER_MICROSECOND,
-            default => 1,
-        };
-        /** @psalm-var int<1, 1000> $roundingIncrement */
-        $nsIncrement = $nsPerSmallest * $roundingIncrement;
-        // For negative output diffs, flip floor/ceil so they retain their directional meaning.
-        $effectiveRoundMode = $roundingMode;
-        if ($outputSign < 0) {
-            $effectiveRoundMode = match ($roundingMode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $roundingMode,
-            };
-        }
-        $roundedAbsNs = EpochRounding::roundAsIfPositive($totalAbsNs, $nsIncrement, $effectiveRoundMode);
-
-        // Decompose based on largest unit (no conversion to higher units).
-        /** @var array<string, int> $timeUnitNs */
-        static $timeUnitNs = [
-            'hour' => 3_600_000_000_000,
-            'minute' => 60_000_000_000,
-            'second' => 1_000_000_000,
-            'millisecond' => 1_000_000,
-            'microsecond' => 1_000,
-            'nanosecond' => 1,
-        ];
-        /** @var list<'hour'|'minute'|'second'|'millisecond'|'microsecond'|'nanosecond'> $timeUnitOrder */
-        static $timeUnitOrder = ['hour', 'minute', 'second', 'millisecond', 'microsecond', 'nanosecond'];
-
-        $rem = $roundedAbsNs;
-        $h = 0;
-        $min = 0;
-        $sec = 0;
-        $ms = 0;
-        $us = 0;
-        $ns = 0;
-        $started = false;
-        foreach ($timeUnitOrder as $unit) {
-            if ($unit === $normLargest) {
-                $started = true;
-            }
-            if (!$started) {
-                continue;
-            }
-            $perUnit = $timeUnitNs[$unit];
-            $val = intdiv(num1: $rem, num2: $perUnit);
-            $rem %= $perUnit;
-            match ($unit) {
-                'hour' => $h = $val,
-                'minute' => $min = $val,
-                'second' => $sec = $val,
-                'millisecond' => $ms = $val,
-                'microsecond' => $us = $val,
-                'nanosecond' => $ns = $val,
-            };
-        }
-
-        return new Duration(
-            hours: $outputSign * $h,
-            minutes: $outputSign * $min,
-            seconds: $outputSign * $sec,
-            milliseconds: $outputSign * $ms,
-            microseconds: $outputSign * $us,
-            nanoseconds: $outputSign * $ns,
+        return DurationRounding::round(
+            new Duration(seconds: $outputSign * $seconds, nanoseconds: $outputSign * $nanoseconds),
+            [
+                'largestUnit' => $normLargest,
+                'smallestUnit' => $normSmallest,
+                'roundingIncrement' => $roundingIncrement,
+                'roundingMode' => $roundingMode,
+            ],
         );
     }
 
@@ -627,6 +543,29 @@ final class DateTimeDifference
         $roundUp = CalendarMath::applyCalendarRoundingProgress($days, $progress, $increment, $mode, $sign);
         $q = intdiv(num1: $days, num2: $increment);
         return $roundUp ? ($q + 1) * $increment : $q * $increment;
+    }
+
+    /**
+     * @param 'month'|'year' $unit
+     * @return array{int, int, int}
+     */
+    private static function absoluteCalendarDiff(
+        CalendarProtocol $calendar,
+        PlainDateTime $receiver,
+        int $targetJdn,
+        string $unit,
+    ): array {
+        [$year, $month, $day] = CalendarMath::fromJulianDay($targetJdn);
+        [$years, $months, , $days] = $calendar->dateUntil(
+            $receiver->isoYear,
+            $receiver->isoMonth,
+            $receiver->isoDay,
+            $year,
+            $month,
+            $day,
+            $unit,
+        );
+        return [abs($years), abs($months), abs($days)];
     }
 
     /**
@@ -652,23 +591,28 @@ final class DateTimeDifference
         // floor-count (rounded down to nearest multiple of increment).
         $floorCount = intdiv(num1: $totalMonths, num2: $increment) * $increment;
 
-        $anchorJdn = self::addSignedMonths($receiver, $dir * $floorCount);
-        $nextJdn = self::addSignedMonths($receiver, $dir * ($floorCount + $increment));
+        $anchorJdn = self::addSigned($receiver, 0, $dir * $floorCount);
+        $nextJdn = self::addSigned($receiver, 0, $dir * ($floorCount + $increment));
 
         $intervalDays = abs($nextJdn - $anchorJdn);
 
-        // Total fractional progress: remaining days + remaining time as fraction of a day.
-        $totalRemNs = ($remainingDays * EpochLimits::NS_PER_DAY) + $remainingTimeNs;
-        $progress = $intervalDays > 0
-            ? (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY)
-            : 0.0;
-
-        $roundUp = CalendarMath::applyCalendarRoundingProgress($totalMonths, $progress, $increment, $mode, $sign);
+        // Measure all progress from the lower increment boundary, including
+        // whole months that do not fill the requested increment.
+        $unroundedJdn = self::addSigned($receiver, 0, $dir * $totalMonths);
+        $remainingDistance = abs($unroundedJdn - $anchorJdn) + $remainingDays;
+        $roundUp = self::roundCalendarProgress(
+            $remainingDistance,
+            $remainingTimeNs,
+            $intervalDays,
+            $mode,
+            $sign,
+            intdiv($floorCount, $increment),
+        );
 
         $roundedAbsMonths = $roundUp ? $floorCount + $increment : $floorCount;
 
         // Validate: the rounded result must not exceed the valid PlainDate range.
-        self::addSignedMonths($receiver, $dir * $roundedAbsMonths);
+        self::addSigned($receiver, 0, $dir * $roundedAbsMonths);
 
         return $roundedAbsMonths;
     }
@@ -680,9 +624,8 @@ final class DateTimeDifference
      */
     private static function roundCalendarYears(
         int $years,
-        int $totalMonths,
-        int $remainingDays,
-        int $remainingTimeNs,
+        int $targetJdn,
+        int $timeDifferenceNs,
         PlainDateTime $receiver,
         int $increment,
         string $mode,
@@ -693,44 +636,77 @@ final class DateTimeDifference
 
         $floorCount = intdiv(num1: $years, num2: $increment) * $increment;
 
-        // For year rounding, we go by year increments (12 months each).
-        $anchorJdn = self::addSignedMonths($receiver, $dir * $floorCount * 12);
-        $nextJdn = self::addSignedMonths($receiver, $dir * ($floorCount + $increment) * 12);
+        // Calendar years can contain leap months, so do not convert them to months.
+        $anchorJdn = self::addSigned($receiver, $dir * $floorCount, 0);
+        $nextJdn = self::addSigned($receiver, $dir * ($floorCount + $increment), 0);
 
         $intervalDays = abs($nextJdn - $anchorJdn);
 
-        // Compute the total distance from anchor (floorCount years) to actual position.
-        $remMonths = $totalMonths - ($floorCount * 12);
-        $monthsJdn = self::addSignedMonths($receiver, $dir * (($floorCount * 12) + $remMonths));
-        $remDaysFromMonths = abs($monthsJdn - $anchorJdn);
-        $totalRemNs = (($remDaysFromMonths + $remainingDays) * EpochLimits::NS_PER_DAY) + $remainingTimeNs;
-        $progress = $intervalDays > 0
-            ? (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY)
-            : 0.0;
-
-        $roundUp = CalendarMath::applyCalendarRoundingProgress($years, $progress, $increment, $mode, $sign);
+        // Measure the actual endpoint, keeping its sub-day part exact.
+        $remainingDays = $dir * ($targetJdn - $anchorJdn);
+        $remainingTimeNs = $dir * $timeDifferenceNs;
+        if ($remainingTimeNs < 0) {
+            $remainingDays--;
+            $remainingTimeNs += EpochLimits::NS_PER_DAY;
+        }
+        $roundUp = self::roundCalendarProgress(
+            $remainingDays,
+            $remainingTimeNs,
+            $intervalDays,
+            $mode,
+            $sign,
+            intdiv($floorCount, $increment),
+        );
 
         $roundedAbsYears = $roundUp ? $floorCount + $increment : $floorCount;
 
         // Validate range.
-        self::addSignedMonths($receiver, $dir * $roundedAbsYears * 12);
+        self::addSigned($receiver, $dir * $roundedAbsYears, 0);
 
         return $roundedAbsYears;
     }
 
     /**
-     * Adds $signedMonths months to $receiver's date and returns the resulting Julian Day Number.
+     * Compare whole days and sub-day nanoseconds separately so a one-nanosecond
+     * difference from the midpoint survives even a multi-year rounding window.
+     */
+    private static function roundCalendarProgress(
+        int $days,
+        int $timeNs,
+        int $intervalDays,
+        string $mode,
+        int $sign,
+        int $floorMultiple,
+    ): bool {
+        $halfDays = intdiv(num1: $intervalDays, num2: 2);
+        $halfTimeNs = ($intervalDays % 2) * intdiv(num1: EpochLimits::NS_PER_DAY, num2: 2);
+        $comparison = $days <=> $halfDays;
+        if ($comparison === 0) {
+            $comparison = $timeNs <=> $halfTimeNs;
+        }
+        // The mode helper needs only zero, below-half, tie, or above-half.
+        $progress = match (true) {
+            $days === 0 && $timeNs === 0 => 0.0,
+            $comparison < 0 => 0.25,
+            $comparison === 0 => 0.5,
+            default => 0.75,
+        };
+        return CalendarMath::applyRoundingProgress($progress, $mode, $sign, $floorMultiple);
+    }
+
+    /**
+     * Adds calendar years and months to the receiver and returns the Julian Day Number.
      *
      * @throws RangeError if the resulting date is outside the valid ISO range.
      */
-    private static function addSignedMonths(PlainDateTime $receiver, int $signedMonths): int
+    private static function addSigned(PlainDateTime $receiver, int $signedYears, int $signedMonths): int
     {
         $cal = CalendarFactory::get($receiver->calendarId);
         [$y, $m, $d] = $cal->dateAdd(
             $receiver->isoYear,
             $receiver->isoMonth,
             $receiver->isoDay,
-            0,
+            $signedYears,
             $signedMonths,
             0,
             0,

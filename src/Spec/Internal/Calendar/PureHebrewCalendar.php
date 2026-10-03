@@ -39,7 +39,7 @@ final class PureHebrewCalendar implements CalendarProtocol
     /** @var array<int, string> Memoized yearType results, keyed by year. */
     private static array $yearTypeCache = [];
 
-    /** @var array<int, array{0: int, 1: int, 2: int}> Memoized isoToHebrew results, keyed by JDN. */
+    /** @var array<int, array{int, int, int}> Memoized isoToHebrew results, keyed by JDN. */
     private static array $isoToHebrewCache = [];
 
     /** @var array<int, int> Memoized monthLength results, keyed by (year * 16) + ordinalMonth. */
@@ -151,11 +151,6 @@ final class PureHebrewCalendar implements CalendarProtocol
         }
         $type = self::yearType($year);
         $isLeap = self::isLeapYear($year);
-        $totalMonths = $isLeap ? 13 : 12;
-
-        if ($ordinalMonth < 1 || $ordinalMonth > $totalMonths) {
-            throw new RangeError("Month ordinal {$ordinalMonth} out of range for Hebrew year {$year}.");
-        }
 
         // Map ordinal to logical month identity
         if ($isLeap) {
@@ -250,7 +245,7 @@ final class PureHebrewCalendar implements CalendarProtocol
     /**
      * Converts ISO date to Hebrew year, ordinal month, day.
      *
-     * @return array{0: int, 1: int, 2: int} [year, ordinalMonth, day]
+     * @return array{int, int, int} [year, ordinalMonth, day]
      */
     private static function isoToHebrew(int $isoYear, int $isoMonth, int $isoDay): array
     {
@@ -292,7 +287,7 @@ final class PureHebrewCalendar implements CalendarProtocol
     /**
      * Converts Hebrew year, ordinal month, day to ISO date.
      *
-     * @return array{0: int, 1: int, 2: int} [isoYear, isoMonth, isoDay]
+     * @return array{int, int, int} [isoYear, isoMonth, isoDay]
      */
     private static function hebrewToIso(int $year, int $ordinalMonth, int $day): array
     {

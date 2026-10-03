@@ -38,13 +38,13 @@ final class DateDifference
      * NudgeToCalendarUnit spec). For "since", the final result is negated.
      *
      * @param string $operation 'since' or 'until'
-     * @param array<array-key, mixed>|object|null $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
+     * @param array<array-key, mixed>|object $options ['largestUnit' => ..., 'smallestUnit' => ..., 'roundingMode' => ..., 'roundingIncrement' => ...]
      */
     public static function between(
         PlainDate $temporalDate,
         PlainDate $other,
         string $operation,
-        array|object|null $options,
+        mixed $options,
     ): Duration {
         /** @var list<string> $validUnits */
         static $validUnits = ['auto', 'day', 'days', 'week', 'weeks', 'month', 'months', 'year', 'years'];
@@ -62,69 +62,67 @@ final class DateDifference
         ];
 
         $largestUnit = 'day';
-        $largestUnitExplicit = false; // whether largestUnit was explicitly specified
+        $largestUnitFixed = false; // whether largestUnit names a fixed unit
         $smallestUnit = null; // null = not specified
         $roundingMode = 'trunc';
         $roundingIncrement = 1;
 
-        if ($options !== null) {
-            $opts = Options::normalizeOptions($options, [
-                'largestUnit',
-                'roundingIncrement',
-                'roundingMode',
-                'smallestUnit',
-            ]);
+        $opts = Options::requireObject($options, [
+            'largestUnit',
+            'roundingIncrement',
+            'roundingMode',
+            'smallestUnit',
+        ]);
 
-            // largestUnit
-            if (array_key_exists('largestUnit', $opts)) {
-                /** @var mixed $lu */
-                $lu = $opts['largestUnit'];
-                if ($lu !== null) {
-                    $lu = Options::coerceEnumOption($lu, 'largestUnit');
-                }
-                if (is_string($lu)) {
-                    if (!in_array($lu, $validUnits, strict: true)) {
-                        throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
-                    }
-                    $largestUnit = $lu;
-                    $largestUnitExplicit = true;
-                }
+        // largestUnit
+        if (array_key_exists('largestUnit', $opts)) {
+            /** @var mixed $lu */
+            $lu = $opts['largestUnit'];
+            if ($lu !== null) {
+                $lu = Options::coerceEnumOption($lu, 'largestUnit');
             }
-
-            // roundingIncrement (parsed early so validation order matches spec)
-            if (array_key_exists('roundingIncrement', $opts)) {
-                /** @var mixed $ri */
-                $ri = $opts['roundingIncrement'];
-                if ($ri !== null) {
-                    $roundingIncrement = CalendarMath::validateRoundingIncrement($ri);
+            if (is_string($lu)) {
+                if (!in_array($lu, $validUnits, strict: true)) {
+                    throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
                 }
+                $largestUnit = $lu;
+                $largestUnitFixed = $lu !== 'auto';
             }
+        }
 
-            // roundingMode
-            if (array_key_exists('roundingMode', $opts)) {
-                /** @var mixed $rm */
-                $rm = $opts['roundingMode'];
-                if ($rm !== null) {
-                    $rm = Options::coerceEnumOption($rm, 'roundingMode');
-                }
-                if (is_string($rm)) {
-                    $roundingMode = Options::roundingMode($rm);
-                }
+        // roundingIncrement (parsed early so validation order matches spec)
+        if (array_key_exists('roundingIncrement', $opts)) {
+            /** @var mixed $ri */
+            $ri = $opts['roundingIncrement'];
+            if ($ri !== null) {
+                $roundingIncrement = CalendarMath::validateRoundingIncrement($ri);
             }
+        }
 
-            // smallestUnit
-            if (array_key_exists('smallestUnit', $opts)) {
-                /** @var mixed $su */
-                $su = $opts['smallestUnit'];
-                if ($su !== null) {
-                    $su = Options::coerceEnumOption($su, 'smallestUnit');
+        // roundingMode
+        if (array_key_exists('roundingMode', $opts)) {
+            /** @var mixed $rm */
+            $rm = $opts['roundingMode'];
+            if ($rm !== null) {
+                $rm = Options::coerceEnumOption($rm, 'roundingMode');
+            }
+            if (is_string($rm)) {
+                $roundingMode = Options::roundingMode($rm);
+            }
+        }
+
+        // smallestUnit
+        if (array_key_exists('smallestUnit', $opts)) {
+            /** @var mixed $su */
+            $su = $opts['smallestUnit'];
+            if ($su !== null) {
+                $su = Options::coerceEnumOption($su, 'smallestUnit');
+            }
+            if (is_string($su)) {
+                if ($su === 'auto' || !in_array($su, $validUnits, strict: true)) {
+                    throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
                 }
-                if (is_string($su)) {
-                    if (!in_array($su, $validUnits, strict: true)) {
-                        throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
-                    }
-                    $smallestUnit = $su;
-                }
+                $smallestUnit = $su;
             }
         }
 
@@ -137,13 +135,13 @@ final class DateDifference
         $luRank = $unitRank[$largestUnit];
 
         if ($suRank > $luRank) {
-            if ($largestUnitExplicit) {
+            if ($largestUnitFixed) {
                 // Both explicitly set and smallestUnit > largestUnit: throw per spec.
                 throw new RangeError(
                     "smallestUnit \"{$smallestUnit}\" cannot be larger than largestUnit \"{$largestUnit}\".",
                 );
             }
-            // Only smallestUnit was explicitly set; bump largestUnit up to match.
+            // An absent or auto largestUnit widens to match smallestUnit.
             $largestUnit = $smallestUnit;
         }
 
@@ -177,7 +175,7 @@ final class DateDifference
         // duration. Negating the mode here makes ceil/floor behave correctly in
         // the user-facing direction. (Symmetric modes like halfExpand are unaffected.)
         if ($operation === 'since') {
-            $roundingMode = self::negateRoundingMode($roundingMode);
+            $roundingMode = EpochRounding::negateMode($roundingMode);
         }
 
         // Weeks and days: purely mathematical (no calendar-awareness for months/years).
@@ -228,7 +226,7 @@ final class DateDifference
             if ($normSmallest === 'month') {
                 $rounded = self::roundCalendarMonths(
                     $totalMonths,
-                    $days,
+                    $otherJdn,
                     $temporalDate,
                     $roundingIncrement,
                     $roundingMode,
@@ -242,11 +240,9 @@ final class DateDifference
 
         // normLargest === 'year'
         if ($normSmallest === 'year') {
-            $totalMonths = ($years * 12) + $months;
             $rounded = self::roundCalendarYears(
                 $years,
-                $totalMonths,
-                $days,
+                $otherJdn,
                 $temporalDate,
                 $roundingIncrement,
                 $roundingMode,
@@ -258,7 +254,7 @@ final class DateDifference
             $totalMonths = ($years * 12) + $months;
             $roundedMonths = self::roundCalendarMonths(
                 $totalMonths,
-                $days,
+                $otherJdn,
                 $temporalDate,
                 $roundingIncrement,
                 $roundingMode,
@@ -271,21 +267,6 @@ final class DateDifference
         // smallestUnit=day: return years + months + rounded days.
         $roundedDays = self::roundDays($days, $roundingIncrement, $roundingMode);
         return new Duration(years: $sinceSign * $years, months: $sinceSign * $months, days: $sinceSign * $roundedDays);
-    }
-
-    /**
-     * Mirrors a directed rounding mode (floor/ceil, halfFloor/halfCeil) across zero;
-     * symmetric modes pass through unchanged.
-     */
-    private static function negateRoundingMode(string $mode): string
-    {
-        return match ($mode) {
-            'floor' => 'ceil',
-            'ceil' => 'floor',
-            'halfFloor' => 'halfCeil',
-            'halfCeil' => 'halfFloor',
-            default => $mode,
-        };
     }
 
     /**
@@ -304,7 +285,7 @@ final class DateDifference
         $absDays = abs($totalDays);
         $effectiveMode = $mode;
         if ($sign < 0) {
-            $effectiveMode = self::negateRoundingMode($mode);
+            $effectiveMode = EpochRounding::negateMode($mode);
         }
         return $sign * EpochRounding::roundAsIfPositive($absDays, $increment, $effectiveMode);
     }
@@ -312,8 +293,7 @@ final class DateDifference
     /**
      * Calendar-aware rounding for months (NudgeToCalendarUnit, unit=months).
      *
-     * Rounds $totalMonths (signed) + $remainingDays to the nearest $increment months,
-     * anchored from the receiver date (per TC39 spec).
+     * Rounds the target date to the nearest increment of months anchored at the receiver.
      *
      * $receiverIsLater: true when the receiver is the LATER of the two dates (since()
      * semantics), false when it is the EARLIER (until() semantics).  This controls the
@@ -323,28 +303,21 @@ final class DateDifference
      */
     private static function roundCalendarMonths(
         int $totalMonths,
-        int $remainingDays,
+        int $targetJdn,
         PlainDate $receiver,
         int $increment,
         string $mode,
         bool $receiverIsLater,
     ): int {
-        $sign = $totalMonths >= 0 ? 1 : -1;
-        if ($totalMonths === 0 && $remainingDays !== 0) {
-            $sign = $remainingDays >= 0 ? 1 : -1;
-        }
+        $sign = $receiverIsLater ? -1 : 1;
         $absTotalMonths = abs($totalMonths);
-        $absRemDays = abs($remainingDays);
 
         // floor-count (rounded down to nearest multiple of increment).
         $floorCount = intdiv(num1: $absTotalMonths, num2: $increment) * $increment;
 
-        // Anchor: receiver going toward "other" by floorCount months.
-        // When receiver is the later date (since): go backward → receiver − sign*floorCount months.
-        // When receiver is the earlier date (until): go forward → receiver + sign*floorCount months.
-        // Equivalently, the direction multiplier is -sign for since and +sign for until,
-        // which simplifies to: direction = receiverIsLater ? -1 : 1.
-        $dir = $receiverIsLater ? -$sign : $sign;
+        // Calendar anchors follow the receiver-to-other direction independently
+        // of the sign applied to the rounded result.
+        $dir = $receiverIsLater ? -1 : 1;
         $anchorJdn = self::addSigned($receiver, 0, $dir * $floorCount);
 
         // Next boundary: one increment further in the same direction.
@@ -353,8 +326,10 @@ final class DateDifference
         // Interval size in days (absolute value of the interval).
         $intervalDays = abs($nextJdn - $anchorJdn);
 
-        // Remaining distance from anchor toward target = |remainingDays| from dateUntil.
-        $progress = $intervalDays > 0 ? $absRemDays / $intervalDays : 0.0;
+        // Include whole months discarded by the increment, as well as the
+        // remaining days. Calendar months need their actual anchored lengths.
+        $remainingDistance = abs($targetJdn - $anchorJdn);
+        $progress = $intervalDays > 0 ? $remainingDistance / $intervalDays : 0.0;
 
         // Apply rounding (for negative diffs, flip floor/ceil per spec §11.5.12).
         $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
@@ -377,42 +352,26 @@ final class DateDifference
      */
     private static function roundCalendarYears(
         int $years,
-        int $totalMonths,
-        int $remainingDays,
+        int $targetJdn,
         PlainDate $receiver,
         int $increment,
         string $mode,
         bool $receiverIsLater,
     ): int {
-        if ($years !== 0) {
-            $sign = $years >= 0 ? 1 : -1;
-        } elseif ($totalMonths !== 0) {
-            $sign = $totalMonths >= 0 ? 1 : -1;
-        } else {
-            $sign = $remainingDays >= 0 ? 1 : -1;
-        }
+        $sign = $receiverIsLater ? -1 : 1;
         $absYears = abs($years);
 
         $floorCount = intdiv(num1: $absYears, num2: $increment) * $increment;
 
-        // Anchor: receiver going toward "other" by floorCount years.
-        // When receiver is later (since): go backward → -sign direction.
-        // When receiver is earlier (until): go forward → +sign direction.
-        $dir = $receiverIsLater ? -$sign : $sign;
+        // Anchor from the receiver toward the other date.
+        $dir = $receiverIsLater ? -1 : 1;
         $anchorJdn = self::addSigned($receiver, $dir * $floorCount, 0);
         $nextJdn = self::addSigned($receiver, $dir * ($floorCount + $increment), 0);
 
         $intervalDays = abs($nextJdn - $anchorJdn);
 
-        // Compute the target JDN: from anchor, go further in the same direction
-        // (toward next boundary) by the remaining months+days.
-        $absRemMonths = abs($totalMonths) - ($floorCount * 12);
-        $subAnchorJdn = self::addSigned(
-            self::dateAtJulianDay($anchorJdn, $receiver->calendarId),
-            0,
-            $dir * $absRemMonths,
-        );
-        $targetJdn = $subAnchorJdn + ($dir * abs($remainingDays));
+        // Use the actual endpoint: rebuilding it from a constrained leap-day
+        // anchor can change its day of month.
         $absRemDistance = abs($targetJdn - $anchorJdn);
 
         $progress = $intervalDays > 0 ? $absRemDistance / $intervalDays : 0.0;
@@ -456,14 +415,5 @@ final class DateDifference
             throw new RangeError('PlainDate rounding result is outside the representable range.');
         }
         return $jdn;
-    }
-
-    /**
-     * Constructs a PlainDate at the given Julian Day Number (used as a rounding anchor).
-     */
-    private static function dateAtJulianDay(int $jdn, string $calendarId): PlainDate
-    {
-        [$y, $m, $d] = CalendarMath::fromJulianDay($jdn);
-        return new PlainDate($y, $m, $d, $calendarId);
     }
 }

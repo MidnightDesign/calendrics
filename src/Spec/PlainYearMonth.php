@@ -8,11 +8,14 @@ use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DateParse;
+use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
+use Calendrics\Spec\Internal\PartialDateFields;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
 
@@ -335,151 +338,18 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             );
         }
 
-        // Non-ISO calendar: delegate to dedicated handler. (withNonIso resolves the
-        // overflow option after reading its own fields.)
-        if ($this->calendarId !== 'iso8601') {
-            return $this->withNonIso($fields, $options, CalendarFactory::get($this->calendarId));
-        }
+        unset($fields['day']);
+        $date = PartialDateFields::prepare(
+            $fields,
+            $this->calendarId,
+            $this->year,
+            $this->monthCode,
+            1,
+            'PlainYearMonth::with()',
+        );
+        [$year, $month, $day] = $date->resolve(Options::overflowFromValue($options));
 
-        // ISO path. TC39 PrepareCalendarFields reads and coerces the partial fields
-        // BEFORE GetOptionsObject validates the options argument's type, so a bad field
-        // value's RangeError precedes a primitive options argument's TypeError. The
-        // overflow keyword (which only drives regulation) is resolved afterward.
-        $year = $this->isoYear;
-        if (array_key_exists('year', $fields)) {
-            $year = CalendarMath::toFiniteInt($fields['year'], 'PlainYearMonth::with() year');
-        }
-
-        $hasMonth = array_key_exists('month', $fields);
-        $hasMonthCode = array_key_exists('monthCode', $fields);
-
-        // MonthCode::validate is field preparation: TYPE (non-stringifiable => TypeError)
-        // then SYNTAX (ill-formed => RangeError). Whether the code names a month this
-        // calendar has is CalendarDateFromFields, resolved after the options are read.
-        $monthCode = $hasMonthCode ? MonthCode::validate($fields['monthCode']) : null;
-        $newMonth = $hasMonth ? CalendarMath::toFiniteInt($fields['month'], 'PlainYearMonth::with() month') : null;
-
-        // `month` is read with ToPositiveIntegerWithTruncation, so a non-positive value
-        // is rejected during field preparation — before the options are read.
-        if ($newMonth !== null && $newMonth < 1) {
-            throw new RangeError("Invalid month {$newMonth}: must be at least 1.");
-        }
-
-        // GetOptionsObject + GetTemporalOverflowOption: explicit null / primitive /
-        // Symbol => TypeError; omitted ([]) and a bag without 'overflow' default to
-        // 'constrain'; an 'overflow' value is coerced/validated.
-        $overflow = Options::overflowFromValue($options);
-
-        $month = $this->isoMonth;
-        if ($monthCode !== null) {
-            $month = CalendarMath::monthCodeToMonth($monthCode);
-        }
-        if ($newMonth !== null) {
-            if ($monthCode !== null && $newMonth !== $month) {
-                throw new RangeError('Conflicting month and monthCode fields.');
-            }
-            $month = $newMonth;
-        }
-
-        if ($overflow === 'constrain') {
-            $month = min(12, $month);
-        }
-
-        // referenceISODay stays 1 after with() — TC39 spec §9.5.6 RegulateISOYearMonth.
-        return new self($year, $month, $this->calendarId, 1);
-    }
-
-    /**
-     * Non-ISO calendar path for with(), mirroring PlainDate::withNonIso().
-     *
-     * Resolves the overflow option AFTER reading its own fields, matching TC39's
-     * PrepareCalendarFields-before-GetOptionsObject ordering.
-     *
-     * @param array<array-key,mixed> $fields
-     * @param Internal\Calendar\CalendarProtocol $calendar
-     */
-    private function withNonIso(array $fields, mixed $options, Internal\Calendar\CalendarProtocol $calendar): self
-    {
-        $hasYear = array_key_exists('year', $fields);
-        $hasEra = array_key_exists('era', $fields);
-        $hasEraYear = array_key_exists('eraYear', $fields);
-        $hasMonth = array_key_exists('month', $fields);
-        $hasMonthCode = array_key_exists('monthCode', $fields);
-
-        // Chinese/Dangi have no eras — providing era or eraYear is always a TypeError.
-        if (($hasEra || $hasEraYear) && in_array($this->calendarId, ['chinese', 'dangi'], strict: true)) {
-            throw new TypeError('eraYear and era are invalid for this calendar.');
-        }
-
-        // TC39: era without eraYear (or vice versa) is TypeError when year is not also provided.
-        if ($hasEra && !$hasEraYear && !$hasYear) {
-            throw new TypeError('era provided without eraYear in with() fields.');
-        }
-        if ($hasEraYear && !$hasEra && !$hasYear) {
-            throw new TypeError('eraYear provided without era in with() fields.');
-        }
-
-        // Resolve year: era+eraYear takes precedence over the current year if both provided.
-        // When $hasYear is false, $hasEra implies $hasEraYear (and vice versa) due to checks above.
-        $year = $this->year;
-        if ($hasYear) {
-            $year = CalendarMath::toFiniteInt($fields['year'], 'PlainYearMonth::with() year');
-        } elseif ($hasEra) {
-            $resolved = CalendarMath::resolveYearFromEra(
-                $calendar,
-                $fields['era'],
-                $fields['eraYear'],
-                'PlainYearMonth::with()',
-            );
-            if ($resolved !== null) {
-                $year = $resolved;
-            }
-        }
-
-        // Resolve monthCode/month with mutual exclusion.
-        // When neither is provided, default to current monthCode (not ordinal month).
-        $monthCode = null;
-        $month = null;
-        $useMonthCode = false;
-
-        if ($hasMonthCode) {
-            // MonthCode::validate: non-string TYPE => TypeError, ill-formed STRING => RangeError.
-            $monthCode = MonthCode::validate($fields['monthCode']);
-            $useMonthCode = true;
-        }
-        if ($hasMonth) {
-            $month = CalendarMath::toFiniteInt($fields['month'], 'PlainYearMonth::with() month');
-            // Validate month/monthCode conflict.
-            if ($hasMonthCode) {
-                /** @var string $monthCode */
-                $monthFromCode = $calendar->monthCodeToMonth($monthCode, $year);
-                if ($month !== $monthFromCode) {
-                    throw new RangeError('Conflicting month and monthCode fields.');
-                }
-            }
-            $useMonthCode = false; // explicit month takes precedence
-        }
-        if (!$hasMonth && !$hasMonthCode) {
-            // Default: preserve current monthCode.
-            $monthCode = $this->monthCode;
-            $useMonthCode = true;
-        }
-
-        // GetOptionsObject + GetTemporalOverflowOption: resolved after the fields have
-        // been read/coerced (PrepareCalendarFields precedes GetOptionsObject in TC39).
-        $overflow = Options::overflowFromValue($options);
-
-        if ($useMonthCode && $monthCode !== null) {
-            [$isoY, $isoM, $isoD] = $calendar->calendarToIsoFromMonthCode($year, $monthCode, 1, $overflow);
-        } else {
-            /** @var int $month */
-            if ($month < 1) {
-                throw new RangeError("Invalid month {$month}: must be at least 1.");
-            }
-            [$isoY, $isoM, $isoD] = $calendar->calendarToIso($year, $month, 1, $overflow);
-        }
-
-        return new self($isoY, $isoM, $this->calendarId, $isoD);
+        return new self($year, $month, $this->calendarId, $day);
     }
 
     /**
@@ -569,14 +439,14 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
      * Format: YYYY-MM (with ±YYYYYY for years outside 0–9999).
      * With calendarName="always" or "critical": YYYY-MM-DD[...] using referenceISODay.
      *
-     * @param array<array-key, mixed>|object|null $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
+     * @param array<array-key, mixed>|object $options Options bag: ['calendarName' => 'auto'|'always'|'never'|'critical']
      * @throws RangeError for invalid calendarName values.
      * @psalm-api
      */
     #[\Override]
-    public function toString(mixed $options = null): string
+    public function toString(mixed $options = []): string
     {
-        $opts = Options::normalizeOptions($options, ['calendarName']);
+        $opts = Options::requireObject($options, ['calendarName']);
 
         $yearStr = self::formatYear($this->isoYear);
         $base = sprintf('%s-%02d', $yearStr, $this->isoMonth);
@@ -618,16 +488,17 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
 
         $day = CalendarMath::toFiniteInt($bag['day'], 'toPlainDate() day');
 
-        // Constrain day to valid range for this year-month.
-        $maxDay = CalendarMath::calcDaysInMonth($this->isoYear, $this->isoMonth);
         if ($day < 1) {
             throw new RangeError("Invalid day {$day}: must be at least 1.");
         }
-        if ($day > $maxDay) {
-            $day = $maxDay; // constrain (default overflow behaviour per spec)
-        }
+        [$year, $month, $day] = CalendarFactory::get($this->calendarId)->calendarToIsoFromMonthCode(
+            $this->year,
+            $this->monthCode,
+            $day,
+            'constrain',
+        );
 
-        return new PlainDate($this->isoYear, $this->isoMonth, $day);
+        return new PlainDate($year, $month, $day, $this->calendarId);
     }
 
     // -------------------------------------------------------------------------
@@ -705,29 +576,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             }
         }
 
-        // Validate time portion if present.
-        if ($m[3] !== '') {
-            $hour = (int) $m[3];
-            if ($hour > 23) {
-                throw new RangeError("PlainYearMonth::from() cannot parse \"{$s}\": hour {$hour} out of range.");
-            }
-            if ($m[4] !== '') {
-                $minute = (int) $m[4];
-                if ($minute > 59) {
-                    throw new RangeError(
-                        "PlainYearMonth::from() cannot parse \"{$s}\": minute {$minute} out of range.",
-                    );
-                }
-                if ($m[5] !== '') {
-                    $second = (int) $m[5];
-                    if ($second > 60) {
-                        throw new RangeError(
-                            "PlainYearMonth::from() cannot parse \"{$s}\": second {$second} out of range.",
-                        );
-                    }
-                }
-            }
-        }
+        DateParse::validateOptionalTime($m[3], $m[4], $m[5], $s, 'PlainYearMonth');
 
         // Validate bracket annotations and extract calendar ID.
         $annotationSection = $m[7];
@@ -902,25 +751,6 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
     ): Duration {
         /** @var list<string> $validUnits */
         static $validUnits = ['auto', 'month', 'months', 'year', 'years'];
-        /** @var list<string> $disallowedUnits */
-        static $disallowedUnits = [
-            'week',
-            'weeks',
-            'day',
-            'days',
-            'hour',
-            'hours',
-            'minute',
-            'minutes',
-            'second',
-            'seconds',
-            'millisecond',
-            'milliseconds',
-            'microsecond',
-            'microseconds',
-            'nanosecond',
-            'nanoseconds',
-        ];
 
         $largestUnit = 'year'; // default for PlainYearMonth per spec (auto = year)
         $smallestUnit = null;
@@ -939,7 +769,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
                     $lu = Options::coerceEnumOption($lu, 'largestUnit');
                 }
                 if (is_string($lu)) {
-                    if (in_array($lu, $disallowedUnits, strict: true) || !in_array($lu, $validUnits, strict: true)) {
+                    if (!in_array($lu, $validUnits, strict: true)) {
                         throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
                     }
                     $largestUnit = $lu;
@@ -975,7 +805,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
                     $su = Options::coerceEnumOption($su, 'smallestUnit');
                 }
                 if (is_string($su)) {
-                    if (in_array($su, $disallowedUnits, strict: true) || !in_array($su, $validUnits, strict: true)) {
+                    if ($su === 'auto' || !in_array($su, $validUnits, strict: true)) {
                         throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
                     }
                     $smallestUnit = $su;
@@ -1000,18 +830,10 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             default => $smallestUnit,
         };
 
-        /** @var array<string, int> $unitRank */
-        static $unitRank = ['year' => 2, 'years' => 2, 'month' => 1, 'months' => 1, 'auto' => 1];
-
-        $suRank = $unitRank[$smallestUnit];
-        $luRank = $unitRank[$largestUnit];
-
-        // smallestUnit larger than largestUnit is only reachable with an explicit
-        // largestUnit: the default largestUnit is 'year' (the maximum rank), and the
-        // only way largestUnit drops to 'month' rank is an explicit option value. So
-        // $suRank > $luRank always implies the throw; there is no auto-widening case to
-        // handle here.
-        if ($suRank > $luRank) {
+        // Only an explicit 'month' largestUnit can be exceeded: the default and 'auto'
+        // both resolve to 'year', the larger of the two units this type has, so unlike
+        // the other difference helpers there is no auto-widening case to handle.
+        if ($normSmallest === 'year' && $normLargest === 'month') {
             throw new RangeError(
                 "smallestUnit \"{$smallestUnit}\" cannot be larger than largestUnit \"{$largestUnit}\".",
             );
@@ -1060,22 +882,16 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         // TC39: for "since", GetDifferenceSettings negates the rounding mode.
         $sinceSign = $operation === 'since' ? -1 : 1;
         if ($operation === 'since') {
-            $roundingMode = self::negateRoundingMode($roundingMode);
+            $roundingMode = EpochRounding::negateMode($roundingMode);
         }
 
         if ($normLargest === 'month') {
-            // $normSmallest is 'month' too: the rank check above rejects a year-ranked
-            // smallestUnit against a month-ranked largestUnit.
-            if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
+            // $normSmallest is 'month' too: a 'year' smallestUnit under a 'month'
+            // largestUnit is rejected above.
+            if ($roundingIncrement === 1) {
                 return new Duration(months: $sinceSign * $totalMonths);
             }
-            $rounded = self::roundCalendarYearMonths(
-                $totalMonths,
-                $temporalDate,
-                $roundingIncrement,
-                $roundingMode,
-                false,
-            );
+            $rounded = self::roundCalendarYearMonths($totalMonths, $temporalDate, $roundingIncrement, $roundingMode);
             return new Duration(months: $sinceSign * $rounded);
         }
 
@@ -1090,13 +906,12 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
                 $temporalDate,
                 $roundingIncrement,
                 $roundingMode,
-                false,
             );
             return new Duration(years: $sinceSign * $roundedYears);
         }
 
         // normSmallest === 'month', normLargest === 'year'
-        if ($roundingIncrement === 1 && $roundingMode === 'trunc') {
+        if ($roundingIncrement === 1) {
             return new Duration(years: $sinceSign * $rawYears, months: $sinceSign * $rawMonths);
         }
         [$ry, $rm] = self::roundCalendarMonthsWithinYear(
@@ -1105,7 +920,6 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             $temporalDate,
             $roundingIncrement,
             $roundingMode,
-            false,
         );
         return new Duration(years: $sinceSign * $ry, months: $sinceSign * $rm);
     }
@@ -1118,82 +932,24 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
      *
      * @throws RangeError if the rounded result is outside the valid range.
      */
-    private static function roundCalendarYearMonths(
-        int $totalMonths,
-        self $receiver,
-        int $increment,
-        string $mode,
-        bool $receiverIsLater,
-    ): int {
+    private static function roundCalendarYearMonths(int $totalMonths, self $receiver, int $increment, string $mode): int
+    {
         $sign = $totalMonths >= 0 ? 1 : -1;
         $absMonths = abs($totalMonths);
 
         $floorCount = intdiv(num1: $absMonths, num2: $increment) * $increment;
         $remainingMonths = $absMonths - $floorCount;
 
-        // No rounding needed when mode is trunc/floor (always rounds down).
-        if ($increment === 1) {
-            $sign2 = $totalMonths >= 0 ? 1 : -1;
-            // Validate range.
-            $dir2 = $receiverIsLater ? -$sign2 : $sign2;
-            [$ry, $rm] = self::addSignedMonthsYM($receiver->isoYear, $receiver->isoMonth, $dir2 * $absMonths);
-            if (!self::isoYearMonthWithinLimits($ry, $rm)) {
-                throw new RangeError('PlainYearMonth arithmetic result is outside the representable range.');
-            }
-            return $totalMonths;
-        }
-
-        // Anchor: receiver going toward "other" by floorCount months.
-        $dir = $receiverIsLater ? -$sign : $sign;
-
-        // Compute anchor and next boundary as year-month.
-        [$anchorY, $anchorM] = self::addSignedMonthsYM($receiver->isoYear, $receiver->isoMonth, $dir * $floorCount);
-        [$nextY, $nextM] = self::addSignedMonthsYM(
+        return $sign
+        * self::roundMonthOffset(
             $receiver->isoYear,
             $receiver->isoMonth,
-            $dir * ($floorCount + $increment),
+            $sign,
+            $floorCount,
+            $remainingMonths,
+            $increment,
+            $mode,
         );
-
-        // Validate the next boundary is within the representable range (§NudgeToCalendarUnit step 8).
-        if (!self::isoYearMonthWithinLimits($nextY, $nextM)) {
-            throw new RangeError('PlainYearMonth rounding result is outside the representable range.');
-        }
-
-        // Interval size in days (anchor → next boundary).
-        $anchorJdn = CalendarMath::toJulianDay($anchorY, $anchorM, 1);
-        $nextJdn = CalendarMath::toJulianDay($nextY, $nextM, 1);
-        $intervalDays = abs($nextJdn - $anchorJdn);
-
-        // Compute how far the remaining months reach within the interval (in days).
-        [$remY, $remM] = self::addSignedMonthsYM($anchorY, $anchorM, $dir * $remainingMonths);
-        $remJdn = CalendarMath::toJulianDay($remY, $remM, 1);
-        $remDays = abs($remJdn - $anchorJdn);
-
-        $progress = $intervalDays > 0 ? $remDays / $intervalDays : 0.0;
-
-        $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
-
-        $roundedAbs = $roundUp ? $floorCount + $increment : $floorCount;
-
-        // $roundedAbs is either $floorCount or $floorCount + $increment; the latter is
-        // exactly the next boundary already validated above, the former is strictly
-        // inside it. A re-check of the rounded result can therefore never fail.
-
-        return $sign * $roundedAbs;
-    }
-
-    /**
-     * Inverts a rounding mode for negative diffs.
-     */
-    private static function negateRoundingMode(string $mode): string
-    {
-        return match ($mode) {
-            'floor' => 'ceil',
-            'ceil' => 'floor',
-            'halfFloor' => 'halfCeil',
-            'halfCeil' => 'halfFloor',
-            default => $mode,
-        };
     }
 
     private static function roundCalendarYearsYM(
@@ -1202,7 +958,6 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         self $receiver,
         int $increment,
         string $mode,
-        bool $receiverIsLater,
     ): int {
         if ($years !== 0) {
             $sign = $years >= 0 ? 1 : -1;
@@ -1213,49 +968,19 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
 
         $floorCount = intdiv(num1: $absYears, num2: $increment) * $increment;
 
-        $dir = $receiverIsLater ? -$sign : $sign;
-
-        // Anchor at floorCount years from receiver.
-        [$anchorY, $anchorM] = self::addSignedMonthsYM(
-            $receiver->isoYear,
-            $receiver->isoMonth,
-            $dir * $floorCount * 12,
-        );
-        [$nextY, $nextM] = self::addSignedMonthsYM(
-            $receiver->isoYear,
-            $receiver->isoMonth,
-            $dir * ($floorCount + $increment) * 12,
-        );
-
-        // Validate the next boundary is within the representable range.
-        if (!self::isoYearMonthWithinLimits($nextY, $nextM)) {
-            throw new RangeError('PlainYearMonth rounding result is outside the representable range.');
-        }
-
-        $anchorJdn = CalendarMath::toJulianDay($anchorY, $anchorM, 1);
-        $nextJdn = CalendarMath::toJulianDay($nextY, $nextM, 1);
-        $intervalDays = abs($nextJdn - $anchorJdn);
-
-        // Target: anchor + (total remaining months from anchor to target).
-        // The target is at floorCount*12 + remaining_months from receiver,
-        // i.e., the full abs diff (absYears*12 + absMonths) months from receiver.
-        // From anchor (= receiver + dir*floorCount*12), the target is at dir*(absYears-floorCount)*12 + dir*absMonths.
         $absMonths = abs($months);
         $remMonthsFromAnchor = (($absYears - $floorCount) * 12) + $absMonths;
-        [$subY, $subM] = self::addSignedMonthsYM($anchorY, $anchorM, $dir * $remMonthsFromAnchor);
-        $subJdn = CalendarMath::toJulianDay($subY, $subM, 1);
-        $remDays = abs($subJdn - $anchorJdn);
+        $roundedMonths = self::roundMonthOffset(
+            $receiver->isoYear,
+            $receiver->isoMonth,
+            $sign,
+            $floorCount * 12,
+            $remMonthsFromAnchor,
+            $increment * 12,
+            $mode,
+        );
 
-        $progress = $intervalDays > 0 ? $remDays / $intervalDays : 0.0;
-        $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
-
-        $roundedAbs = $roundUp ? $floorCount + $increment : $floorCount;
-
-        // $roundedAbs * 12 months is bounded by the next boundary already validated
-        // above ($floorCount + $increment years), so the rounded result is always
-        // within range; a re-check can never fail.
-
-        return $sign * $roundedAbs;
+        return $sign * intdiv($roundedMonths, num2: 12);
     }
 
     /**
@@ -1266,7 +991,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
      * is done within the bucket of size `increment` months from that anchor.
      * If rounding up would push months to >= 12, the carry propagates into years.
      *
-     * @return array{0: int, 1: int} [roundedYears, roundedMonths]
+     * @return array{int, int} [roundedYears, roundedMonths]
      * @throws RangeError if the rounded result is outside the valid range.
      */
     private static function roundCalendarMonthsWithinYear(
@@ -1275,7 +1000,6 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         self $receiver,
         int $increment,
         string $mode,
-        bool $receiverIsLater,
     ): array {
         if ($rawYears !== 0) {
             $sign = $rawYears >= 0 ? 1 : -1;
@@ -1283,43 +1007,24 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             $sign = $rawMonths >= 0 ? 1 : -1;
         }
 
-        // Direction from receiver toward the other.
-        $dir = $receiverIsLater ? -$sign : $sign;
-
         // Yearly anchor: receiver moved by |rawYears| years (the whole-year portion of the diff).
         [$yearAnchorY, $yearAnchorM] = self::addSignedMonthsYM(
             $receiver->isoYear,
             $receiver->isoMonth,
-            $dir * abs($rawYears) * 12,
+            $sign * abs($rawYears) * 12,
         );
 
         $absMonths = abs($rawMonths);
         $floorCount = intdiv(num1: $absMonths, num2: $increment) * $increment;
-        $nextCount = $floorCount + $increment;
-
-        // Month anchor: yearAnchor moved by floorCount months (= lower boundary of the rounding bucket).
-        [$monthAnchorY, $monthAnchorM] = self::addSignedMonthsYM($yearAnchorY, $yearAnchorM, $dir * $floorCount);
-        [$nextY, $nextM] = self::addSignedMonthsYM($yearAnchorY, $yearAnchorM, $dir * $nextCount);
-
-        // Validate that the next boundary is representable.
-        if (!self::isoYearMonthWithinLimits($nextY, $nextM)) {
-            throw new RangeError('PlainYearMonth rounding result is outside the representable range.');
-        }
-
-        // Calendar-aware progress: measure remaining months in days from the month anchor.
-        $monthAnchorJdn = CalendarMath::toJulianDay($monthAnchorY, $monthAnchorM, 1);
-        $nextJdn = CalendarMath::toJulianDay($nextY, $nextM, 1);
-        $intervalDays = abs($nextJdn - $monthAnchorJdn);
-
-        $remainingMonths = $absMonths - $floorCount;
-        [$remY, $remM] = self::addSignedMonthsYM($monthAnchorY, $monthAnchorM, $dir * $remainingMonths);
-        $remJdn = CalendarMath::toJulianDay($remY, $remM, 1);
-        $remDays = abs($remJdn - $monthAnchorJdn);
-
-        $progress = $intervalDays > 0 ? $remDays / $intervalDays : 0.0;
-        $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
-
-        $roundedAbsMonths = $roundUp ? $nextCount : $floorCount;
+        $roundedAbsMonths = self::roundMonthOffset(
+            $yearAnchorY,
+            $yearAnchorM,
+            $sign,
+            $floorCount,
+            $absMonths - $floorCount,
+            $increment,
+            $mode,
+        );
 
         // Convert rounded abs months to a years+months result with carry.
         $carryYears = intdiv(num1: $roundedAbsMonths, num2: 12);
@@ -1327,11 +1032,36 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         $roundedYears = $rawYears + ($sign * $carryYears);
         $roundedMonths = $sign * $remainMonths;
 
-        // The total offset (|rawYears| * 12 + $roundedAbsMonths, with
-        // $roundedAbsMonths <= $nextCount) never exceeds the next boundary already
-        // validated above, so the rounded result is always within range.
-
         return [$roundedYears, $roundedMonths];
+    }
+
+    private static function roundMonthOffset(
+        int $year,
+        int $month,
+        int $sign,
+        int $floorCount,
+        int $remainingMonths,
+        int $increment,
+        string $mode,
+    ): int {
+        [$anchorY, $anchorM] = self::addSignedMonthsYM($year, $month, $sign * $floorCount);
+        [$nextY, $nextM] = self::addSignedMonthsYM($year, $month, $sign * ($floorCount + $increment));
+
+        if (!self::isoYearMonthWithinLimits($nextY, $nextM)) {
+            throw new RangeError('PlainYearMonth rounding result is outside the representable range.');
+        }
+
+        $anchorJdn = CalendarMath::toJulianDay($anchorY, $anchorM, 1);
+        $nextJdn = CalendarMath::toJulianDay($nextY, $nextM, 1);
+        $intervalDays = abs($nextJdn - $anchorJdn);
+        [$remY, $remM] = self::addSignedMonthsYM($anchorY, $anchorM, $sign * $remainingMonths);
+        $remJdn = CalendarMath::toJulianDay($remY, $remM, 1);
+        $remDays = abs($remJdn - $anchorJdn);
+
+        $progress = $remDays / $intervalDays;
+        $roundUp = CalendarMath::applyRoundingProgress($progress, $mode, $sign, intdiv($floorCount, $increment));
+
+        return $roundUp ? $floorCount + $increment : $floorCount;
     }
 
     /**
@@ -1394,20 +1124,11 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
     /**
      * Adds $signedMonths months to [year, month] and returns [$newYear, $newMonth].
      *
-     * @return array{0: int, 1: int}
+     * @return array{int, int}
      */
     private static function addSignedMonthsYM(int $year, int $month, int $signedMonths): array
     {
-        $m = $month + $signedMonths;
-        $y = $year;
-
-        if ($m > 12) {
-            $y += intdiv(num1: $m - 1, num2: 12);
-            $m = (($m - 1) % 12) + 1;
-        } elseif ($m < 1) {
-            $y += intdiv(num1: $m - 12, num2: 12);
-            $m = (((($m - 1) % 12) + 12) % 12) + 1;
-        }
+        [$y, $m] = CalendarFactory::get('iso8601')->dateAdd($year, $month, 1, 0, $signedMonths, 0, 0, 'constrain');
 
         return [$y, $m];
     }
@@ -1438,41 +1159,5 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             return false;
         }
         return true;
-    }
-
-    #[\Override]
-    protected function localeDefaultComponents(): string
-    {
-        return 'yearmonth';
-    }
-
-    #[\Override]
-    protected function localeIsDateOnly(): bool
-    {
-        return true;
-    }
-
-    #[\Override]
-    protected function localeIsTimeOnly(): bool
-    {
-        return false;
-    }
-
-    #[\Override]
-    protected function localeCalendarId(): string
-    {
-        return $this->calendarId;
-    }
-
-    #[\Override]
-    protected function toLocaleTimestamp(): int
-    {
-        // Use referenceISODay to ensure the timestamp falls within the correct
-        // calendar month for non-ISO calendars.
-        $dt = new \DateTime(
-            sprintf('%04d-%02d-%02d 00:00:00', $this->isoYear, $this->isoMonth, $this->referenceISODay),
-            new \DateTimeZone('UTC'),
-        );
-        return $dt->getTimestamp();
     }
 }

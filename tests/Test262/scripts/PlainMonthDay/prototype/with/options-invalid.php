@@ -10,6 +10,5 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\PlainMonthDay(2, 2);
 foreach ([null, true, 'hello', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 1] as $badOptions) {
-if ($badOptions === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$instance, &$badOptions) { return $instance->with(['day' => 17], $badOptions); }, '');
 }

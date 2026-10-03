@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $badOptions = [null, true, 'some string', \Calendrics\Tests\Test262\JsSymbol::singleton(), 1, 2];
 $instance = new \Calendrics\Spec\PlainTime();
 foreach ($badOptions as $value) {
-if ($value === null) { continue; }
 Assert::throws(\TypeError::class, function () use (&$instance, &$value) { return $instance->since(new \Calendrics\Spec\PlainTime(12, 34, 56), $value); }, "TypeError on wrong options type " . (gettype($value)) . "");
 }

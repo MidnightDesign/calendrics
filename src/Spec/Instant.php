@@ -103,17 +103,9 @@ final class Instant implements Stringable
         $negative = $decimal[0] === '-';
         $digits = ltrim($decimal, characters: '+-');
         $digits = ltrim($digits, characters: '0');
-        if ($digits === '') {
-            return [0, 0];
-        }
         // Split off the last 9 digits as the sub-second nanosecond magnitude.
-        if (strlen($digits) <= 9) {
-            $secMagnitude = 0;
-            $subMagnitude = (int) $digits;
-        } else {
-            $secMagnitude = (int) substr($digits, offset: 0, length: -9);
-            $subMagnitude = (int) substr($digits, offset: -9);
-        }
+        $secMagnitude = (int) substr($digits, offset: 0, length: -9);
+        $subMagnitude = (int) substr($digits, offset: -9);
         if (!$negative) {
             return [$secMagnitude, $subMagnitude];
         }
@@ -163,15 +155,15 @@ final class Instant implements Stringable
      * paths, arithmetic, rounding, and the toInstant()/toZonedDateTimeISO()
      * converters so every over-int64 instant carries its true value.
      *
-     * $epochSec/$subNs accept int|float and are narrowed by
-     * {@see EpochValue::narrowParts()}, which documents where float parts come from.
+     * Float seconds represent overflowing transpiler literals and are rejected by
+     * {@see EpochValue::narrowParts()}. Sub-second nanoseconds are always integers.
      *
      * @internal
      * @psalm-internal Calendrics\Spec
-     * @throws RangeError if a part is a non-integer float or the result
+     * @throws RangeError if seconds overflow PHP's integer range or the result
      *         is outside the representable Temporal range.
      */
-    public static function fromEpochParts(int|float $epochSec, int|float $subNs): self
+    public static function fromEpochParts(int|float $epochSec, int $subNs): self
     {
         // Spec range: |epochNs| ≤ 8_640_000_000_000 × 10⁹. Out-of-range results
         // throw RangeError — the project's range-violation type,
@@ -393,12 +385,12 @@ final class Instant implements Stringable
             if (!is_finite($epochMilliseconds) || floor($epochMilliseconds) !== $epochMilliseconds) {
                 throw new RangeError("epochMilliseconds must be a finite integer value, got {$epochMilliseconds}.");
             }
-            $epochMilliseconds = (int) $epochMilliseconds;
         }
         $limit = EpochLimits::MAX_EPOCH_MILLISECONDS;
         if ($epochMilliseconds < -$limit || $epochMilliseconds > $limit) {
             throw new RangeError("epochMilliseconds {$epochMilliseconds} is outside the valid range of ±{$limit}.");
         }
+        $epochMilliseconds = (int) $epochMilliseconds;
         // Guard against int64 overflow when multiplying ms × 10^6 to get nanoseconds.
         // Threshold: floor(PHP_INT_MAX / NS_PER_MILLISECOND) = 9_223_372_036_854.
         // Beyond it, decompose into (epochSec, subNs) and let fromEpochParts()
@@ -438,32 +430,16 @@ final class Instant implements Stringable
     }
 
     /**
-     * Coerces a non-Instant value to an Instant by parsing it as an ISO string.
+     * Converts Stringable arguments before shared Instant conversion. A JsSymbol
+     * sentinel's __toString() raises TypeError during that conversion.
      *
-     * Per TC39, the argument undergoes ToTemporalInstant, which performs ToString
-     * on a non-Instant value and then parses the result. A foreign object
-     * stringifies and fails to parse, so it surfaces a RangeError; a Symbol's
-     * ToString throws a TypeError (modelled here by the JsSymbol sentinel's
-     * throwing {@see \Stringable::__toString()}). Non-string, non-object
-     * primitives (number/bool/null/bigint) never reach this method — the typed
-     * `string|object` signature rejects them with a native TypeError first.
-     *
-     * @throws TypeError if $arg is a Symbol (Stringable whose cast throws).
-     * @throws RangeError if $arg is a foreign object or an invalid ISO string.
+     * @throws TypeError if $arg is a Symbol or a non-Stringable object.
+     * @throws RangeError if the converted ISO string is invalid.
      */
     private static function coerceToInstant(string|object $arg): self
     {
-        if (!is_string($arg)) {
-            if ($arg instanceof Stringable) {
-                // JsSymbol's __toString() throws TypeError here; a genuine
-                // Stringable is parsed below and any parse failure is a RangeError.
-                $arg = (string) $arg;
-            } else {
-                // A non-string, non-Stringable value (number, bool, plain object,
-                // Temporal type other than Instant) is a wrong-TYPE argument —
-                // TC39 throws TypeError before any string coercion is attempted.
-                throw new TypeError('Calendrics\\Instant argument must be an Instant or an ISO string.');
-            }
+        if ($arg instanceof Stringable) {
+            $arg = (string) $arg;
         }
         return self::from($arg);
     }
@@ -503,13 +479,13 @@ final class Instant implements Stringable
      * Uses RoundNumberToIncrementAsIfPositive (spec §8.3.13): rounding is always applied
      * using the unsigned mode for a positive sign, regardless of the actual sign of the epoch.
      *
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @throws RangeError if options are invalid.
      * @throws TypeError if the timeZone option is a non-string.
      */
-    public function toString(mixed $options = null): string
+    public function toString(mixed $options = []): string
     {
-        $options = Options::normalizeOptions($options, [
+        $options = Options::requireObject($options, [
             'fractionalSecondDigits',
             'roundingMode',
             'smallestUnit',
@@ -734,11 +710,7 @@ final class Instant implements Stringable
         }
         // Pure UTC-offset strings: ±HH:MM or ±HHMM
         $m = null;
-        if (preg_match('/^([+\-])(\d{2}):(\d{2})$/', $tz, $m) === 1) {
-            $sign = $m[1] === '+' ? 1 : -1;
-            return $sign * (((int) $m[2] * 3600) + ((int) $m[3] * 60));
-        }
-        if (preg_match('/^([+\-])(\d{2})(\d{2})$/', $tz, $m) === 1) {
+        if (preg_match('/^([+\-])(\d{2}):?(\d{2})$/', $tz, $m) === 1) {
             $sign = $m[1] === '+' ? 1 : -1;
             return $sign * (((int) $m[2] * 3600) + ((int) $m[3] * 60));
         }
@@ -787,12 +759,8 @@ final class Instant implements Stringable
      */
     private static function ianaOffsetSeconds(string $tz, int $epochSec): int
     {
-        try {
-            $phpTz = new \DateTimeZone($tz);
-            return $phpTz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
-        } catch (\Exception) {
-            return 0;
-        }
+        $phpTz = new \DateTimeZone($tz);
+        return $phpTz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
     }
 
     #[\Override]
@@ -820,7 +788,7 @@ final class Instant implements Stringable
      *   - calendar: calendar identifier appended as u-ca locale extension
      *
      * @param string|array<array-key, mixed>|null $locales  BCP 47 locale string or array of strings.
-     * @param array<array-key, mixed>|object|null $options  Intl.DateTimeFormat options array.
+     * @param array<array-key, mixed>|object $options  Intl.DateTimeFormat options array.
      * @psalm-api
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
@@ -829,13 +797,15 @@ final class Instant implements Stringable
         /** @var array<string, mixed> $opts */
         $opts = $options === null ? [] : Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES);
 
+        IntlFormatter::validateOptionValues($opts);
+
         /** @var mixed $tzOpt */
         $tzOpt = $opts['timeZone'] ?? null;
         $timeZone = is_string($tzOpt) ? $tzOpt : 'UTC';
 
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $opts);
         [$seconds, $subNs] = $this->epochParts();
-        $result = IntlFormatter::formatEpoch($formatter, $seconds, $subNs, $timeZone, $locale);
+        $result = IntlFormatter::formatEpoch($formatter, $seconds, $subNs);
 
         return $result !== false ? $result : $this->toString();
     }
@@ -1100,10 +1070,10 @@ final class Instant implements Stringable
      * The result is positive when $this is after $other.
      *
      * @param string|object $other The starting instant (Instant or ISO string).
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @psalm-api used by test262 scripts
      */
-    public function since(string|object $other, mixed $options = null): Duration
+    public function since(string|object $other, mixed $options = []): Duration
     {
         $otherInst = $other instanceof self ? $other : self::coerceToInstant($other);
         [$aSec, $aSubNs] = $this->epochParts();
@@ -1117,10 +1087,10 @@ final class Instant implements Stringable
      * The result is positive when $other is after $this.
      *
      * @param string|object $other The ending instant (Instant or ISO string).
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @psalm-api used by test262 scripts
      */
-    public function until(string|object $other, mixed $options = null): Duration
+    public function until(string|object $other, mixed $options = []): Duration
     {
         $otherInst = $other instanceof self ? $other : self::coerceToInstant($other);
         [$aSec, $aSubNs] = $otherInst->epochParts();
@@ -1253,7 +1223,7 @@ final class Instant implements Stringable
      *
      * @param int $diffSec   Signed whole-second difference (this − other for since, other − this for until).
      * @param int $diffSubNs Signed sub-second nanosecond difference paired with $diffSec.
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @throws RangeError for invalid unit/mode strings or invalid roundingIncrement.
      * @throws TypeError for wrong-typed option values.
      */
@@ -1322,7 +1292,7 @@ final class Instant implements Stringable
         ];
 
         // ---- Parse options ----
-        $options = Options::normalizeOptions($options, [
+        $options = Options::requireObject($options, [
             'largestUnit',
             'roundingIncrement',
             'roundingMode',
@@ -1399,13 +1369,7 @@ final class Instant implements Stringable
         $nsInc = $nsPerUnitByIndex[$suIdx] * $increment;
         $effectiveMode = $roundingMode;
         if ($diffSign < 0) {
-            $effectiveMode = match ($roundingMode) {
-                'floor' => 'ceil',
-                'ceil' => 'floor',
-                'halfFloor' => 'halfCeil',
-                'halfCeil' => 'halfFloor',
-                default => $roundingMode,
-            };
+            $effectiveMode = EpochRounding::negateMode($roundingMode);
         }
         [$roundedSec, $roundedSubNs] = $nsInc === 1
             ? [$absSec, $absSubNs]

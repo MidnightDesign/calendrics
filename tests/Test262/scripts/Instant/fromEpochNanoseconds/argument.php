@@ -11,6 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 Assert::throws(\TypeError::class, fn() => \Calendrics\Spec\Instant::fromEpochNanoseconds(), 'undefined');
 Assert::throws(\TypeError::class, fn() => \Calendrics\Spec\Instant::fromEpochNanoseconds(), 'undefined');
 Assert::throws(\TypeError::class, fn() => \Calendrics\Spec\Instant::fromEpochNanoseconds(null), 'null');
-// JS-only (Number passed to fromEpochNanoseconds; BigInt vs Number distinction not replicable in PHP): assert.throws(TypeError, () => Temporal.Instant.fromEpochNanoseconds(42), "number")
+Assert::throws(\TypeError::class, fn() => \Calendrics\Spec\Instant::fromEpochNanoseconds(42.0), 'number');
 Assert::throws(\TypeError::class, fn() => \Calendrics\Spec\Instant::fromEpochNanoseconds(\Calendrics\Tests\Test262\JsSymbol::singleton()), 'symbol');
-Assert::incomplete('Number passed to fromEpochNanoseconds; BigInt vs Number distinction not replicable in PHP');

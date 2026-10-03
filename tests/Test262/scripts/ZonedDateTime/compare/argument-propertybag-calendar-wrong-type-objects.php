@@ -12,7 +12,6 @@ $datetime = new \Calendrics\Spec\ZonedDateTime(0, 'UTC');
 $wrongTypeTests = [[null, 'null'], [true, 'boolean'], [1, 'number'], [1, 'bigint'], [19_970_327, 'large number'], [-19_970_327, 'negative number'], [1_234_567_890, 'very large integer'], [\Calendrics\Tests\Test262\JsSymbol::singleton(), 'symbol'], [(object) [], 'object'], [new \Calendrics\Spec\Duration(), 'duration instance']];
 foreach ($wrongTypeTests as $__entry__) {
 [$calendar, $description] = array_pad($__entry__, 2, null);
-if ($calendar === null) { continue; }
 $arg = (object) JsUndefined::strip(['year' => 1970, 'monthCode' => 'M01', 'day' => 1, 'calendar' => $calendar, 'timeZone' => 'UTC']);
 Assert::throws(\TypeError::class, function () use (&$arg, &$datetime) { return \Calendrics\Spec\ZonedDateTime::compare($arg, $datetime); }, "{$description} is not a valid calendar (first argument)");
 Assert::throws(\TypeError::class, function () use (&$datetime, &$arg) { return \Calendrics\Spec\ZonedDateTime::compare($datetime, $arg); }, "{$description} is not a valid calendar (second argument)");

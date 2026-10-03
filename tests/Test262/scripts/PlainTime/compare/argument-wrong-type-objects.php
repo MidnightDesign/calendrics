@@ -11,7 +11,6 @@ use Calendrics\Tests\Test262\JsUndefined;
 $primitiveTests = [[JsUndefined::singleton(), 'undefined'], [null, 'null'], [true, 'boolean'], ['', 'empty string'], [1, 'number that doesn\'t convert to a valid ISO string'], [1, 'bigint']];
 foreach ($primitiveTests as $__entry__) {
 [$arg, $description] = array_pad($__entry__, 2, null);
-if ($arg === null) { continue; }
 Assert::throws((is_string($arg) ? \RangeException::class : \TypeError::class), function () use (&$arg) { return \Calendrics\Spec\PlainTime::compare($arg, new \Calendrics\Spec\PlainTime(12, 34, 56, 987, 654, 321)); }, "{$description} does not convert to a valid ISO string (first argument)");
 Assert::throws((is_string($arg) ? \RangeException::class : \TypeError::class), function () use (&$arg) { return \Calendrics\Spec\PlainTime::compare(new \Calendrics\Spec\PlainTime(12, 34, 56, 987, 654, 321), $arg); }, "{$description} does not convert to a valid ISO string (second argument)");
 }

@@ -102,7 +102,7 @@ final class ZonedDifference
      * through instead of the caller pre-ordering the pair.
      *
      * @param string $operation 'since' or 'until'.
-     * @param array<array-key, mixed>|object|null $options
+     * @param array<array-key, mixed>|object $options
      * @throws RangeError for invalid units, invalid rounding increments, or a calendar
      *                    `largestUnit` across two different zones.
      */
@@ -110,7 +110,7 @@ final class ZonedDifference
         ZonedDateTime $temporalDate,
         ZonedDateTime $other,
         string $operation,
-        array|object|null $options,
+        mixed $options,
     ): Duration {
         [$normLargest, $normSmallest, $roundingMode, $roundingIncrement] = self::resolveOptions(
             $temporalDate,
@@ -132,7 +132,7 @@ final class ZonedDifference
         $diffNs = self::diffEpochNs($temporalDate, $other);
         $sign = $diffNs <=> 0;
         $outputSign = $operation === 'since' ? -$sign : $sign;
-        $effectiveMode = $outputSign < 0 ? self::negateRoundingMode($roundingMode) : $roundingMode;
+        $effectiveMode = $outputSign < 0 ? EpochRounding::negateMode($roundingMode) : $roundingMode;
 
         if (!$isCalendarLargest) {
             return self::timeOnlyDifference(
@@ -167,71 +167,69 @@ final class ZonedDifference
      * (the `hour` default) silently widens instead, which is what lets
      * `until($x, ['smallestUnit' => 'day'])` work without also naming a largest unit.
      *
-     * @param array<array-key, mixed>|object|null $options
-     * @return array{0: string, 1: string, 2: string, 3: int<1, max>} [largestUnit, smallestUnit, roundingMode, roundingIncrement]
+     * @param array<array-key, mixed>|object $options
+     * @return array{string, string, string, int<1, max>} [largestUnit, smallestUnit, roundingMode, roundingIncrement]
      */
     private static function resolveOptions(ZonedDateTime $temporalDate, array|object|null $options): array
     {
         $largestUnit = 'hour';
-        $largestUnitExplicit = false;
+        $largestUnitFixed = false;
         $smallestUnit = 'nanosecond';
         $roundingMode = 'trunc';
         $roundingIncrement = 1;
 
-        if ($options !== null) {
-            $opts = Options::normalizeOptions($options, [
-                'largestUnit',
-                'roundingIncrement',
-                'roundingMode',
-                'smallestUnit',
-            ]);
+        $opts = Options::requireObject($options, [
+            'largestUnit',
+            'roundingIncrement',
+            'roundingMode',
+            'smallestUnit',
+        ]);
 
-            if (array_key_exists('largestUnit', $opts)) {
-                /** @var mixed $lu */
-                $lu = $opts['largestUnit'];
-                if ($lu !== null) {
-                    $lu = Options::coerceEnumOption($lu, 'largestUnit');
-                }
-                if (is_string($lu)) {
-                    if (!in_array($lu, self::VALID_UNITS, strict: true)) {
-                        throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
-                    }
-                    $largestUnit = $lu;
-                    $largestUnitExplicit = true;
-                }
+        if (array_key_exists('largestUnit', $opts)) {
+            /** @var mixed $lu */
+            $lu = $opts['largestUnit'];
+            if ($lu !== null) {
+                $lu = Options::coerceEnumOption($lu, 'largestUnit');
             }
-
-            if (array_key_exists('roundingIncrement', $opts)) {
-                /** @var mixed $ri */
-                $ri = $opts['roundingIncrement'];
-                if ($ri !== null) {
-                    $roundingIncrement = CalendarMath::validateRoundingIncrement($ri);
+            if (is_string($lu)) {
+                if (!in_array($lu, self::VALID_UNITS, strict: true)) {
+                    throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
                 }
+                $largestUnit = $lu;
+                $largestUnitFixed = $lu !== 'auto';
             }
+        }
 
-            if (array_key_exists('roundingMode', $opts)) {
-                /** @var mixed $rm */
-                $rm = $opts['roundingMode'];
-                if ($rm !== null) {
-                    $rm = Options::coerceEnumOption($rm, 'roundingMode');
-                }
-                if (is_string($rm)) {
-                    $roundingMode = Options::roundingMode($rm);
-                }
+        if (array_key_exists('roundingIncrement', $opts)) {
+            /** @var mixed $ri */
+            $ri = $opts['roundingIncrement'];
+            if ($ri !== null) {
+                $roundingIncrement = CalendarMath::validateRoundingIncrement($ri);
             }
+        }
 
-            if (array_key_exists('smallestUnit', $opts)) {
-                /** @var mixed $su */
-                $su = $opts['smallestUnit'];
-                if ($su !== null) {
-                    $su = Options::coerceEnumOption($su, 'smallestUnit');
+        if (array_key_exists('roundingMode', $opts)) {
+            /** @var mixed $rm */
+            $rm = $opts['roundingMode'];
+            if ($rm !== null) {
+                $rm = Options::coerceEnumOption($rm, 'roundingMode');
+            }
+            if (is_string($rm)) {
+                $roundingMode = Options::roundingMode($rm);
+            }
+        }
+
+        if (array_key_exists('smallestUnit', $opts)) {
+            /** @var mixed $su */
+            $su = $opts['smallestUnit'];
+            if ($su !== null) {
+                $su = Options::coerceEnumOption($su, 'smallestUnit');
+            }
+            if (is_string($su)) {
+                if ($su === 'auto' || !in_array($su, self::VALID_UNITS, strict: true)) {
+                    throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
                 }
-                if (is_string($su)) {
-                    if (!in_array($su, self::VALID_UNITS, strict: true)) {
-                        throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
-                    }
-                    $smallestUnit = $su;
-                }
+                $smallestUnit = $su;
             }
         }
 
@@ -242,7 +240,7 @@ final class ZonedDifference
         $suRank = self::UNIT_RANK[$normSmallest] ?? 1;
         $luRank = self::UNIT_RANK[$normLargest] ?? 4;
         if ($suRank > $luRank) {
-            if ($largestUnitExplicit) {
+            if ($largestUnitFixed) {
                 throw new RangeError(
                     "smallestUnit \"{$normSmallest}\" cannot be larger than largestUnit \"{$normLargest}\".",
                 );
@@ -478,7 +476,7 @@ final class ZonedDifference
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $tdLocal
      * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $otherLocal
      * @param 'month'|'year' $normLargest
-     * @return array{0: int, 1: DateSpan} [adjustedJdn, span]
+     * @return array{int, DateSpan} [adjustedJdn, span]
      */
     private static function nonIsoDateDiff(array $tdLocal, array $otherLocal, string $calId, string $normLargest): array
     {
@@ -489,18 +487,27 @@ final class ZonedDifference
         $dateSign = $tdJdn <=> $otherJdn;
         $adjJdn = $timeSign !== 0 && $timeSign === -$dateSign ? $otherJdn - $timeSign : $otherJdn;
 
-        [$adjY, $adjM, $adjD] = CalendarMath::fromJulianDay($adjJdn);
+        return [$adjJdn, self::absoluteCalendarSpan($tdLocal, $adjJdn, $calId, $normLargest)];
+    }
+
+    /**
+     * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $receiver
+     * @param 'month'|'year' $unit
+     */
+    private static function absoluteCalendarSpan(array $receiver, int $targetJdn, string $calId, string $unit): DateSpan
+    {
+        [$adjY, $adjM, $adjD] = CalendarMath::fromJulianDay($targetJdn);
         [$years, $months, , $days] = CalendarFactory::get($calId)->dateUntil(
-            $tdLocal['year'],
-            $tdLocal['month'],
-            $tdLocal['day'],
+            $receiver['year'],
+            $receiver['month'],
+            $receiver['day'],
             $adjY,
             $adjM,
             $adjD,
-            $normLargest,
+            $unit,
         );
 
-        return [$adjJdn, new DateSpan(years: abs($years), months: abs($months), days: abs($days))];
+        return new DateSpan(years: abs($years), months: abs($months), days: abs($days));
     }
 
     /**
@@ -511,7 +518,7 @@ final class ZonedDifference
      * date portion overshot — the intermediate date fell in a DST gap — so one day comes
      * back off and the measurement repeats.
      *
-     * @return array{0: int, 1: DateSpan} [timeDiffNs, span]
+     * @return array{int, DateSpan} [timeDiffNs, span]
      */
     private static function remeasureTimeRemainder(
         ZonedDateTime $earlierZ,
@@ -713,19 +720,12 @@ final class ZonedDifference
         if ($overflowDays > 0 && in_array($normLargest, ['year', 'month'], strict: true)) {
             if ($calId !== 'iso8601') {
                 assert($tc39AdjJdn !== null, description: 'the non-ISO date-diff branch must have set $tc39AdjJdn');
-                [$anchorY, $anchorM, $anchorD] = CalendarMath::fromJulianDay(
+                $span = self::absoluteCalendarSpan(
+                    $tdLocal,
                     $tc39AdjJdn + ($sign >= 0 ? $overflowDays : -$overflowDays),
-                );
-                [$years, $months, , $days] = CalendarFactory::get($calId)->dateUntil(
-                    $tdLocal['year'],
-                    $tdLocal['month'],
-                    $tdLocal['day'],
-                    $anchorY,
-                    $anchorM,
-                    $anchorD,
+                    $calId,
                     $normLargest,
                 );
-                $span = new DateSpan(years: abs($years), months: abs($months), days: abs($days));
             } else {
                 [$anchorY, $anchorM, $anchorD] = CalendarMath::fromJulianDay($adjOtherJdn + $overflowDays);
                 $span = self::isoDateSpan(
@@ -916,20 +916,11 @@ final class ZonedDifference
     /**
      * Adds years and months to a date, clamping the day to the resulting month's length.
      *
-     * @return array{0: int, 1: int, 2: int} [year, month, day]
+     * @return array{int, int, int} [year, month, day]
      */
     private static function addYearsMonthsToDate(int $year, int $month, int $day, int $addYears, int $addMonths): array
     {
-        $newYear = $year + $addYears;
-        $newMonth = $month + $addMonths;
-        if ($newMonth > 12) {
-            $newYear += intdiv(num1: $newMonth - 1, num2: 12);
-            $newMonth = (($newMonth - 1) % 12) + 1;
-        } elseif ($newMonth < 1) {
-            $newYear += intdiv(num1: $newMonth - 12, num2: 12);
-            $newMonth = (((($newMonth - 1) % 12) + 12) % 12) + 1;
-        }
-        return [$newYear, $newMonth, min($day, CalendarMath::calcDaysInMonth($newYear, $newMonth))];
+        return CalendarFactory::get('iso8601')->dateAdd($year, $month, $day, $addYears, $addMonths, 0, 0, 'constrain');
     }
 
     /**
@@ -949,21 +940,6 @@ final class ZonedDifference
             return $diffSec > 0 ? PHP_INT_MAX : PHP_INT_MIN;
         }
         return ($diffSec * EpochLimits::NS_PER_SECOND) + ($bSubNs - $aSubNs);
-    }
-
-    /**
-     * Mirrors directional rounding modes so they keep their meaning once the sign is
-     * reapplied to an absolute value. Symmetric modes are returned unchanged.
-     */
-    private static function negateRoundingMode(string $mode): string
-    {
-        return match ($mode) {
-            'floor' => 'ceil',
-            'ceil' => 'floor',
-            'halfFloor' => 'halfCeil',
-            'halfCeil' => 'halfFloor',
-            default => $mode,
-        };
     }
 
     /**

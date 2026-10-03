@@ -6,6 +6,7 @@ namespace Calendrics\Spec\Internal;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Spec\Duration;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 
 /**
  * Date arithmetic performed once a `relativeTo` anchor has been resolved.
@@ -54,21 +55,7 @@ final class AnchorMath
         $m = (int) $date->format('n');
         $d = (int) $date->format('j');
 
-        $m += $months;
-        // Normalize month into 1-12 range, carrying into years.
-        if ($m > 12) {
-            $y += intdiv(num1: $m - 1, num2: 12);
-            $m = (($m - 1) % 12) + 1;
-        } elseif ($m < 1) {
-            // For negative: m-1 makes the -1 offset work for intdiv.
-            $y += CalendarMath::floorDiv($m - 1, 12);
-            $m = (((($m - 1) % 12) + 12) % 12) + 1;
-        }
-        // Days in the target month (handles leap years). Computed via CalendarMath
-        // rather than a string-built DateTimeImmutable so extended (5-/6-digit) years
-        // do not trip "Double timezone specification" parse errors.
-        $daysInMonth = CalendarMath::calcDaysInMonth($y, $m);
-        $clampedDay = min($d, $daysInMonth);
+        [$y, $m, $clampedDay] = CalendarFactory::get('iso8601')->dateAdd($y, $m, $d, 0, $months, 0, 0, 'constrain');
         return new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
             ->setDate($y, $m, $clampedDay)
             ->setTime(0, 0, 0);
@@ -85,13 +72,16 @@ final class AnchorMath
         if ($years === 0) {
             return $date;
         }
-        $y = (int) $date->format('Y') + $years;
-        $m = (int) $date->format('n');
-        $d = (int) $date->format('j');
-        // Computed via CalendarMath (not a string-built DateTimeImmutable) so extended
-        // (5-/6-digit) years do not trip "Double timezone specification" parse errors.
-        $daysInMonth = CalendarMath::calcDaysInMonth($y, $m);
-        $clampedDay = min($d, $daysInMonth);
+        [$y, $m, $clampedDay] = CalendarFactory::get('iso8601')->dateAdd(
+            (int) $date->format('Y'),
+            (int) $date->format('n'),
+            (int) $date->format('j'),
+            $years,
+            0,
+            0,
+            0,
+            'constrain',
+        );
         return new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
             ->setDate($y, $m, $clampedDay)
             ->setTime(0, 0, 0);
@@ -341,24 +331,12 @@ final class AnchorMath
      * day-count between start and end.
      *
      * @param \DateTimeImmutable $startDate UTC midnight on the start date.
-     * @return array{0: \DateTimeImmutable, 1: int}
+     * @return array{\DateTimeImmutable, int}
      * @throws RangeError if the resulting date falls outside the representable range.
      */
     public static function applyCalendarToDate(Duration $d, \DateTimeImmutable $startDate): array
     {
-        $endDate = $startDate;
-        // Apply years, months, weeks with TC39-compliant clamped arithmetic.
-        $applySign = $d->sign;
-        if ((int) $d->years !== 0) {
-            $endDate = self::addYearsClamped($endDate, $applySign * abs((int) $d->years));
-        }
-        if ((int) $d->months !== 0) {
-            $endDate = self::addMonthsClamped($endDate, $applySign * abs((int) $d->months));
-        }
-        if ((int) $d->weeks !== 0) {
-            $awDays = $applySign * abs((int) $d->weeks) * 7;
-            $endDate = $endDate->modify(sprintf('%+d days', $awDays));
-        }
+        $endDate = self::applyYearsMonthsWeeks($d, $startDate);
         // Apply days.
         $calDays = (int) $d->days;
         if ($calDays !== 0) {
@@ -373,97 +351,20 @@ final class AnchorMath
         return [$endDate, $calendarDays];
     }
 
-    /**
-     * Computes the signed total nanoseconds $d represents when anchored to a
-     * relativeTo value. Used for Duration::compare() with calendar units.
-     *
-     * @param mixed $rt Validated relativeTo value.
-     * @throws RangeError if the total overflows the 64-bit nanosecond range.
-     */
-    public static function totalNsFromRelativeTo(Duration $d, mixed $rt): int
+    public static function applyYearsMonthsWeeks(Duration $d, \DateTimeImmutable $startDate): \DateTimeImmutable
     {
-        $bag = RelativeTo::toPlainDateBag($rt);
-        $tz = new \DateTimeZone('UTC');
-        $startDate = new \DateTimeImmutable('now', $tz)
-            ->setDate($bag['year'], $bag['month'], $bag['day'])
-            ->setTime(0, 0, 0);
-
-        // applyCalendarToDate throws RangeError if totalDays > ±100M.
-        [, $calendarDays] = self::applyCalendarToDate($d, $startDate);
-
-        $timeNs =
-            ((int) $d->hours * 3_600_000_000_000)
-            + ((int) $d->minutes * 60_000_000_000)
-            + ((int) $d->seconds * 1_000_000_000)
-            + ((int) $d->milliseconds * 1_000_000)
-            + ((int) $d->microseconds * 1_000)
-            + (int) $d->nanoseconds;
-
-        // For ZDT with IANA timezone: use actual epoch seconds for calendar days.
-        $zdtInfo = RelativeTo::resolveZdt($rt);
-        if ($zdtInfo !== null) {
-            $actualDaysSec = (int) self::zdtDaysToSec(
-                $zdtInfo['year'],
-                $zdtInfo['month'],
-                $zdtInfo['day'],
-                $zdtInfo['hour'],
-                $zdtInfo['minute'],
-                $zdtInfo['second'],
-                $zdtInfo['tzId'],
-                $calendarDays,
-            );
-            $dayNs = $actualDaysSec * 1_000_000_000;
-            $totalNsF = (float) $dayNs + (float) $timeNs;
-            if ($totalNsF > (float) PHP_INT_MAX || $totalNsF < (float) PHP_INT_MIN) {
-                throw new RangeError('Duration nanosecond total overflows the 64-bit range.');
-            }
-            return $dayNs + $timeNs;
+        $endDate = $startDate;
+        $applySign = $d->sign;
+        if ((int) $d->years !== 0) {
+            $endDate = self::addYearsClamped($endDate, $applySign * abs((int) $d->years));
         }
-
-        $nsPerDay = 86_400_000_000_000;
-        // Guard against int64 overflow when combining calendar days and time nanoseconds.
-        $totalNsF = ((float) $calendarDays * (float) $nsPerDay) + (float) $timeNs;
-        if ($totalNsF > (float) PHP_INT_MAX || $totalNsF < (float) PHP_INT_MIN) {
-            throw new RangeError('Duration nanosecond total overflows the 64-bit range.');
+        if ((int) $d->months !== 0) {
+            $endDate = self::addMonthsClamped($endDate, $applySign * abs((int) $d->months));
         }
-
-        return ($calendarDays * $nsPerDay) + $timeNs;
-    }
-
-    /**
-     * Computes the total epoch-second offset for a duration added to a ZDT.
-     * Days are added as calendar days (DST-aware), time fields as seconds.
-     *
-     * @param array{epochSec: int, subNs: int, tzId: string, year: int, month: int, day: int, hour: int, minute: int, second: int} $zdtInfo
-     */
-    public static function durationToEpochOffsetSec(Duration $d, array $zdtInfo): float
-    {
-        // Pass the ZDT's actual epoch so that sub-minute offsets (e.g. Pacific/Niue
-        // -11:19:40 vs -11:20:00) are preserved instead of being re-resolved via
-        // compatible disambiguation.
-        $daysSec = self::zdtDaysToSec(
-            $zdtInfo['year'],
-            $zdtInfo['month'],
-            $zdtInfo['day'],
-            $zdtInfo['hour'],
-            $zdtInfo['minute'],
-            $zdtInfo['second'],
-            $zdtInfo['tzId'],
-            (int) $d->days,
-            $zdtInfo['epochSec'],
-        );
-        $timeSec =
-            ((float) $d->hours * 3_600.0)
-            + ((float) $d->minutes * 60.0)
-            + (float) $d->seconds
-            + (
-                (
-                    ((float) $d->milliseconds * 1_000_000.0)
-                    + ((float) $d->microseconds * 1_000.0)
-                    + (float) $d->nanoseconds
-                )
-                / 1_000_000_000.0
-            );
-        return $daysSec + $timeSec;
+        if ((int) $d->weeks !== 0) {
+            $awDays = $applySign * abs((int) $d->weeks) * 7;
+            $endDate = $endDate->modify(sprintf('%+d days', $awDays));
+        }
+        return $endDate;
     }
 }

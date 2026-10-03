@@ -8,4 +8,8 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-Assert::incomplete('untranslatable: Date.now');
+$nowBefore = \Calendrics\Tests\Test262\Js::dateNow();
+$seconds = (float) (intdiv(\Calendrics\Spec\Now::instant()->epochNanoseconds, 1_000_000));
+$nowAfter = \Calendrics\Tests\Test262\Js::dateNow();
+Assert::assertTrue($seconds >= $nowBefore, 'The result of evaluating (seconds >= nowBefore) is expected to be true');
+Assert::assertTrue($seconds <= $nowAfter, 'The result of evaluating (seconds <= nowAfter) is expected to be true');
