@@ -19,9 +19,9 @@ use Calendrics\Spec\ZonedDateTime;
  *     answer is one division. No `relativeTo` needed.
  *   - **Zoned time units.** With an IANA anchor a "day" is whatever the zone says
  *     it is, so days are walked one real transition at a time via {@see AnchorMath}.
- *   - **Calendar units.** Years, months and weeks are counted by stepping the anchor
- *     forward a unit at a time and measuring the leftover against the length of the
- *     unit that would come next — TC39 RoundDuration's fractional-unit rule.
+ *   - **Calendar units.** Years, months and weeks use calendar boundaries and measure
+ *     the leftover against the length of the unit that would come next — TC39
+ *     RoundDuration's fractional-unit rule.
  *
  * The float expressions deliberately preserve TC39's evaluation order: float
  * addition is not associative, and reordering these terms changes the last ULP
@@ -341,7 +341,18 @@ final class DurationTotal
         $end = $start->modify("{$dir}{$absWholeDays} days");
 
         $months = 0;
+        if ($calendarId === 'iso8601') {
+            // Start one month below the ISO coordinate difference. The existing
+            // anchor checks finish the count without skipping a constrained boundary.
+            $monthDifference =
+                (((int) $end->format('Y') - (int) $start->format('Y')) * 12) + (int) $end->format('n')
+                - (int) $start->format('n');
+            $months = max(0, abs($monthDifference) - 1);
+        }
         $current = $start;
+        if ($months > 0) {
+            $current = AnchorMath::addMonthsClamped($start, $sign * $months, $calendarId);
+        }
         while (true) {
             $next = AnchorMath::addMonthsClamped($start, $sign * ($months + 1), $calendarId);
             if ($sign > 0 ? $next > $end : $next < $end) {
@@ -409,7 +420,14 @@ final class DurationTotal
         $end = $start->modify("{$dir}{$absWholeDays} days");
 
         $years = 0;
+        if ($calendarId === 'iso8601') {
+            // As for months, keep one whole unit for the original-anchor checks.
+            $years = max(0, abs((int) $end->format('Y') - (int) $start->format('Y')) - 1);
+        }
         $current = $start;
+        if ($years > 0) {
+            $current = AnchorMath::addYearsClamped($start, $sign * $years, $calendarId);
+        }
         while (true) {
             $next = AnchorMath::addYearsClamped($start, $sign * ($years + 1), $calendarId);
             if ($sign > 0 ? $next > $end : $next < $end) {
