@@ -107,6 +107,7 @@ final class ZonedParse
 
         $hasInlineOffset = $offsetRaw !== '';
         $inlineOffsetSec = 0;
+        $inlineOffsetSubNs = 0;
         // ±HH:MM:SS and ±HHMMSS state seconds; ±HH:MM cannot, which changes how strictly
         // the offset is matched against the zone below.
         $inlineOffsetHasSeconds = false;
@@ -118,8 +119,9 @@ final class ZonedParse
             ) {
                 throw new RangeError("Invalid ZonedDateTime string \"{$text}\": UTC offset out of range.");
             }
-            [$inlineSign, $inlineAbsSec] = IsoOffset::parts($offsetRaw);
+            [$inlineSign, $inlineAbsSec, $inlineFracNs] = IsoOffset::parts($offsetRaw);
             $inlineOffsetSec = $inlineSign * $inlineAbsSec;
+            $inlineOffsetSubNs = $inlineSign * $inlineFracNs;
             $inlineOffsetHasSeconds =
                 preg_match('/^[+\-]\d{2}:\d{2}:\d{2}/', $offsetRaw) === 1
                 || preg_match('/^[+\-]\d{6}/', $offsetRaw) === 1;
@@ -169,11 +171,22 @@ final class ZonedParse
                 $text,
                 $wallSec,
                 $inlineOffsetSec,
+                $inlineOffsetSubNs,
                 $inlineOffsetHasSeconds,
                 ZoneOffsets::canonicalize($tzId),
                 $offsetOption,
                 $disambiguation,
             );
+            if ($offsetOption === 'use') {
+                $subNs -= $inlineOffsetSubNs;
+                if ($subNs < 0) {
+                    --$epochSec;
+                    $subNs += 1_000_000_000;
+                } elseif ($subNs >= 1_000_000_000) {
+                    ++$epochSec;
+                    $subNs -= 1_000_000_000;
+                }
+            }
         } else {
             $tzId = TimeZoneHelper::normalizeTimezoneId($tzId);
             $resolvedTzId = ZoneOffsets::canonicalize($tzId);
@@ -233,6 +246,7 @@ final class ZonedParse
         string $text,
         int $wallSec,
         int $inlineOffsetSec,
+        int $inlineOffsetSubNs,
         bool $inlineOffsetHasSeconds,
         string $resolvedTzId,
         string $offsetOption,
@@ -248,11 +262,14 @@ final class ZonedParse
         if ($inlineOffsetHasSeconds) {
             // Second precision: the stated offset must be exactly what the zone observed.
             $epochSec = $wallSec - $inlineOffsetSec;
-            if (ZoneOffsets::offsetAt($epochSec, $resolvedTzId) === $inlineOffsetSec) {
+            if ($inlineOffsetSubNs === 0 && ZoneOffsets::offsetAt($epochSec, $resolvedTzId) === $inlineOffsetSec) {
                 return $epochSec;
             }
             $tzEpoch = TimeZoneHelper::wallSecToEpochSec($wallSec, $resolvedTzId, $disambiguation);
-            if ($offsetOption === 'prefer' || ZoneOffsets::offsetAt($tzEpoch, $resolvedTzId) === $inlineOffsetSec) {
+            if (
+                $offsetOption === 'prefer'
+                || $inlineOffsetSubNs === 0 && ZoneOffsets::offsetAt($tzEpoch, $resolvedTzId) === $inlineOffsetSec
+            ) {
                 return $tzEpoch;
             }
             throw new RangeError(
