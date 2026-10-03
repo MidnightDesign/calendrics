@@ -673,6 +673,8 @@ class Emitter {
     // Variables known to hold arrays-of-object-literals.
     // When a for-of loop iterates such a variable, the loop var is added to objectVars.
     this.objectArrayVars = new Set();
+    this.objectResultFunctions = new Set();
+    this.calendarConsistencyFixture = false;
     // Variables that may hold PHP arrays (loop over mixed arrays with some objects).
     // These are safe-stringified in template literals using json_encode().
     this.maybeArrayVars = new Set();
@@ -1075,6 +1077,11 @@ class Emitter {
       if (decl.id.type === 'Identifier' && decl.init?.type === 'ObjectExpression') {
         this.objectVars.add(decl.id.name);
       }
+      if (decl.id.type === 'Identifier' && decl.init?.type === 'CallExpression'
+          && decl.init.callee.type === 'Identifier'
+          && this.objectResultFunctions.has(decl.init.callee.name)) {
+        this.objectVars.add(decl.id.name);
+      }
       // Track arrays whose every element is a non-empty object literal.
       // Used in transpileForOf to propagate objectVars to the loop variable.
       if (decl.id.type === 'Identifier' && decl.init?.type === 'ArrayExpression'
@@ -1279,6 +1286,19 @@ class Emitter {
     if (!name) {
       this.emitIncomplete('untranslatable: anonymous FunctionDeclaration');
       return;
+    }
+    // Preserve property-bag access for the calendar fixtures' field helpers.
+    // Only a sole, unconditional final object-literal return is recognized.
+    if (this.calendarConsistencyFixture) {
+      const returns = [];
+      forEachNode(node.body, n => {
+        if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(n.type)) return false;
+        if (n.type === 'ReturnStatement') returns.push(n);
+      });
+      if (returns.length === 1 && node.body.body.at(-1) === returns[0]
+          && returns[0].argument?.type === 'ObjectExpression') {
+        this.objectResultFunctions.add(name);
+      }
     }
     const destructured = this.destructureParams(node.params);
     if (destructured === null) return;
@@ -2531,6 +2551,15 @@ class Emitter {
       this.emitIncomplete('untranslatable: BigInt()');
       return null;
     }
+    // These calendar fixtures consume ICU part strings, not JS object coercion
+    // or BigInts. Keep this numeric lowering within that supported scope.
+    if (this.calendarConsistencyFixture
+        && isMember(callee, 'Number', 'isInteger')
+        && node.arguments.length === 1) {
+      const arg = this.transpileExpr(node.arguments[0]);
+      if (arg === null) return null;
+      return `${HARNESS_NS}JsNumber::${callee.property.name}(${arg})`;
+    }
     if (callee.type === 'Identifier' && callee.name === 'Number') {
       // Number(bigIntExpr) is not translatable (BigInt vs Number distinction).
       // Number(nonBigInt) → (float) cast — mirrors JS's Number() returning IEEE 754
@@ -3244,6 +3273,9 @@ class Emitter {
     }
     const arg = this.transpileExpr(node.argument);
     if (arg === null) return null;
+    if (this.calendarConsistencyFixture && node.operator === '+') {
+      return `${HARNESS_NS}JsNumber::fromString(${arg})`;
+    }
     // Word operators (void) need a space; symbol operators (!, -, +, ~) do not.
     const space = /^[a-z]/.test(node.operator) ? ' ' : '';
     const wrapped = parenthesizeOperand(arg, node.argument, 'unary', 'right');
@@ -5279,6 +5311,7 @@ function processFile(jsPath, dataDir, scriptsDir) {
     emitter.requiresCompactDateTimeRange = relPath === 'intl402/DateTimeFormat/prototype/formatRange/temporal-objects-resolved-time-zone.js';
     emitter.localeSpaceComparison = relPath === 'intl402/DateTimeFormat/prototype/format/numbering-system.js';
     emitter.observersInUse = observersInUse;
+    emitter.calendarConsistencyFixture = relPath === 'intl402/DateTimeFormat/prototype/formatToParts/compare-to-temporal.js';
     emitter.observerTrackers = new Set(observerTrackers);
     if (unsupportedIncludes.length > 0) {
       emitter.emitIncomplete(`needs TemporalHelpers (includes: ${includes.join(', ')})`);
@@ -5286,6 +5319,11 @@ function processFile(jsPath, dataDir, scriptsDir) {
       emitter.emitIncomplete(`parse error: ${parseError}`);
     } else if (dynamicToString) {
       emitter.emitIncomplete('JS dynamic .toString assignment has no PHP equivalent (test exercises ToPrimitive("string") coercion which neither array nor stdClass supports)');
+    } else if (relPath === 'intl402/DateTimeFormat/prototype/formatToParts/compare-to-temporal-lunisolar.js') {
+      // Raw ICU is not yet a verified oracle for the project's Chinese calendar
+      // corrections: ICU 76.1 calls 1987-08-24 M07L, while Temporal uses M07.
+      // Do not substitute Temporal's field values into the independent oracle.
+      emitter.emitIncomplete('lunisolar consistency needs an independently validated ICU oracle; Chinese 1987 monthCode differs with ICU 76.1');
     } else if (float64NarrowingTest) {
       emitter.emitIncomplete(relPath.startsWith('Instant/')
         ? 'Instant differences keep exact int64 Duration fields instead of JS float64 narrowing (see README deviation)'

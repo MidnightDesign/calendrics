@@ -8,4 +8,4 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-Assert::incomplete('untranslatable: Number.isInteger');
+Assert::incomplete('lunisolar consistency needs an independently validated ICU oracle; Chinese 1987 monthCode differs with ICU 76.1');
