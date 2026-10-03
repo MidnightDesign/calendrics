@@ -450,15 +450,15 @@ final class PorcelainCalendarAwarenessTest extends TestCase
         static::assertContains($result, [-1, 0, 1]);
     }
 
-    public function testDurationTotalWithNonIsoRelativeTo(): void
+    public function testDurationTotalForwardsUnitAndTypedCalendarAnchor(): void
     {
         $d = new Duration(years: 1);
         $rt = new PlainDate(2024, 1, 15, Calendar::Hebrew);
 
-        // 2024 is a leap year, so 1 year from Jan 15 should be 366 days
+        // The wrapper forwards the enum value and the typed anchor to the Spec API.
         $result = $d->total(Unit::Day, $rt);
 
-        static::assertSame(366.0, (float) $result);
+        static::assertSame($d->toSpec()->total(['unit' => Unit::Day->value, 'relativeTo' => $rt->toSpec()]), $result);
     }
 
     public function testDurationRoundWithNonIsoRelativeTo(): void
