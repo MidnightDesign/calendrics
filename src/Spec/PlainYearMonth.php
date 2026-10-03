@@ -1083,14 +1083,14 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         // TC39 spec: §9.5.7 AddDurationToOrSubtractDurationFromPlainYearMonth step 4.
         // Any non-zero week, day, or sub-day field causes a RangeError.
         if (
-            (int) $dur->weeks !== 0
-            || (int) $dur->days !== 0
-            || (int) $dur->hours !== 0
-            || (int) $dur->minutes !== 0
-            || (int) $dur->seconds !== 0
-            || (int) $dur->milliseconds !== 0
-            || (int) $dur->microseconds !== 0
-            || (int) $dur->nanoseconds !== 0
+            (float) $dur->weeks !== 0.0
+            || (float) $dur->days !== 0.0
+            || (float) $dur->hours !== 0.0
+            || (float) $dur->minutes !== 0.0
+            || (float) $dur->seconds !== 0.0
+            || (float) $dur->milliseconds !== 0.0
+            || (float) $dur->microseconds !== 0.0
+            || (float) $dur->nanoseconds !== 0.0
         ) {
             throw new RangeError(
                 'PlainYearMonth::add()/subtract() does not support sub-month units (weeks, days, hours, etc.).',
