@@ -252,11 +252,15 @@ final class DateTimeDifference
         $dateDiff = $otherJdn - $tdJdn;
         $timeDiffNs = $otherNs - $tdNs;
 
+        // Equal date-times return zero after option validation, without calendar anchors.
+        if ($dateDiff === 0 && $timeDiffNs === 0) {
+            return new Duration();
+        }
+
         // The overall sign is determined by the combined date+time diff.
-        $sign = 0;
         if ($dateDiff > 0 || $dateDiff === 0 && $timeDiffNs > 0) {
             $sign = 1;
-        } elseif ($dateDiff < 0 || $timeDiffNs < 0) {
+        } else {
             $sign = -1;
         }
 
