@@ -173,7 +173,7 @@ final class ZonedDifference
     private static function resolveOptions(ZonedDateTime $temporalDate, array|object|null $options): array
     {
         $largestUnit = 'hour';
-        $largestUnitExplicit = false;
+        $largestUnitFixed = false;
         $smallestUnit = 'nanosecond';
         $roundingMode = 'trunc';
         $roundingIncrement = 1;
@@ -196,7 +196,7 @@ final class ZonedDifference
                     throw new RangeError("Invalid largestUnit value: \"{$lu}\".");
                 }
                 $largestUnit = $lu;
-                $largestUnitExplicit = true;
+                $largestUnitFixed = $lu !== 'auto';
             }
         }
 
@@ -226,7 +226,7 @@ final class ZonedDifference
                 $su = Options::coerceEnumOption($su, 'smallestUnit');
             }
             if (is_string($su)) {
-                if (!in_array($su, self::VALID_UNITS, strict: true)) {
+                if ($su === 'auto' || !in_array($su, self::VALID_UNITS, strict: true)) {
                     throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
                 }
                 $smallestUnit = $su;
@@ -240,7 +240,7 @@ final class ZonedDifference
         $suRank = self::UNIT_RANK[$normSmallest] ?? 1;
         $luRank = self::UNIT_RANK[$normLargest] ?? 4;
         if ($suRank > $luRank) {
-            if ($largestUnitExplicit) {
+            if ($largestUnitFixed) {
                 throw new RangeError(
                     "smallestUnit \"{$normSmallest}\" cannot be larger than largestUnit \"{$normLargest}\".",
                 );

@@ -7,6 +7,7 @@ namespace Calendrics\Tests\Test262;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Instant;
 use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormat;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Calendrics\Spec\ZonedDateTime;
@@ -87,8 +88,10 @@ final class IntlDateTimeFormat
     {
         $this->locales = is_string($locales) || is_array($locales) ? $locales : null;
         /** @var array<string, mixed> $opts */
-        $opts = is_object($options) ? get_object_vars($options) : (is_array($options) ? $options : []);
-        $this->options = IntlDateTimeFormatOptions::withConstructorDefaults($opts);
+        $opts = is_object($options) || is_array($options)
+            ? Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES)
+            : [];
+        $this->options = IntlDateTimeFormatOptions::withConstructorDefaults(IntlFormatter::normalizeOptions($opts));
     }
 
     /**
@@ -106,6 +109,17 @@ final class IntlDateTimeFormat
             throw new \RuntimeException('Intl.DateTimeFormat.format(): IntlDateFormatter::format() failed.');
         }
         return $result;
+    }
+
+    /**
+     * Literal-oracle comparison for numbering-system.js. ICU/CLDR versions use
+     * ordinary, no-break, or narrow no-break spaces before the day period. Only
+     * those separators are equivalent; digits, padding and fractions stay exact.
+     */
+    public static function includesLocaleString(string $actual, string $expected): bool
+    {
+        $spaces = ["\u{00A0}" => ' ', "\u{202F}" => ' '];
+        return str_contains(strtr($actual, $spaces), strtr($expected, $spaces));
     }
 
     /**
