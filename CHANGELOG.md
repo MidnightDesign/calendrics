@@ -7,6 +7,71 @@ All notable changes to this project are documented in this file. It is generated
 
 Until 1.0.0 the public API may change between minor versions.
 
+## [0.3.3](https://github.com/MidnightDesign/calendrics/compare/v0.3.2...v0.3.3) (2026-10-03)
+
+
+### Bug Fixes
+
+* bubble expanded calendar date-time differences ([#249](https://github.com/MidnightDesign/calendrics/issues/249)) ([608dbc1](https://github.com/MidnightDesign/calendrics/commit/608dbc10f5d0dccfbf0523799c2162e913c98c9b))
+* handle long differences and automatic units ([#194](https://github.com/MidnightDesign/calendrics/issues/194)) ([87ed6a4](https://github.com/MidnightDesign/calendrics/commit/87ed6a47f5cf7d8d37edfc0f77ebcf45c43354f9))
+* include whole days in date-time rounding parity ([#252](https://github.com/MidnightDesign/calendrics/issues/252)) ([3cad79b](https://github.com/MidnightDesign/calendrics/commit/3cad79b05171fe7fb8fffc3ee3b44dd20275dea5))
+* invert corrected Chinese leap-month fields ([55114d6](https://github.com/MidnightDesign/calendrics/commit/55114d6288fe97432dfd9b456b5c73fb777eeb27))
+* invert corrected Chinese leap-month fields during date arithmetic ([#222](https://github.com/MidnightDesign/calendrics/issues/222)) ([55114d6](https://github.com/MidnightDesign/calendrics/commit/55114d6288fe97432dfd9b456b5c73fb777eeb27))
+* normalize Intl boolean and fractional-second options ([#227](https://github.com/MidnightDesign/calendrics/issues/227)) ([28bc5e3](https://github.com/MidnightDesign/calendrics/commit/28bc5e3aa69af865b31a60294f56f8ce457eebe7))
+* preserve calendar anchors in duration totals and rounding ([#240](https://github.com/MidnightDesign/calendrics/issues/240)) ([6d3e4a3](https://github.com/MidnightDesign/calendrics/commit/6d3e4a3d150c5a01034dcdc0aa5ceb2cff22e035))
+* preserve calendar years when rounding month differences ([#243](https://github.com/MidnightDesign/calendrics/issues/243)) ([6e8f60e](https://github.com/MidnightDesign/calendrics/commit/6e8f60ed5b919082f83d0064f42e893353195772))
+* preserve fractional inline offsets in ZonedDateTime parsing ([#236](https://github.com/MidnightDesign/calendrics/issues/236)) ([eb35b79](https://github.com/MidnightDesign/calendrics/commit/eb35b79d265dc36c1b97572c8d3532a9fe209145))
+* preserve fractional ZonedDateTime inline offsets ([eb35b79](https://github.com/MidnightDesign/calendrics/commit/eb35b79d265dc36c1b97572c8d3532a9fe209145))
+* preserve full-range timestamps across PHP API conversions ([#214](https://github.com/MidnightDesign/calendrics/issues/214)) ([2b51017](https://github.com/MidnightDesign/calendrics/commit/2b5101793d2e9174e2e4055eeadfd175af70b523))
+* reject large lower units in year-month arithmetic ([#217](https://github.com/MidnightDesign/calendrics/issues/217)) ([4c312c1](https://github.com/MidnightDesign/calendrics/commit/4c312c12d216e911f437ec244cb8b09bf7c7b47f))
+* resolve Chinese calendar boundaries consistently ([#223](https://github.com/MidnightDesign/calendrics/issues/223)) ([dd1bba8](https://github.com/MidnightDesign/calendrics/commit/dd1bba89a181c25afcc28a0dd815d445cb645d50))
+* resolve corrected Chinese month boundaries consistently ([dd1bba8](https://github.com/MidnightDesign/calendrics/commit/dd1bba89a181c25afcc28a0dd815d445cb645d50))
+* retain receiver order in calendar date-time differences ([#248](https://github.com/MidnightDesign/calendrics/issues/248)) ([bf62338](https://github.com/MidnightDesign/calendrics/commit/bf62338430382a449a1089a8288260ae16c0aae0))
+* round calendar differences against exact increment boundaries ([#201](https://github.com/MidnightDesign/calendrics/issues/201)) ([8eebf11](https://github.com/MidnightDesign/calendrics/commit/8eebf1125b3bc3e5c58a5092a825b9b32a49d56f))
+* total large calendar-relative durations exactly ([#241](https://github.com/MidnightDesign/calendrics/issues/241)) ([852a99e](https://github.com/MidnightDesign/calendrics/commit/852a99ea11ad98f1ab6e53f6526d8c69ae2a3a2c))
+* use proleptic Gregorian calendar arithmetic at all years ([#221](https://github.com/MidnightDesign/calendrics/issues/221)) ([4b46bbe](https://github.com/MidnightDesign/calendrics/commit/4b46bbed61441a4c6ef9dfd74e5d86de0bfb99d4))
+* validate numeric offset ranges in plain date strings ([#230](https://github.com/MidnightDesign/calendrics/issues/230)) ([c3feda6](https://github.com/MidnightDesign/calendrics/commit/c3feda6f516d3ca1c136dcbffdebac90331f526a))
+* validate zoned string components before resolution ([f066080](https://github.com/MidnightDesign/calendrics/commit/f066080db75ad9680342ed627dbbfd4aa07784f1))
+* validate ZonedDateTime string components before resolution ([#235](https://github.com/MidnightDesign/calendrics/issues/235)) ([f066080](https://github.com/MidnightDesign/calendrics/commit/f066080db75ad9680342ed627dbbfd4aa07784f1))
+
+
+### Performance Improvements
+
+* avoid year traversal for fixed-month calendars ([8083b6c](https://github.com/MidnightDesign/calendrics/commit/8083b6c30e121e810e8f2fcaaa333de0b11114ce))
+* bound Hebrew month arithmetic by calendar cycles ([d1dca6a](https://github.com/MidnightDesign/calendrics/commit/d1dca6a4459a4b9e318ae0f9a25916d48f3cedd8))
+* bound ISO calendar duration total counting ([#242](https://github.com/MidnightDesign/calendrics/issues/242)) ([d727864](https://github.com/MidnightDesign/calendrics/commit/d727864163d3c41ae8debc4e60c7c021c5a904ee))
+* cache repeated ICU date pattern generation ([#208](https://github.com/MidnightDesign/calendrics/issues/208)) ([2d3daa6](https://github.com/MidnightDesign/calendrics/commit/2d3daa6038a1808e35767fba35fefb481648722c))
+* calculate fixed-calendar month spans directly ([#210](https://github.com/MidnightDesign/calendrics/issues/210)) ([8083b6c](https://github.com/MidnightDesign/calendrics/commit/8083b6c30e121e810e8f2fcaaa333de0b11114ce))
+* construct native dates from numeric timestamps ([#211](https://github.com/MidnightDesign/calendrics/issues/211)) ([3b5a920](https://github.com/MidnightDesign/calendrics/commit/3b5a9206a0f4aee48c2f0562cff376da43b118b9))
+* construct native timestamps without string parsing ([3b5a920](https://github.com/MidnightDesign/calendrics/commit/3b5a9206a0f4aee48c2f0562cff376da43b118b9))
+* reuse ordinary-day timezone resolution ([#213](https://github.com/MidnightDesign/calendrics/issues/213)) ([2f59f42](https://github.com/MidnightDesign/calendrics/commit/2f59f4263a3437dd67ddad7c8942ee2f6d31ecda))
+* reuse start-of-day timezone resolution ([2f59f42](https://github.com/MidnightDesign/calendrics/commit/2f59f4263a3437dd67ddad7c8942ee2f6d31ecda))
+* skip complete Hebrew calendar month cycles ([#209](https://github.com/MidnightDesign/calendrics/issues/209)) ([d1dca6a](https://github.com/MidnightDesign/calendrics/commit/d1dca6a4459a4b9e318ae0f9a25916d48f3cedd8))
+
+
+### Documentation
+
+* guarantee porcelain string and JSON round trips ([#196](https://github.com/MidnightDesign/calendrics/issues/196)) ([4a1bba3](https://github.com/MidnightDesign/calendrics/commit/4a1bba34dbe3e43b75cb2130b0d6afd5e19fa3e4))
+* rebuild the README around adoption and practical usage ([#207](https://github.com/MidnightDesign/calendrics/issues/207)) ([ad309eb](https://github.com/MidnightDesign/calendrics/commit/ad309eb6a4554f74d9fe957cc66fb4a5c2c82029))
+
+
+### Tests
+
+* activate current-time instant conformance fixture ([#198](https://github.com/MidnightDesign/calendrics/issues/198)) ([34554ce](https://github.com/MidnightDesign/calendrics/commit/34554ce80b6ce7d09f13a26ad1aec548f1a4c147))
+* activate Intl formatter callback and parts fixtures ([#200](https://github.com/MidnightDesign/calendrics/issues/200)) ([01fe351](https://github.com/MidnightDesign/calendrics/commit/01fe35185f43280ece645696f3a4c463565db755))
+* activate non-lunisolar calendar consistency fixtures ([#203](https://github.com/MidnightDesign/calendrics/issues/203)) ([1265c8e](https://github.com/MidnightDesign/calendrics/commit/1265c8e111d9d72074d76d3630c8f7d82e72b663))
+* activate resolved time zone formatting fixtures ([#202](https://github.com/MidnightDesign/calendrics/issues/202)) ([81f3bbf](https://github.com/MidnightDesign/calendrics/commit/81f3bbff0d395f56a3b73ba9fd5f18f71d4d856d))
+* cover Intl fractional-second option validation ([#261](https://github.com/MidnightDesign/calendrics/issues/261)) ([724c04e](https://github.com/MidnightDesign/calendrics/commit/724c04ec241b0e4e5fa579e09c0d7b8a4e2c9254))
+* cover shared locale formatting ([#195](https://github.com/MidnightDesign/calendrics/issues/195)) ([e2958e9](https://github.com/MidnightDesign/calendrics/commit/e2958e9ad8c0c439f8d3cd829b45d761f7a1a133))
+* cover shared locale formatting with upstream literal assertions ([e2958e9](https://github.com/MidnightDesign/calendrics/commit/e2958e9ad8c0c439f8d3cd829b45d761f7a1a133))
+
+
+### Miscellaneous Chores
+
+* align calendar match layout with Mago 1.51 ([#193](https://github.com/MidnightDesign/calendrics/issues/193)) ([62eb54a](https://github.com/MidnightDesign/calendrics/commit/62eb54a76f21d6b1700b52c1321d4eed2d922065))
+* centralize the porcelain mutation gate and document its scope ([41e424c](https://github.com/MidnightDesign/calendrics/commit/41e424c94d58303882b3fd53c6433f445a817eed))
+* clarify and centralize the porcelain mutation gate ([#197](https://github.com/MidnightDesign/calendrics/issues/197)) ([41e424c](https://github.com/MidnightDesign/calendrics/commit/41e424c94d58303882b3fd53c6433f445a817eed))
+
 ## [0.3.2](https://github.com/MidnightDesign/calendrics/compare/v0.3.1...v0.3.2) (2026-09-26)
 
 
