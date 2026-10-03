@@ -1,5 +1,5 @@
 {
-    "ref_collected_at": "2026-09-03T18:40:53+00:00",
+    "ref_collected_at": "2026-10-03T10:13:12+00:00",
     "commits": [
         {
             "sha": "6f44d2dc8c077070299eb2f8be485fe9dc58e183",
@@ -6447,6 +6447,2354 @@
                 "docs": 41294,
                 "config": 14525,
                 "total": 41247111
+            }
+        },
+        {
+            "sha": "c77e057c5d3b9ea7ceaccef16f18e92531a49573",
+            "short": "c77e057c5",
+            "timestamp": 1788460967,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "build: type DateTimeZone::listIdentifiers() as returning non-empty strings (#99)",
+            "type": "build",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 35,
+                "deleted": 0,
+                "files_touched": 3
+            },
+            "loc": {
+                "src": 30992,
+                "tests": 13154,
+                "test262_data": 340292,
+                "test262_scripts": 274605,
+                "tools": 5622,
+                "docs": 781,
+                "config": 449,
+                "total": 665895
+            },
+            "files": {
+                "src": 86,
+                "tests": 41,
+                "test262_data": 6628,
+                "test262_scripts": 11370,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18152
+            },
+            "bytes": {
+                "src": 1255795,
+                "tests": 451423,
+                "test262_data": 13144961,
+                "test262_scripts": 26073466,
+                "tools": 266651,
+                "docs": 41294,
+                "config": 14614,
+                "total": 41248204
+            }
+        },
+        {
+            "sha": "3cfe9b7806173c98a62e56c05a750d822cacd29b",
+            "short": "3cfe9b780",
+            "timestamp": 1788462470,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "refactor: split the Plain-type toLocaleString seam out of HasStringRepresentations (#107)",
+            "type": "refactor",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 137,
+                "deleted": 133,
+                "files_touched": 9
+            },
+            "loc": {
+                "src": 30996,
+                "tests": 13154,
+                "test262_data": 340292,
+                "test262_scripts": 274605,
+                "tools": 5622,
+                "docs": 781,
+                "config": 449,
+                "total": 665899
+            },
+            "files": {
+                "src": 87,
+                "tests": 41,
+                "test262_data": 6628,
+                "test262_scripts": 11370,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18153
+            },
+            "bytes": {
+                "src": 1256289,
+                "tests": 451419,
+                "test262_data": 13144961,
+                "test262_scripts": 26073466,
+                "tools": 266651,
+                "docs": 41294,
+                "config": 14614,
+                "total": 41248694
+            }
+        },
+        {
+            "sha": "e4de2f5b2ffdd8a9d7e9323c94670f3fdfc7e8fb",
+            "short": "e4de2f5b2",
+            "timestamp": 1788462948,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "refactor: route the ISO calendar through the calendar protocol (#108)",
+            "type": "refactor",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 176,
+                "deleted": 570,
+                "files_touched": 19
+            },
+            "loc": {
+                "src": 30628,
+                "tests": 13128,
+                "test262_data": 340292,
+                "test262_scripts": 274605,
+                "tools": 5622,
+                "docs": 781,
+                "config": 449,
+                "total": 665505
+            },
+            "files": {
+                "src": 87,
+                "tests": 41,
+                "test262_data": 6628,
+                "test262_scripts": 11370,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18153
+            },
+            "bytes": {
+                "src": 1242835,
+                "tests": 450446,
+                "test262_data": 13144961,
+                "test262_scripts": 26073466,
+                "tools": 266651,
+                "docs": 41294,
+                "config": 14614,
+                "total": 41234267
+            }
+        },
+        {
+            "sha": "057513137505397c73868aceae901446c8331e08",
+            "short": "057513137",
+            "timestamp": 1788464286,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "refactor: mark the Plain toLocaleString types with an interface (#111)",
+            "type": "refactor",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 46,
+                "deleted": 29,
+                "files_touched": 8
+            },
+            "loc": {
+                "src": 30659,
+                "tests": 13114,
+                "test262_data": 340292,
+                "test262_scripts": 274605,
+                "tools": 5622,
+                "docs": 781,
+                "config": 449,
+                "total": 665522
+            },
+            "files": {
+                "src": 88,
+                "tests": 41,
+                "test262_data": 6628,
+                "test262_scripts": 11370,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18154
+            },
+            "bytes": {
+                "src": 1244098,
+                "tests": 450119,
+                "test262_data": 13144961,
+                "test262_scripts": 26073466,
+                "tools": 266651,
+                "docs": 41294,
+                "config": 14614,
+                "total": 41235203
+            }
+        },
+        {
+            "sha": "604ef15440d66f2c14e2312f44cb279f26017f9b",
+            "short": "604ef1544",
+            "timestamp": 1788464544,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "refactor: delete the write-only _locale option-bag key (#112)",
+            "type": "refactor",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 10,
+                "deleted": 12,
+                "files_touched": 5
+            },
+            "loc": {
+                "src": 30654,
+                "tests": 13117,
+                "test262_data": 340292,
+                "test262_scripts": 274605,
+                "tools": 5622,
+                "docs": 781,
+                "config": 449,
+                "total": 665520
+            },
+            "files": {
+                "src": 88,
+                "tests": 41,
+                "test262_data": 6628,
+                "test262_scripts": 11370,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18154
+            },
+            "bytes": {
+                "src": 1243988,
+                "tests": 450124,
+                "test262_data": 13144961,
+                "test262_scripts": 26073466,
+                "tools": 266651,
+                "docs": 41294,
+                "config": 14614,
+                "total": 41235098
+            }
+        },
+        {
+            "sha": "6ebb6ee0873f31c740b7396d2986affc3c6ba311",
+            "short": "6ebb6ee08",
+            "timestamp": 1788464707,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "build: raise the container's memory_limit so `composer check` can run (#109)",
+            "type": "build",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 7,
+                "deleted": 2,
+                "files_touched": 2
+            },
+            "loc": {
+                "src": 30654,
+                "tests": 13117,
+                "test262_data": 340292,
+                "test262_scripts": 274605,
+                "tools": 5622,
+                "docs": 781,
+                "config": 454,
+                "total": 665525
+            },
+            "files": {
+                "src": 88,
+                "tests": 41,
+                "test262_data": 6628,
+                "test262_scripts": 11370,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18154
+            },
+            "bytes": {
+                "src": 1243988,
+                "tests": 450124,
+                "test262_data": 13144961,
+                "test262_scripts": 26073466,
+                "tools": 266651,
+                "docs": 41294,
+                "config": 14848,
+                "total": 41235332
+            }
+        },
+        {
+            "sha": "d6e3afcbda84dee6c381424f07b43da581f822f7",
+            "short": "d6e3afcbd",
+            "timestamp": 1788465171,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: reject unknown time zone identifiers in Instant::toString (#97)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 142,
+                "deleted": 38,
+                "files_touched": 7
+            },
+            "loc": {
+                "src": 30658,
+                "tests": 13117,
+                "test262_data": 340344,
+                "test262_scripts": 274653,
+                "tools": 5622,
+                "docs": 781,
+                "config": 454,
+                "total": 665629
+            },
+            "files": {
+                "src": 88,
+                "tests": 41,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18159
+            },
+            "bytes": {
+                "src": 1244064,
+                "tests": 450124,
+                "test262_data": 13146597,
+                "test262_scripts": 26076310,
+                "tools": 266651,
+                "docs": 41294,
+                "config": 14848,
+                "total": 41239888
+            }
+        },
+        {
+            "sha": "b773de315af53b65bfba5b2c543d295c9cf63e5a",
+            "short": "b773de315",
+            "timestamp": 1788465857,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "ci: show refactor, docs, test, build, and ci commits in the changelog (#116)",
+            "type": "ci",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 13,
+                "deleted": 0,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30658,
+                "tests": 13117,
+                "test262_data": 340344,
+                "test262_scripts": 274653,
+                "tools": 5622,
+                "docs": 781,
+                "config": 467,
+                "total": 665642
+            },
+            "files": {
+                "src": 88,
+                "tests": 41,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18159
+            },
+            "bytes": {
+                "src": 1244064,
+                "tests": 450124,
+                "test262_data": 13146597,
+                "test262_scripts": 26076310,
+                "tools": 266651,
+                "docs": 41294,
+                "config": 15471,
+                "total": 41240511
+            }
+        },
+        {
+            "sha": "ac8f599ffe518afa70540e6cfc1d5da2fb521b5b",
+            "short": "ac8f599ff",
+            "timestamp": 1788466081,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: reject conflicting month and monthCode in non-ISO PlainMonthDay::with() (#113)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 80,
+                "deleted": 74,
+                "files_touched": 10
+            },
+            "loc": {
+                "src": 30625,
+                "tests": 13156,
+                "test262_data": 340344,
+                "test262_scripts": 274653,
+                "tools": 5622,
+                "docs": 781,
+                "config": 467,
+                "total": 665648
+            },
+            "files": {
+                "src": 88,
+                "tests": 41,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18159
+            },
+            "bytes": {
+                "src": 1242889,
+                "tests": 451266,
+                "test262_data": 13146597,
+                "test262_scripts": 26076310,
+                "tools": 266651,
+                "docs": 41294,
+                "config": 15471,
+                "total": 41240478
+            }
+        },
+        {
+            "sha": "44b7e083facf928a7b8ef283f956bd7559980904",
+            "short": "44b7e083f",
+            "timestamp": 1788468429,
+            "date": "2026-09-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "docs: state which layer gets which tests (#131)",
+            "type": "docs",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 21,
+                "deleted": 0,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30625,
+                "tests": 13156,
+                "test262_data": 340344,
+                "test262_scripts": 274653,
+                "tools": 5622,
+                "docs": 802,
+                "config": 467,
+                "total": 665669
+            },
+            "files": {
+                "src": 88,
+                "tests": 41,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18159
+            },
+            "bytes": {
+                "src": 1242889,
+                "tests": 451266,
+                "test262_data": 13146597,
+                "test262_scripts": 26076310,
+                "tools": 266651,
+                "docs": 44022,
+                "config": 15471,
+                "total": 41243206
+            }
+        },
+        {
+            "sha": "1ef3451f6d69fd91ae42b639d8b75af84e703fa6",
+            "short": "1ef3451f6",
+            "timestamp": 1788513500,
+            "date": "2026-09-04",
+            "author": "Rudolph Gottesheim",
+            "subject": "test: delete the legacy hand-written spec-layer tests (#141)",
+            "type": "test",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 0,
+                "deleted": 1551,
+                "files_touched": 3
+            },
+            "loc": {
+                "src": 30625,
+                "tests": 11605,
+                "test262_data": 340344,
+                "test262_scripts": 274653,
+                "tools": 5622,
+                "docs": 802,
+                "config": 467,
+                "total": 664118
+            },
+            "files": {
+                "src": 88,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18156
+            },
+            "bytes": {
+                "src": 1242889,
+                "tests": 398338,
+                "test262_data": 13146597,
+                "test262_scripts": 26076310,
+                "tools": 266651,
+                "docs": 44022,
+                "config": 15471,
+                "total": 41190278
+            }
+        },
+        {
+            "sha": "273b557543b01065e1af4be4bbe50f8fcdbfbc90",
+            "short": "273b55754",
+            "timestamp": 1788514108,
+            "date": "2026-09-04",
+            "author": "Rudolph Gottesheim",
+            "subject": "test: drop the empty catch-all PHPUnit suite (#139)",
+            "type": "test",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 9,
+                "deleted": 9,
+                "files_touched": 4
+            },
+            "loc": {
+                "src": 30625,
+                "tests": 11605,
+                "test262_data": 340344,
+                "test262_scripts": 274653,
+                "tools": 5622,
+                "docs": 802,
+                "config": 467,
+                "total": 664118
+            },
+            "files": {
+                "src": 88,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18156
+            },
+            "bytes": {
+                "src": 1242889,
+                "tests": 398338,
+                "test262_data": 13146597,
+                "test262_scripts": 26076310,
+                "tools": 266651,
+                "docs": 44118,
+                "config": 15454,
+                "total": 41190357
+            }
+        },
+        {
+            "sha": "99453dff21f70743397cefef93528c8662767329",
+            "short": "99453dff2",
+            "timestamp": 1788515416,
+            "date": "2026-09-04",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: reject a null options argument wherever TC39 does (#153)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 280,
+                "deleted": 612,
+                "files_touched": 318
+            },
+            "loc": {
+                "src": 30566,
+                "tests": 11605,
+                "test262_data": 340344,
+                "test262_scripts": 274360,
+                "tools": 5642,
+                "docs": 802,
+                "config": 467,
+                "total": 663786
+            },
+            "files": {
+                "src": 88,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18156
+            },
+            "bytes": {
+                "src": 1239395,
+                "tests": 398338,
+                "test262_data": 13146597,
+                "test262_scripts": 26065755,
+                "tools": 267816,
+                "docs": 44118,
+                "config": 15454,
+                "total": 41177473
+            }
+        },
+        {
+            "sha": "a4573ae8e0b93b5fbb3aa221ac446126e0b3c596",
+            "short": "a4573ae8e",
+            "timestamp": 1788518832,
+            "date": "2026-09-04",
+            "author": "dependabot[bot]",
+            "subject": "chore(deps): bump actions/checkout from 6 to 7 (#35)",
+            "type": "chore",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 1,
+                "deleted": 1,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30566,
+                "tests": 11605,
+                "test262_data": 340344,
+                "test262_scripts": 274360,
+                "tools": 5642,
+                "docs": 802,
+                "config": 467,
+                "total": 663786
+            },
+            "files": {
+                "src": 88,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18156
+            },
+            "bytes": {
+                "src": 1239395,
+                "tests": 398338,
+                "test262_data": 13146597,
+                "test262_scripts": 26065755,
+                "tools": 267816,
+                "docs": 44118,
+                "config": 15454,
+                "total": 41177473
+            }
+        },
+        {
+            "sha": "669e996f0699976f45f953ef90942d75d5ca75ab",
+            "short": "669e996f0",
+            "timestamp": 1788519429,
+            "date": "2026-09-04",
+            "author": "Rudolph Gottesheim",
+            "subject": "docs: warn that tests/Test262/data is a subset of test262 (#156)",
+            "type": "docs",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 10,
+                "deleted": 3,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30566,
+                "tests": 11605,
+                "test262_data": 340344,
+                "test262_scripts": 274360,
+                "tools": 5642,
+                "docs": 809,
+                "config": 467,
+                "total": 663793
+            },
+            "files": {
+                "src": 88,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18156
+            },
+            "bytes": {
+                "src": 1239395,
+                "tests": 398338,
+                "test262_data": 13146597,
+                "test262_scripts": 26065755,
+                "tools": 267816,
+                "docs": 45018,
+                "config": 15454,
+                "total": 41178373
+            }
+        },
+        {
+            "sha": "42d714279dbcabe46e75c6e1c0ab2b00e03b2e46",
+            "short": "42d714279",
+            "timestamp": 1788519963,
+            "date": "2026-09-04",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: resolve PlainYearMonth's largestUnit 'auto' before ranking it (#120)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 4,
+                "deleted": 12,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30558,
+                "tests": 11605,
+                "test262_data": 340344,
+                "test262_scripts": 274360,
+                "tools": 5642,
+                "docs": 809,
+                "config": 467,
+                "total": 663785
+            },
+            "files": {
+                "src": 88,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18156
+            },
+            "bytes": {
+                "src": 1239084,
+                "tests": 398338,
+                "test262_data": 13146597,
+                "test262_scripts": 26065755,
+                "tools": 267816,
+                "docs": 45018,
+                "config": 15454,
+                "total": 41178062
+            }
+        },
+        {
+            "sha": "3b459dcdcae042321705dd02a1fb41ac8a82d121",
+            "short": "3b459dcdc",
+            "timestamp": 1788520278,
+            "date": "2026-09-04",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: negate directed rounding modes on Duration::round()'s pure-time path (#124)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 25,
+                "deleted": 16,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30567,
+                "tests": 11605,
+                "test262_data": 340344,
+                "test262_scripts": 274360,
+                "tools": 5642,
+                "docs": 809,
+                "config": 467,
+                "total": 663794
+            },
+            "files": {
+                "src": 88,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18156
+            },
+            "bytes": {
+                "src": 1239347,
+                "tests": 398338,
+                "test262_data": 13146597,
+                "test262_scripts": 26065755,
+                "tools": 267816,
+                "docs": 45018,
+                "config": 15454,
+                "total": 41178325
+            }
+        },
+        {
+            "sha": "10946f36a531d351edfb0153c4a1a4f6853640c6",
+            "short": "10946f36a",
+            "timestamp": 1788520662,
+            "date": "2026-09-04",
+            "author": "Rudolph Gottesheim",
+            "subject": "refactor: state the month-branch invariant without naming the rank check (#128)",
+            "type": "refactor",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 2,
+                "deleted": 2,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30567,
+                "tests": 11605,
+                "test262_data": 340344,
+                "test262_scripts": 274360,
+                "tools": 5642,
+                "docs": 809,
+                "config": 467,
+                "total": 663794
+            },
+            "files": {
+                "src": 88,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18156
+            },
+            "bytes": {
+                "src": 1239324,
+                "tests": 398338,
+                "test262_data": 13146597,
+                "test262_scripts": 26065755,
+                "tools": 267816,
+                "docs": 45018,
+                "config": 15454,
+                "total": 41178302
+            }
+        },
+        {
+            "sha": "965b42ad95cd0f6eb8551c3f61260cc98bd11bdf",
+            "short": "965b42ad9",
+            "timestamp": 1788521322,
+            "date": "2026-09-04",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: reject a Duration seconds field that overflows int64 (#127)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 84,
+                "deleted": 89,
+                "files_touched": 6
+            },
+            "loc": {
+                "src": 30568,
+                "tests": 11605,
+                "test262_data": 340344,
+                "test262_scripts": 274377,
+                "tools": 5619,
+                "docs": 809,
+                "config": 467,
+                "total": 663789
+            },
+            "files": {
+                "src": 88,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18156
+            },
+            "bytes": {
+                "src": 1239427,
+                "tests": 398338,
+                "test262_data": 13146597,
+                "test262_scripts": 26067497,
+                "tools": 266631,
+                "docs": 45018,
+                "config": 15454,
+                "total": 41178962
+            }
+        },
+        {
+            "sha": "fc32a4cc6506be878de6dd581ad1b53bd4e066fd",
+            "short": "fc32a4cc6",
+            "timestamp": 1788521516,
+            "date": "2026-09-04",
+            "author": "Rudolph Gottesheim",
+            "subject": "refactor: replace the locale component mode string with an internal enum (#110)",
+            "type": "refactor",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 161,
+                "deleted": 151,
+                "files_touched": 10
+            },
+            "loc": {
+                "src": 30567,
+                "tests": 11616,
+                "test262_data": 340344,
+                "test262_scripts": 274377,
+                "tools": 5619,
+                "docs": 809,
+                "config": 467,
+                "total": 663799
+            },
+            "files": {
+                "src": 89,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18157
+            },
+            "bytes": {
+                "src": 1239883,
+                "tests": 398757,
+                "test262_data": 13146597,
+                "test262_scripts": 26067497,
+                "tools": 266631,
+                "docs": 45018,
+                "config": 15454,
+                "total": 41179837
+            }
+        },
+        {
+            "sha": "49d49c1d99ded08c5948c60816078366bcdd3cc1",
+            "short": "49d49c1d9",
+            "timestamp": 1789210116,
+            "date": "2026-09-12",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: reject invalid toLocaleString options and stop dropping hourCycle (#129)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 197,
+                "deleted": 66,
+                "files_touched": 5
+            },
+            "loc": {
+                "src": 30693,
+                "tests": 11621,
+                "test262_data": 340344,
+                "test262_scripts": 274377,
+                "tools": 5619,
+                "docs": 809,
+                "config": 467,
+                "total": 663930
+            },
+            "files": {
+                "src": 89,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18157
+            },
+            "bytes": {
+                "src": 1245416,
+                "tests": 399054,
+                "test262_data": 13146597,
+                "test262_scripts": 26067497,
+                "tools": 266631,
+                "docs": 45018,
+                "config": 15454,
+                "total": 41185667
+            }
+        },
+        {
+            "sha": "2141b3b294a5ebfea5b5832f37200b7c3370a687",
+            "short": "2141b3b29",
+            "timestamp": 1789211441,
+            "date": "2026-09-12",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: resolve relativeTo bags through their calendar (#162)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 14,
+                "deleted": 0,
+                "files_touched": 2
+            },
+            "loc": {
+                "src": 30703,
+                "tests": 11621,
+                "test262_data": 340344,
+                "test262_scripts": 274377,
+                "tools": 5619,
+                "docs": 813,
+                "config": 467,
+                "total": 663944
+            },
+            "files": {
+                "src": 89,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18157
+            },
+            "bytes": {
+                "src": 1245933,
+                "tests": 399054,
+                "test262_data": 13146597,
+                "test262_scripts": 26067497,
+                "tools": 266631,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41186803
+            }
+        },
+        {
+            "sha": "acf61571f5901078e3d149e34e3a77705e3f8ff5",
+            "short": "acf61571f",
+            "timestamp": 1789212120,
+            "date": "2026-09-12",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: pad the hour when toLocaleString() asks for hour: '2-digit' (#138)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 29,
+                "deleted": 1,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30731,
+                "tests": 11621,
+                "test262_data": 340344,
+                "test262_scripts": 274377,
+                "tools": 5619,
+                "docs": 813,
+                "config": 467,
+                "total": 663972
+            },
+            "files": {
+                "src": 89,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18157
+            },
+            "bytes": {
+                "src": 1247263,
+                "tests": 399054,
+                "test262_data": 13146597,
+                "test262_scripts": 26067497,
+                "tools": 266631,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41188133
+            }
+        },
+        {
+            "sha": "fc05ebace632af4841c901cc44dc65532fc6a527",
+            "short": "fc05ebace",
+            "timestamp": 1789212399,
+            "date": "2026-09-12",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: narrow an integer-valued Duration field to int on construction (#140)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 112,
+                "deleted": 55,
+                "files_touched": 5
+            },
+            "loc": {
+                "src": 30768,
+                "tests": 11636,
+                "test262_data": 340344,
+                "test262_scripts": 274377,
+                "tools": 5624,
+                "docs": 813,
+                "config": 467,
+                "total": 664029
+            },
+            "files": {
+                "src": 89,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18157
+            },
+            "bytes": {
+                "src": 1248696,
+                "tests": 399780,
+                "test262_data": 13146597,
+                "test262_scripts": 26067529,
+                "tools": 266936,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41190629
+            }
+        },
+        {
+            "sha": "c324e9e6cd9d5a7b614377d65fb75735f4d05edc",
+            "short": "c324e9e6c",
+            "timestamp": 1789212664,
+            "date": "2026-09-12",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: reject a null relativeTo whatever the duration's units (#143)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 43,
+                "deleted": 59,
+                "files_touched": 4
+            },
+            "loc": {
+                "src": 30752,
+                "tests": 11636,
+                "test262_data": 340344,
+                "test262_scripts": 274377,
+                "tools": 5624,
+                "docs": 813,
+                "config": 467,
+                "total": 664013
+            },
+            "files": {
+                "src": 89,
+                "tests": 38,
+                "test262_data": 6630,
+                "test262_scripts": 11373,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18157
+            },
+            "bytes": {
+                "src": 1247618,
+                "tests": 399780,
+                "test262_data": 13146597,
+                "test262_scripts": 26067529,
+                "tools": 266936,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41189551
+            }
+        },
+        {
+            "sha": "f72261a1b517e081dd9dfa978bc8de28d46375ac",
+            "short": "f72261a1b",
+            "timestamp": 1789213943,
+            "date": "2026-09-12",
+            "author": "Rudolph Gottesheim",
+            "subject": "Extend the test262 sync scope to test/staging/Temporal/ (#154)",
+            "type": null,
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 299,
+                "deleted": 68,
+                "files_touched": 6
+            },
+            "loc": {
+                "src": 30752,
+                "tests": 11636,
+                "test262_data": 340481,
+                "test262_scripts": 274441,
+                "tools": 5654,
+                "docs": 813,
+                "config": 467,
+                "total": 664244
+            },
+            "files": {
+                "src": 89,
+                "tests": 38,
+                "test262_data": 6632,
+                "test262_scripts": 11375,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18161
+            },
+            "bytes": {
+                "src": 1247618,
+                "tests": 399780,
+                "test262_data": 13155215,
+                "test262_scripts": 26071856,
+                "tools": 268385,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41203945
+            }
+        },
+        {
+            "sha": "883267e89ea73af68c113ab4f4d3831c668bdcb6",
+            "short": "883267e89",
+            "timestamp": 1789215359,
+            "date": "2026-09-12",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: keep JS parentheses and rest bindings when transpiling test262 (#157)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 119,
+                "deleted": 44,
+                "files_touched": 2
+            },
+            "loc": {
+                "src": 30752,
+                "tests": 11655,
+                "test262_data": 340481,
+                "test262_scripts": 274441,
+                "tools": 5710,
+                "docs": 813,
+                "config": 467,
+                "total": 664319
+            },
+            "files": {
+                "src": 89,
+                "tests": 38,
+                "test262_data": 6632,
+                "test262_scripts": 11375,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18161
+            },
+            "bytes": {
+                "src": 1247618,
+                "tests": 400509,
+                "test262_data": 13155215,
+                "test262_scripts": 26071856,
+                "tools": 270661,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41206950
+            }
+        },
+        {
+            "sha": "94f470f3b6fa0eb3ea6b834e4d9b25d2c2b1091a",
+            "short": "94f470f3b",
+            "timestamp": 1789217050,
+            "date": "2026-09-12",
+            "author": "Rudolph Gottesheim",
+            "subject": "test: model the ECMA-402 constructor/format split in the Intl shim (#158)",
+            "type": "test",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 294,
+                "deleted": 239,
+                "files_touched": 9
+            },
+            "loc": {
+                "src": 30675,
+                "tests": 11787,
+                "test262_data": 340481,
+                "test262_scripts": 274441,
+                "tools": 5710,
+                "docs": 813,
+                "config": 467,
+                "total": 664374
+            },
+            "files": {
+                "src": 90,
+                "tests": 39,
+                "test262_data": 6632,
+                "test262_scripts": 11375,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18163
+            },
+            "bytes": {
+                "src": 1245459,
+                "tests": 405172,
+                "test262_data": 13155215,
+                "test262_scripts": 26071856,
+                "tools": 270661,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41209454
+            }
+        },
+        {
+            "sha": "c7115d1c8b4e22847e571bc25d6b38c9c91beddd",
+            "short": "c7115d1c8",
+            "timestamp": 1789227858,
+            "date": "2026-09-12",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: render pre-1582 and extreme-year dates correctly in toLocaleString() (#159)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 212,
+                "deleted": 125,
+                "files_touched": 8
+            },
+            "loc": {
+                "src": 30700,
+                "tests": 11849,
+                "test262_data": 340481,
+                "test262_scripts": 274441,
+                "tools": 5710,
+                "docs": 813,
+                "config": 467,
+                "total": 664461
+            },
+            "files": {
+                "src": 91,
+                "tests": 39,
+                "test262_data": 6632,
+                "test262_scripts": 11375,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18164
+            },
+            "bytes": {
+                "src": 1245614,
+                "tests": 407313,
+                "test262_data": 13155215,
+                "test262_scripts": 26071856,
+                "tools": 270661,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41211750
+            }
+        },
+        {
+            "sha": "09407c316c3e4eb2217cfe0ff2d522f540dddb61",
+            "short": "09407c316",
+            "timestamp": 1790360645,
+            "date": "2026-09-25",
+            "author": "Rudolph Gottesheim",
+            "subject": "chore: simplify tuple annotations (#169)",
+            "type": "chore",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 27,
+                "deleted": 27,
+                "files_touched": 10
+            },
+            "loc": {
+                "src": 30700,
+                "tests": 11849,
+                "test262_data": 340481,
+                "test262_scripts": 274441,
+                "tools": 5710,
+                "docs": 813,
+                "config": 467,
+                "total": 664461
+            },
+            "files": {
+                "src": 91,
+                "tests": 39,
+                "test262_data": 6632,
+                "test262_scripts": 11375,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18164
+            },
+            "bytes": {
+                "src": 1245386,
+                "tests": 407313,
+                "test262_data": 13155215,
+                "test262_scripts": 26071856,
+                "tools": 270661,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41211522
+            }
+        },
+        {
+            "sha": "d56ec227b81dd6d00e073a9d4b0f76fd04fa189a",
+            "short": "d56ec227b",
+            "timestamp": 1790360645,
+            "date": "2026-09-25",
+            "author": "Rudolph Gottesheim",
+            "subject": "refactor: share partial calendar field resolution (#165)",
+            "type": "refactor",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 136,
+                "deleted": 658,
+                "files_touched": 5
+            },
+            "loc": {
+                "src": 30178,
+                "tests": 11849,
+                "test262_data": 340481,
+                "test262_scripts": 274441,
+                "tools": 5710,
+                "docs": 813,
+                "config": 467,
+                "total": 663939
+            },
+            "files": {
+                "src": 92,
+                "tests": 39,
+                "test262_data": 6632,
+                "test262_scripts": 11375,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18165
+            },
+            "bytes": {
+                "src": 1220762,
+                "tests": 407313,
+                "test262_data": 13155215,
+                "test262_scripts": 26071856,
+                "tools": 270661,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41186898
+            }
+        },
+        {
+            "sha": "d27bd982a0ad0ecfe1dda5c7a5ba507258845654",
+            "short": "d27bd982a",
+            "timestamp": 1790360876,
+            "date": "2026-09-25",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: preserve locale patterns for partial dates (#166)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 23,
+                "deleted": 23,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30178,
+                "tests": 11849,
+                "test262_data": 340481,
+                "test262_scripts": 274441,
+                "tools": 5710,
+                "docs": 813,
+                "config": 467,
+                "total": 663939
+            },
+            "files": {
+                "src": 92,
+                "tests": 39,
+                "test262_data": 6632,
+                "test262_scripts": 11375,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18165
+            },
+            "bytes": {
+                "src": 1220473,
+                "tests": 407313,
+                "test262_data": 13155215,
+                "test262_scripts": 26071856,
+                "tools": 270661,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41186609
+            }
+        },
+        {
+            "sha": "00f751b41718d0c2e99c31b541c4b170cd18976e",
+            "short": "00f751b41",
+            "timestamp": 1790361061,
+            "date": "2026-09-25",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: total oversized subsecond duration fields (#167)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 32,
+                "deleted": 9,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30201,
+                "tests": 11849,
+                "test262_data": 340481,
+                "test262_scripts": 274441,
+                "tools": 5710,
+                "docs": 813,
+                "config": 467,
+                "total": 663962
+            },
+            "files": {
+                "src": 92,
+                "tests": 39,
+                "test262_data": 6632,
+                "test262_scripts": 11375,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18165
+            },
+            "bytes": {
+                "src": 1221238,
+                "tests": 407313,
+                "test262_data": 13155215,
+                "test262_scripts": 26071856,
+                "tools": 270661,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41187374
+            }
+        },
+        {
+            "sha": "7cc75831286c3e1d2031d46eaadd904bcb923a58",
+            "short": "7cc758312",
+            "timestamp": 1790361436,
+            "date": "2026-09-25",
+            "author": "Rudolph Gottesheim",
+            "subject": "refactor: route ISO operations through calendar protocol (#168)",
+            "type": "refactor",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 49,
+                "deleted": 190,
+                "files_touched": 6
+            },
+            "loc": {
+                "src": 30060,
+                "tests": 11849,
+                "test262_data": 340481,
+                "test262_scripts": 274441,
+                "tools": 5710,
+                "docs": 813,
+                "config": 467,
+                "total": 663821
+            },
+            "files": {
+                "src": 92,
+                "tests": 39,
+                "test262_data": 6632,
+                "test262_scripts": 11375,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18165
+            },
+            "bytes": {
+                "src": 1214316,
+                "tests": 407313,
+                "test262_data": 13155215,
+                "test262_scripts": 26071856,
+                "tools": 270661,
+                "docs": 45637,
+                "config": 15454,
+                "total": 41180452
+            }
+        },
+        {
+            "sha": "904a45fa28b791183e2ff3116cd081e4f09afc4b",
+            "short": "904a45fa2",
+            "timestamp": 1790364959,
+            "date": "2026-09-25",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: accept Temporal objects in withCalendar (#34)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 94,
+                "deleted": 20,
+                "files_touched": 10
+            },
+            "loc": {
+                "src": 30121,
+                "tests": 11862,
+                "test262_data": 340481,
+                "test262_scripts": 274441,
+                "tools": 5710,
+                "docs": 813,
+                "config": 467,
+                "total": 663895
+            },
+            "files": {
+                "src": 93,
+                "tests": 39,
+                "test262_data": 6632,
+                "test262_scripts": 11375,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18166
+            },
+            "bytes": {
+                "src": 1217066,
+                "tests": 407822,
+                "test262_data": 13155215,
+                "test262_scripts": 26071856,
+                "tools": 270661,
+                "docs": 45715,
+                "config": 15454,
+                "total": 41183789
+            }
+        },
+        {
+            "sha": "5cbd11787e6b8ccaacd34506f436711d1cb9e2df",
+            "short": "5cbd11787",
+            "timestamp": 1790445792,
+            "date": "2026-09-26",
+            "author": "Rudolph Gottesheim",
+            "subject": "test: sync the Temporal-tagged Intl formatter fixtures (#160)",
+            "type": "test",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 7020,
+                "deleted": 67,
+                "files_touched": 209
+            },
+            "loc": {
+                "src": 30121,
+                "tests": 11947,
+                "test262_data": 343965,
+                "test262_scripts": 277793,
+                "tools": 5742,
+                "docs": 813,
+                "config": 467,
+                "total": 670848
+            },
+            "files": {
+                "src": 93,
+                "tests": 39,
+                "test262_data": 6703,
+                "test262_scripts": 11508,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18370
+            },
+            "bytes": {
+                "src": 1217066,
+                "tests": 411125,
+                "test262_data": 13298455,
+                "test262_scripts": 26315756,
+                "tools": 271769,
+                "docs": 45715,
+                "config": 15454,
+                "total": 41575340
+            }
+        },
+        {
+            "sha": "16d4a928d0dc59249c031126d35e1d9806e32f02",
+            "short": "16d4a928d",
+            "timestamp": 1790446406,
+            "date": "2026-09-26",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: honor locale-resolved numeric hour widths (#174)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 179,
+                "deleted": 6,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30294,
+                "tests": 11947,
+                "test262_data": 343965,
+                "test262_scripts": 277793,
+                "tools": 5742,
+                "docs": 813,
+                "config": 467,
+                "total": 671021
+            },
+            "files": {
+                "src": 93,
+                "tests": 39,
+                "test262_data": 6703,
+                "test262_scripts": 11508,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18370
+            },
+            "bytes": {
+                "src": 1223646,
+                "tests": 411125,
+                "test262_data": 13298455,
+                "test262_scripts": 26315756,
+                "tools": 271769,
+                "docs": 45715,
+                "config": 15454,
+                "total": 41581920
+            }
+        },
+        {
+            "sha": "f4cdb8550acb662d24ca65fe658fc4a99b6af887",
+            "short": "f4cdb8550",
+            "timestamp": 1790452338,
+            "date": "2026-09-26",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: avoid allocating a Docker subnet per worktree (#189)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 1,
+                "deleted": 0,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 30294,
+                "tests": 11947,
+                "test262_data": 343965,
+                "test262_scripts": 277793,
+                "tools": 5742,
+                "docs": 813,
+                "config": 468,
+                "total": 671022
+            },
+            "files": {
+                "src": 93,
+                "tests": 39,
+                "test262_data": 6703,
+                "test262_scripts": 11508,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18370
+            },
+            "bytes": {
+                "src": 1223646,
+                "tests": 411125,
+                "test262_data": 13298455,
+                "test262_scripts": 26315756,
+                "tools": 271769,
+                "docs": 45715,
+                "config": 15479,
+                "total": 41581945
+            }
+        },
+        {
+            "sha": "c15cebf5c0212ad63087e149f92ab0c02bbc1ecd",
+            "short": "c15cebf5c",
+            "timestamp": 1790458861,
+            "date": "2026-09-26",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: match ICU hour widths without locale-specific overrides (#191)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 484,
+                "deleted": 203,
+                "files_touched": 5
+            },
+            "loc": {
+                "src": 30575,
+                "tests": 11947,
+                "test262_data": 343965,
+                "test262_scripts": 277793,
+                "tools": 5742,
+                "docs": 813,
+                "config": 468,
+                "total": 671303
+            },
+            "files": {
+                "src": 97,
+                "tests": 39,
+                "test262_data": 6703,
+                "test262_scripts": 11508,
+                "tools": 8,
+                "docs": 3,
+                "config": 16,
+                "total": 18374
+            },
+            "bytes": {
+                "src": 1233983,
+                "tests": 411125,
+                "test262_data": 13298455,
+                "test262_scripts": 26315756,
+                "tools": 271769,
+                "docs": 45715,
+                "config": 15479,
+                "total": 41592282
+            }
+        },
+        {
+            "sha": "bc22422fd29ae18d98998ab5094ae34fd2149a3a",
+            "short": "bc22422fd",
+            "timestamp": 1790461250,
+            "date": "2026-09-26",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: correct Temporal edge cases and remove redundant Spec code (#175)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 609,
+                "deleted": 2271,
+                "files_touched": 30
+            },
+            "loc": {
+                "src": 28902,
+                "tests": 11947,
+                "test262_data": 343965,
+                "test262_scripts": 277793,
+                "tools": 5752,
+                "docs": 813,
+                "config": 469,
+                "total": 669641
+            },
+            "files": {
+                "src": 98,
+                "tests": 39,
+                "test262_data": 6703,
+                "test262_scripts": 11508,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18376
+            },
+            "bytes": {
+                "src": 1156151,
+                "tests": 411125,
+                "test262_data": 13298455,
+                "test262_scripts": 26315756,
+                "tools": 271993,
+                "docs": 45715,
+                "config": 15521,
+                "total": 41514716
+            }
+        },
+        {
+            "sha": "efed0f48e8fbe6bf3129983303a4f84bfa798883",
+            "short": "efed0f48e",
+            "timestamp": 1790581311,
+            "date": "2026-09-28",
+            "author": "github-actions[bot]",
+            "subject": "chore(master): release 0.3.2 (#98)",
+            "type": "chore",
+            "breaking": false,
+            "tags": [
+                "v0.3.2"
+            ],
+            "churn": {
+                "added": 77,
+                "deleted": 1,
+                "files_touched": 2
+            },
+            "loc": {
+                "src": 28902,
+                "tests": 11947,
+                "test262_data": 343965,
+                "test262_scripts": 277793,
+                "tools": 5752,
+                "docs": 889,
+                "config": 469,
+                "total": 669717
+            },
+            "files": {
+                "src": 98,
+                "tests": 39,
+                "test262_data": 6703,
+                "test262_scripts": 11508,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18376
+            },
+            "bytes": {
+                "src": 1156151,
+                "tests": 411125,
+                "test262_data": 13298455,
+                "test262_scripts": 26315756,
+                "tools": 271993,
+                "docs": 56724,
+                "config": 15521,
+                "total": 41525725
+            }
+        },
+        {
+            "sha": "62eb54a76f21d6b1700b52c1321d4eed2d922065",
+            "short": "62eb54a76",
+            "timestamp": 1790981253,
+            "date": "2026-10-02",
+            "author": "Rudolph Gottesheim",
+            "subject": "chore: align calendar match layout with Mago 1.51 (#193)",
+            "type": "chore",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 6,
+                "deleted": 8,
+                "files_touched": 1
+            },
+            "loc": {
+                "src": 28900,
+                "tests": 11947,
+                "test262_data": 343965,
+                "test262_scripts": 277793,
+                "tools": 5752,
+                "docs": 889,
+                "config": 469,
+                "total": 669715
+            },
+            "files": {
+                "src": 98,
+                "tests": 39,
+                "test262_data": 6703,
+                "test262_scripts": 11508,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18376
+            },
+            "bytes": {
+                "src": 1156131,
+                "tests": 411125,
+                "test262_data": 13298455,
+                "test262_scripts": 26315756,
+                "tools": 271993,
+                "docs": 56724,
+                "config": 15521,
+                "total": 41525705
+            }
+        },
+        {
+            "sha": "34554ce80b6ce7d09f13a26ad1aec548f1a4c147",
+            "short": "34554ce80",
+            "timestamp": 1790981528,
+            "date": "2026-10-02",
+            "author": "Rudolph Gottesheim",
+            "subject": "test: activate current-time instant conformance fixture (#198)",
+            "type": "test",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 23,
+                "deleted": 1,
+                "files_touched": 3
+            },
+            "loc": {
+                "src": 28900,
+                "tests": 11953,
+                "test262_data": 343965,
+                "test262_scripts": 277797,
+                "tools": 5764,
+                "docs": 889,
+                "config": 469,
+                "total": 669737
+            },
+            "files": {
+                "src": 98,
+                "tests": 39,
+                "test262_data": 6703,
+                "test262_scripts": 11508,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18376
+            },
+            "bytes": {
+                "src": 1156131,
+                "tests": 411329,
+                "test262_data": 13298455,
+                "test262_scripts": 26316140,
+                "tools": 272612,
+                "docs": 56724,
+                "config": 15521,
+                "total": 41526912
+            }
+        },
+        {
+            "sha": "e2958e9ad8c0c439f8d3cd829b45d761f7a1a133",
+            "short": "e2958e9ad",
+            "timestamp": 1791015894,
+            "date": "2026-10-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "test: cover shared locale formatting (#195)",
+            "type": "test",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 178,
+                "deleted": 14,
+                "files_touched": 8
+            },
+            "loc": {
+                "src": 28900,
+                "tests": 11987,
+                "test262_data": 344024,
+                "test262_scripts": 277843,
+                "tools": 5789,
+                "docs": 889,
+                "config": 469,
+                "total": 669901
+            },
+            "files": {
+                "src": 98,
+                "tests": 39,
+                "test262_data": 6704,
+                "test262_scripts": 11510,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18379
+            },
+            "bytes": {
+                "src": 1156131,
+                "tests": 412684,
+                "test262_data": 13300985,
+                "test262_scripts": 26320832,
+                "tools": 273904,
+                "docs": 56803,
+                "config": 15521,
+                "total": 41536860
+            }
+        },
+        {
+            "sha": "01fe35185f43280ece645696f3a4c463565db755",
+            "short": "01fe35185",
+            "timestamp": 1791016855,
+            "date": "2026-10-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "test: activate Intl formatter callback and parts fixtures (#200)",
+            "type": "test",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 159,
+                "deleted": 29,
+                "files_touched": 27
+            },
+            "loc": {
+                "src": 28900,
+                "tests": 11987,
+                "test262_data": 344024,
+                "test262_scripts": 277961,
+                "tools": 5801,
+                "docs": 889,
+                "config": 469,
+                "total": 670031
+            },
+            "files": {
+                "src": 98,
+                "tests": 39,
+                "test262_data": 6704,
+                "test262_scripts": 11510,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18379
+            },
+            "bytes": {
+                "src": 1156131,
+                "tests": 412684,
+                "test262_data": 13300985,
+                "test262_scripts": 26330945,
+                "tools": 274493,
+                "docs": 56803,
+                "config": 15521,
+                "total": 41547562
+            }
+        },
+        {
+            "sha": "81f3bbff0d395f56a3b73ba9fd5f18f71d4d856d",
+            "short": "81f3bbff0",
+            "timestamp": 1791016855,
+            "date": "2026-10-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "test: activate resolved time zone formatting fixtures (#202)",
+            "type": "test",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 130,
+                "deleted": 9,
+                "files_touched": 6
+            },
+            "loc": {
+                "src": 28900,
+                "tests": 12002,
+                "test262_data": 344024,
+                "test262_scripts": 278023,
+                "tools": 5845,
+                "docs": 889,
+                "config": 469,
+                "total": 670152
+            },
+            "files": {
+                "src": 98,
+                "tests": 39,
+                "test262_data": 6704,
+                "test262_scripts": 11510,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18379
+            },
+            "bytes": {
+                "src": 1156131,
+                "tests": 413205,
+                "test262_data": 13300985,
+                "test262_scripts": 26337010,
+                "tools": 277104,
+                "docs": 56803,
+                "config": 15521,
+                "total": 41556759
+            }
+        },
+        {
+            "sha": "87ed6a47f5cf7d8d37edfc0f77ebcf45c43354f9",
+            "short": "87ed6a47f",
+            "timestamp": 1791017239,
+            "date": "2026-10-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: handle long differences and automatic units (#194)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 100,
+                "deleted": 109,
+                "files_touched": 24
+            },
+            "loc": {
+                "src": 28846,
+                "tests": 12002,
+                "test262_data": 344024,
+                "test262_scripts": 278067,
+                "tools": 5846,
+                "docs": 889,
+                "config": 469,
+                "total": 670143
+            },
+            "files": {
+                "src": 98,
+                "tests": 39,
+                "test262_data": 6704,
+                "test262_scripts": 11510,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18379
+            },
+            "bytes": {
+                "src": 1154294,
+                "tests": 413205,
+                "test262_data": 13300985,
+                "test262_scripts": 26342300,
+                "tools": 277136,
+                "docs": 56358,
+                "config": 15521,
+                "total": 41559799
+            }
+        },
+        {
+            "sha": "4a1bba34dbe3e43b75cb2130b0d6afd5e19fa3e4",
+            "short": "4a1bba34d",
+            "timestamp": 1791018192,
+            "date": "2026-10-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "docs: guarantee porcelain string and JSON round trips (#196)",
+            "type": "docs",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 59,
+                "deleted": 0,
+                "files_touched": 2
+            },
+            "loc": {
+                "src": 28846,
+                "tests": 12060,
+                "test262_data": 344024,
+                "test262_scripts": 278067,
+                "tools": 5846,
+                "docs": 890,
+                "config": 469,
+                "total": 670202
+            },
+            "files": {
+                "src": 98,
+                "tests": 40,
+                "test262_data": 6704,
+                "test262_scripts": 11510,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18380
+            },
+            "bytes": {
+                "src": 1154294,
+                "tests": 415607,
+                "test262_data": 13300985,
+                "test262_scripts": 26342300,
+                "tools": 277136,
+                "docs": 56992,
+                "config": 15521,
+                "total": 41562835
+            }
+        },
+        {
+            "sha": "41e424c94d58303882b3fd53c6433f445a817eed",
+            "short": "41e424c94",
+            "timestamp": 1791018365,
+            "date": "2026-10-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "chore: clarify and centralize the porcelain mutation gate (#197)",
+            "type": "chore",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 19,
+                "deleted": 7,
+                "files_touched": 4
+            },
+            "loc": {
+                "src": 28846,
+                "tests": 12060,
+                "test262_data": 344024,
+                "test262_scripts": 278067,
+                "tools": 5846,
+                "docs": 901,
+                "config": 470,
+                "total": 670214
+            },
+            "files": {
+                "src": 98,
+                "tests": 40,
+                "test262_data": 6704,
+                "test262_scripts": 11510,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18380
+            },
+            "bytes": {
+                "src": 1154294,
+                "tests": 415607,
+                "test262_data": 13300985,
+                "test262_scripts": 26342300,
+                "tools": 277136,
+                "docs": 58502,
+                "config": 15527,
+                "total": 41564351
+            }
+        },
+        {
+            "sha": "8eebf1125b3bc3e5c58a5092a825b9b32a49d56f",
+            "short": "8eebf1125",
+            "timestamp": 1791020427,
+            "date": "2026-10-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "fix: round calendar differences against exact increment boundaries (#201)",
+            "type": "fix",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 88,
+                "deleted": 82,
+                "files_touched": 2
+            },
+            "loc": {
+                "src": 28852,
+                "tests": 12060,
+                "test262_data": 344024,
+                "test262_scripts": 278067,
+                "tools": 5846,
+                "docs": 901,
+                "config": 470,
+                "total": 670220
+            },
+            "files": {
+                "src": 98,
+                "tests": 40,
+                "test262_data": 6704,
+                "test262_scripts": 11510,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18380
+            },
+            "bytes": {
+                "src": 1153764,
+                "tests": 415607,
+                "test262_data": 13300985,
+                "test262_scripts": 26342300,
+                "tools": 277136,
+                "docs": 58502,
+                "config": 15527,
+                "total": 41563821
+            }
+        },
+        {
+            "sha": "1265c8e111d9d72074d76d3630c8f7d82e72b663",
+            "short": "1265c8e11",
+            "timestamp": 1791020752,
+            "date": "2026-10-03",
+            "author": "Rudolph Gottesheim",
+            "subject": "test: activate non-lunisolar calendar consistency fixtures (#203)",
+            "type": "test",
+            "breaking": false,
+            "tags": [],
+            "churn": {
+                "added": 167,
+                "deleted": 4,
+                "files_touched": 6
+            },
+            "loc": {
+                "src": 28852,
+                "tests": 12123,
+                "test262_data": 344024,
+                "test262_scripts": 278129,
+                "tools": 5884,
+                "docs": 901,
+                "config": 470,
+                "total": 670383
+            },
+            "files": {
+                "src": 98,
+                "tests": 41,
+                "test262_data": 6704,
+                "test262_scripts": 11510,
+                "tools": 9,
+                "docs": 3,
+                "config": 16,
+                "total": 18381
+            },
+            "bytes": {
+                "src": 1153764,
+                "tests": 417689,
+                "test262_data": 13300985,
+                "test262_scripts": 26347633,
+                "tools": 279334,
+                "docs": 58502,
+                "config": 15527,
+                "total": 41573434
             }
         }
     ]
