@@ -11,4 +11,7 @@ use Calendrics\Tests\Test262\JsUndefined;
 $dtf = new \Calendrics\Tests\Test262\IntlDateTimeFormat('en', (object) ['weekday' => 'long', 'year' => 'numeric', 'month' => 'long', 'day' => 'numeric', 'calendar' => 'iso8601']);
 $minDate = new \Calendrics\Spec\PlainDate(-271_821, 4, 19);
 $parts = $dtf->formatToParts($minDate);
-Assert::incomplete('untranslatable: Array.prototype.find()');
+$weekdayPart = \Calendrics\Tests\Test262\Js::arrayFind($parts, function ($p) { return $p->type === 'weekday'; });
+Assert::notSameValue($weekdayPart, null, 'formatToParts should include a weekday part');
+$weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+Assert::incomplete('untranslatable: Array.prototype.indexOf()');
