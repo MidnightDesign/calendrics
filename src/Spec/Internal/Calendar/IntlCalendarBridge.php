@@ -163,6 +163,10 @@ final class IntlCalendarBridge implements CalendarProtocol
 
     private function yearFromIcu(int $isoYear, int $isoMonth, int $isoDay): int
     {
+        $corrected = $this->correctedChineseFields($isoYear, $isoMonth, $isoDay);
+        if ($corrected !== null) {
+            return $corrected['year'];
+        }
         $key = ($isoYear * 512) + ($isoMonth * 32) + $isoDay;
         if (array_key_exists($key, $this->yearCache)) {
             return $this->yearCache[$key];
@@ -187,6 +191,10 @@ final class IntlCalendarBridge implements CalendarProtocol
     #[\Override]
     public function month(int $isoYear, int $isoMonth, int $isoDay): int
     {
+        $corrected = $this->correctedChineseFields($isoYear, $isoMonth, $isoDay);
+        if ($corrected !== null) {
+            return $corrected['month'];
+        }
         // Gregorian-based calendars share ISO month structure.
         if ($this->isGregorianBased) {
             return $isoMonth;
@@ -210,6 +218,10 @@ final class IntlCalendarBridge implements CalendarProtocol
     #[\Override]
     public function day(int $isoYear, int $isoMonth, int $isoDay): int
     {
+        $corrected = $this->correctedChineseFields($isoYear, $isoMonth, $isoDay);
+        if ($corrected !== null) {
+            return $corrected['day'];
+        }
         // Gregorian-based calendars share ISO day structure.
         if ($this->isGregorianBased) {
             return $isoDay;
@@ -294,6 +306,10 @@ final class IntlCalendarBridge implements CalendarProtocol
     #[\Override]
     public function monthCode(int $isoYear, int $isoMonth, int $isoDay): string
     {
+        $corrected = $this->correctedChineseFields($isoYear, $isoMonth, $isoDay);
+        if ($corrected !== null) {
+            return sprintf('M%02d', $corrected['month']);
+        }
         // Gregorian-based calendars: month code matches ISO month.
         if ($this->isGregorianBased) {
             return sprintf('M%02d', $isoMonth);
@@ -317,6 +333,19 @@ final class IntlCalendarBridge implements CalendarProtocol
     #[\Override]
     public function dayOfYear(int $isoYear, int $isoMonth, int $isoDay): int
     {
+        $corrected = $this->correctedChineseFields($isoYear, $isoMonth, $isoDay);
+        if ($corrected !== null) {
+            return $corrected['month'] === 1
+                ? $corrected['day']
+                : self::CHINESE_DAYS_IN_YEAR_CORRECTIONS[$corrected['year']] - $corrected['daysInMonth']
+                + $corrected['day'];
+        }
+        if ($this->calendarId === 'chinese') {
+            $yearStart = ChineseCalendarCorrections::yearStart($this->year($isoYear, $isoMonth, $isoDay));
+            if ($yearStart !== null) {
+                return CalendarMath::toJulianDay($isoYear, $isoMonth, $isoDay) - $yearStart + 1;
+            }
+        }
         // Gregorian-based calendars: compute directly.
         if ($this->isGregorianBased) {
             return CalendarMath::isoDayOfYear($isoYear, $isoMonth, $isoDay);
@@ -337,6 +366,10 @@ final class IntlCalendarBridge implements CalendarProtocol
     #[\Override]
     public function daysInMonth(int $isoYear, int $isoMonth, int $isoDay): int
     {
+        $corrected = $this->correctedChineseFields($isoYear, $isoMonth, $isoDay);
+        if ($corrected !== null) {
+            return $corrected['daysInMonth'];
+        }
         // Gregorian-based calendars: compute directly.
         if ($this->isGregorianBased) {
             return CalendarMath::calcDaysInMonth($isoYear, $isoMonth);
@@ -357,6 +390,10 @@ final class IntlCalendarBridge implements CalendarProtocol
     #[\Override]
     public function daysInYear(int $isoYear, int $isoMonth, int $isoDay): int
     {
+        $corrected = $this->correctedChineseFields($isoYear, $isoMonth, $isoDay);
+        if ($corrected !== null) {
+            return self::CHINESE_DAYS_IN_YEAR_CORRECTIONS[$corrected['year']];
+        }
         // Gregorian-based calendars: compute directly.
         if ($this->isGregorianBased) {
             return CalendarMath::isLeapYear($isoYear) ? 366 : 365;
@@ -474,6 +511,12 @@ final class IntlCalendarBridge implements CalendarProtocol
                 $calMonth = $maxMonths;
             }
         }
+        if ($this->calendarId === 'chinese') {
+            $corrected = ChineseCalendarCorrections::toIso($calYear, $calMonth, $calDay, $overflow);
+            if ($corrected !== null) {
+                return $corrected;
+            }
+        }
         $this->setCalendarFields($calYear, $calMonth, $calDay);
         return $this->resolveAndConstrain($calDay, $overflow);
     }
@@ -502,6 +545,23 @@ final class IntlCalendarBridge implements CalendarProtocol
         string $overflow,
     ): array {
         $isLeapCode = str_ends_with($monthCode, 'L');
+
+        if ($this->calendarId === 'chinese') {
+            $corrected = ChineseCalendarCorrections::toIso(
+                $calYear,
+                (int) substr($monthCode, offset: 1, length: 2),
+                $calDay,
+                $overflow,
+            );
+            if ($corrected !== null) {
+                // The corrected intervals are in common years; constrain a leap
+                // code to its regular counterpart before resolving the day.
+                if ($isLeapCode && $overflow === 'reject') {
+                    throw new RangeError("monthCode \"{$monthCode}\" does not exist in this calendar year.");
+                }
+                return $corrected;
+            }
+        }
 
         // For Chinese/Dangi leap month codes, first verify the leap month exists
         // in this year using day 1 (to avoid day overflow changing the month).
@@ -643,6 +703,13 @@ final class IntlCalendarBridge implements CalendarProtocol
                     }
                     $calMonth -= $monthsInYear;
                     $calYear++;
+                }
+            }
+
+            if ($this->calendarId === 'chinese') {
+                $corrected = ChineseCalendarCorrections::toIso($calYear, $calMonth, $originalCalDay, $overflow);
+                if ($corrected !== null) {
+                    return CalendarMath::fromJulianDay(CalendarMath::toJulianDay(...$corrected) + ($weeks * 7) + $days);
                 }
             }
 
@@ -899,6 +966,10 @@ final class IntlCalendarBridge implements CalendarProtocol
      */
     private function calendarYear(): int
     {
+        $corrected = $this->correctedChineseFields($this->lastSetIsoYear, $this->lastSetIsoMonth, $this->lastSetIsoDay);
+        if ($this->lastSetJdn !== null && $corrected !== null) {
+            return $corrected['year'];
+        }
         // For Gregorian-based calendars, derive directly from the cached ISO
         // year. Every caller runs setIsoDate() immediately before this, so
         // $lastSetIsoYear is always valid on the Gregorian path.
@@ -1494,18 +1565,26 @@ final class IntlCalendarBridge implements CalendarProtocol
         return $this->findChineseLeapMonthInYear($calYear) >= 0;
     }
 
+    /** @return array{year:int,month:int,day:int,daysInMonth:int}|null */
+    private function correctedChineseFields(int $isoYear, int $isoMonth, int $isoDay): ?array
+    {
+        return $this->calendarId === 'chinese'
+            ? ChineseCalendarCorrections::fromIso($isoYear, $isoMonth, $isoDay)
+            : null;
+    }
+
     /**
-     * Returns corrected (icuMonth, isLeap) for the current IntlCalendar state,
-     * applying known ICU 76.1 corrections for Chinese calendar leap month bugs.
-     *
-     * For year 1987, ICU places the leap month after month 7 (ICU 6) but it
-     * should be after month 6 (ICU 5). This means ICU's "regular M07" is
-     * actually "leap M06", and ICU's "leap M07" is actually "regular M07".
+     * Returns corrected month identity for the current ISO date.
+     * For 1987, ICU's regular M07 is leap M06 and ICU's leap M07 is regular M07.
      *
      * @return array{int, int} [icuMonth, isLeap]
      */
     private function correctedChineseMonthFields(): array
     {
+        $corrected = $this->correctedChineseFields($this->lastSetIsoYear, $this->lastSetIsoMonth, $this->lastSetIsoDay);
+        if ($this->lastSetJdn !== null && $corrected !== null) {
+            return [$corrected['month'] - 1, 0];
+        }
         $icuMonth = $this->intlCal->get(\IntlCalendar::FIELD_MONTH);
         $isLeap = $this->intlCal->get(self::FIELD_IS_LEAP_MONTH);
 
