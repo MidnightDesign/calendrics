@@ -679,6 +679,10 @@ class Emitter {
     // These are safe-stringified in template literals using json_encode().
     this.maybeArrayVars = new Set();
     this.instantVars = new Set();  // variables known to hold Temporal.Instant instances
+    // Unreassigned const bindings whose epoch nanoseconds have exact epoch parts.
+    this.epochPartsVars = new Map();
+    this.ambiguousEpochBindings = new Set();
+    this.hasEpochPropertyMutation = false;
     // Variables that are aliases for a Temporal class (from `const { Instant } = Temporal;`).
     // Maps JS variable name → Temporal class name (e.g. 'Instant' → 'Instant').
     this.temporalClassAliases = new Map();
@@ -818,6 +822,35 @@ class Emitter {
 
   transpileProgram(node) {
     collectReassignedNames(node, this.reassignedVars);
+    // This small type proof is name-based: reject every shadowed binding rather
+    // than carrying a proof into a different lexical scope.
+    const bindingNames = new Set();
+    const markBinding = (pattern) => {
+      if (!pattern) return;
+      if (pattern.type === 'Identifier') {
+        if (bindingNames.has(pattern.name)) this.ambiguousEpochBindings.add(pattern.name);
+        bindingNames.add(pattern.name);
+      } else if (pattern.type === 'ArrayPattern') pattern.elements.forEach(markBinding);
+      else if (pattern.type === 'ObjectPattern') pattern.properties.forEach(p => markBinding(p.value ?? p.argument));
+      else if (pattern.type === 'AssignmentPattern') markBinding(pattern.left);
+      else if (pattern.type === 'RestElement') markBinding(pattern.argument);
+    };
+    forEachNode(node, n => {
+      // Do not infer native Temporal return types in mutation/observer fixtures.
+      if ((n.type === 'AssignmentExpression' && n.left.type === 'MemberExpression')
+          || (n.type === 'UpdateExpression' && n.argument.type === 'MemberExpression')
+          || (n.type === 'UnaryExpression' && n.operator === 'delete')
+          || (n.type === 'CallExpression' && n.callee.type === 'MemberExpression'
+            && (n.callee.computed || ['defineProperty', 'defineProperties', 'setPrototypeOf', 'set', 'assign'].includes(n.callee.property.name)))) {
+        this.hasEpochPropertyMutation = true;
+      }
+      if (n.type === 'VariableDeclarator') markBinding(n.id);
+      else if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(n.type)) {
+        markBinding(n.id);
+        n.params.forEach(markBinding);
+      } else if (n.type === 'CatchClause') markBinding(n.param);
+      else if (n.type === 'ClassDeclaration' || n.type === 'ClassExpression') markBinding(n.id);
+    });
     // Canonical read-only-accessor prop-desc.js shape (whole-program match):
     // emit a single Assert::readOnlyAccessor call (member-shape reflection lives
     // in Assert beside methodExists/methodLength).
@@ -946,6 +979,26 @@ class Emitter {
 
   transpileVarDecl(node) {
     for (const decl of node.declarations) {
+      if (decl.id.type === 'Identifier') {
+        const name = decl.id.name;
+        this.epochPartsVars.delete(name);
+        if (!this.hasEpochPropertyMutation && node.kind === 'const' && !this.reassignedVars.has(name)
+            && !this.ambiguousEpochBindings.has(name)) {
+          const target = decl.init?.type === 'NewExpression'
+            ? parseVerifyPropertyTarget(decl.init.callee) : null;
+          if (target?.type === 'class' && ['Instant', 'ZonedDateTime'].includes(target.class)) {
+            this.epochPartsVars.set(name, target.class);
+          } else if (decl.init?.type === 'CallExpression') {
+            const callee = decl.init.callee;
+            if (callee.type === 'MemberExpression' && !callee.computed
+                && callee.object.type === 'Identifier'
+                && callee.property.name === 'getTimeZoneTransition'
+                && this.epochPartsVars.get(callee.object.name) === 'ZonedDateTime') {
+              this.epochPartsVars.set(name, 'ZonedDateTime|null');
+            }
+          }
+        }
+      }
       if (decl.init === null) continue;
       // Skip `const X = Array.prototype[Symbol.iterator]` (saving the original to
       // restore later). The override + restore are JS-only and have no PHP effect.
@@ -3283,6 +3336,26 @@ class Emitter {
   }
 
   transpileBinary(node) {
+    // Exact Temporal BigInt ordering must not compare clamped scalar fields.
+    // Fixed two-integer epoch-part arrays order lexicographically in PHP.
+    if (['<', '<=', '>', '>='].includes(node.operator)) {
+      const exactReceiver = (operand) => operand.type === 'MemberExpression'
+        && !operand.computed && operand.property.name === 'epochNanoseconds'
+        && operand.object.type === 'Identifier'
+        && this.epochPartsVars.has(operand.object.name)
+        && !this.reassignedVars.has(operand.object.name);
+      if (exactReceiver(node.left) && exactReceiver(node.right)) {
+        const receiver = (operand) => {
+          const value = this.transpileExpr(operand.object);
+          return this.epochPartsVars.get(operand.object.name) === 'ZonedDateTime|null'
+            ? `(${value} ?? throw new \\TypeError('Cannot read epochNanoseconds of null'))`
+            : value;
+        };
+        const left = receiver(node.left);
+        const right = receiver(node.right);
+        return `(${left}->epochParts() <=> ${right}->epochParts()) ${node.operator} 0`;
+      }
+    }
     // Handle `key in obj` — JS property existence check.
     // Map to array_key_exists($key, $obj) for array-mode objects or
     // property_exists($obj, $key) for real objects.
