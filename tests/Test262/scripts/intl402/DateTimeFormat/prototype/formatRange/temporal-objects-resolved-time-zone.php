@@ -8,4 +8,13 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-Assert::incomplete('untranslatable expression: ChainExpression');
+$usDayPeriodSpace = (\Calendrics\Tests\Test262\Js::truthy($__logical0 = \Calendrics\Tests\Test262\Js::arrayFind(new \Calendrics\Tests\Test262\IntlDateTimeFormat('en-US', ['timeStyle' => 'short'])->formatRangeToParts(0, 86_400), fn($part, $i, $parts) => $part->type === 'literal' && $parts[$i + 1]->type === 'dayPeriod')?->value) ? $__logical0 : '');
+$usDateRangeSeparator = \Calendrics\Tests\Test262\Js::arrayFind(new \Calendrics\Tests\Test262\IntlDateTimeFormat('en-US', ['dateStyle' => 'short'])->formatRangeToParts(1 * 86_400 * 1000, 366 * 86_400 * 1000), fn($part) => $part->type === 'literal' && $part->source === 'shared')->value;
+$formatter = new \Calendrics\Tests\Test262\IntlDateTimeFormat('en-US', ['timeZone' => 'Pacific/Apia']);
+$date1 = new \Calendrics\Spec\PlainDate(2021, 8, 4);
+$date2 = new \Calendrics\Spec\PlainDate(2021, 8, 5);
+$dateResult = $formatter->formatRange($date1, $date2);
+Assert::sameValue($dateResult, "8/4/2021{$usDateRangeSeparator}8/5/2021", 'plain dates');
+$datetime1 = new \Calendrics\Spec\PlainDateTime(2021, 8, 4, 0, 30, 45, 123, 456, 789);
+$datetime2 = new \Calendrics\Spec\PlainDateTime(2021, 8, 4, 23, 30, 45, 123, 456, 789);
+Assert::incomplete('Intl range harness does not support compact shared-date intervals');

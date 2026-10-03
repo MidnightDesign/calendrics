@@ -760,7 +760,7 @@ final class Instant implements Stringable
     private static function ianaOffsetSeconds(string $tz, int $epochSec): int
     {
         $phpTz = new \DateTimeZone($tz);
-        return $phpTz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
+        return $phpTz->getOffset(\DateTimeImmutable::createFromTimestamp($epochSec));
     }
 
     #[\Override]
@@ -797,7 +797,7 @@ final class Instant implements Stringable
         /** @var array<string, mixed> $opts */
         $opts = $options === null ? [] : Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES);
 
-        IntlFormatter::validateOptionValues($opts);
+        $opts = IntlFormatter::normalizeOptions($opts);
 
         /** @var mixed $tzOpt */
         $tzOpt = $opts['timeZone'] ?? null;
