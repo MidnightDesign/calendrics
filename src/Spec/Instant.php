@@ -7,6 +7,7 @@ namespace Calendrics\Spec;
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DurationTime;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\EpochValue;
@@ -941,16 +942,7 @@ final class Instant implements Stringable
             );
         }
         [$epochSec, $subNs] = $this->epochParts();
-        return self::addNsOffset(
-            $epochSec,
-            $subNs,
-            $d->hours,
-            $d->minutes,
-            $d->seconds,
-            $d->milliseconds,
-            $d->microseconds,
-            $d->nanoseconds,
-        );
+        return self::addNsOffset($epochSec, $subNs, $d, direction: 1);
     }
 
     /**
@@ -971,16 +963,7 @@ final class Instant implements Stringable
             );
         }
         [$epochSec, $subNs] = $this->epochParts();
-        return self::addNsOffset(
-            $epochSec,
-            $subNs,
-            -$d->hours,
-            -$d->minutes,
-            -$d->seconds,
-            -$d->milliseconds,
-            -$d->microseconds,
-            -$d->nanoseconds,
-        );
+        return self::addNsOffset($epochSec, $subNs, $d, direction: -1);
     }
 
     /**
@@ -1125,89 +1108,13 @@ final class Instant implements Stringable
      *
      * @throws RangeError if the resulting instant is outside the Temporal spec range.
      */
-    private static function addNsOffset(
-        int $epochSec,
-        int $subNs,
-        int|float $hours,
-        int|float $minutes,
-        int|float $seconds,
-        int|float $milliseconds,
-        int|float $microseconds,
-        int|float $nanoseconds,
-    ): self {
-        // Float approximation — used only to reject deltas so large their whole-
-        // second magnitude could itself overflow int64 before decomposition.
-        $floatDeltaSec =
-            ((float) $hours * 3_600.0)
-            + ((float) $minutes * 60.0)
-            + (float) $seconds
-            + ((float) $milliseconds / 1_000.0)
-            + ((float) $microseconds / 1_000_000.0)
-            + ((float) $nanoseconds / 1_000_000_000.0);
-        // Spec range in seconds: |epochSec| ≤ 8_640_000_000_000. A delta whose
-        // magnitude exceeds twice that can never land in range; reject early so
-        // the integer seconds sum below cannot overflow.
-        $specMaxSec = (float) EpochLimits::MAX_EPOCH_SECONDS;
-        if ($floatDeltaSec > (4.0 * $specMaxSec) || $floatDeltaSec < (-4.0 * $specMaxSec)) {
-            throw new RangeError('Instant result is outside the representable nanosecond range.');
-        }
-
-        // Decompose each field into whole seconds + sub-second nanoseconds.
-        // Crucially, ms/us/ns are each split into a whole-second part (added in
-        // the seconds domain) and a sub-second remainder, so that a huge field
-        // value (e.g. microseconds ≈ 9e18) never forms an int64-overflowing
-        // nanosecond product — which would silently wrap and skip the range check.
-        $h = (int) $hours;
-        $m = (int) $minutes;
-        $s = (int) $seconds;
-
-        // Each sub-second field is split via decomposeUnit(): exact integer math
-        // when the field fits int64 (so values up to 9.2e18 stay precise), or a
-        // float-domain split when the field exceeds int64 (so over-int64-but-in-spec
-        // float fields like nanoseconds ≈ 1.728e22 don't overflow on the int cast).
-        [$msSec, $msSubNs] = self::decomposeUnit($milliseconds, 1_000_000, 1_000);
-        [$usSec, $usSubNs] = self::decomposeUnit($microseconds, 1_000, 1_000_000);
-        [$nsSec, $nsSubNs] = self::decomposeUnit($nanoseconds, 1, 1_000_000_000);
-
-        // Whole-second contribution from every field.
-        $deltaSec = ($h * 3_600) + ($m * 60) + $s + $msSec + $usSec + $nsSec;
-
-        // Sub-second contribution in nanoseconds: each field's remainder is < 1e9 ns
-        // apiece (sum < 3e9, well within int64).
-        $subDeltaNs = $msSubNs + $usSubNs + $nsSubNs;
-
-        // fromEpochParts() normalizes the sub-ns carry and enforces the spec range.
-        return self::fromEpochParts($epochSec + $deltaSec, $subNs + $subDeltaNs);
-    }
-
-    /**
-     * Splits one sub-second duration field into a whole-second part and a
-     * sub-second nanosecond remainder, without ever forming an int64-overflowing
-     * nanosecond product.
-     *
-     * @param int|float $value          The field value (e.g. nanoseconds, microseconds).
-     * @param int       $nsPerUnit      Nanoseconds per one of this unit (ns=1, us=1_000, ms=1_000_000).
-     * @param int       $unitsPerSecond Units of this kind per second (ns=1e9, us=1e6, ms=1e3).
-     * @return array{int, int} [wholeSeconds, subNanoseconds] where subNanoseconds
-     *                         carries the sign of $value and |subNanoseconds| < 1e9.
-     */
-    private static function decomposeUnit(int|float $value, int $nsPerUnit, int $unitsPerSecond): array
+    private static function addNsOffset(int $epochSec, int $subNs, Duration $duration, int $direction): self
     {
-        // Fast exact path: the field fits int64, so integer division and the
-        // sub-second remainder (always < 1e9 ns) are computed without precision loss.
-        if (is_int($value)) {
-            $whole = CalendarMath::floorDiv($value, $unitsPerSecond);
-            $remainderUnits = $value - ($whole * $unitsPerSecond);
-            return [$whole, $remainderUnits * $nsPerUnit];
-        }
-
-        // Over-int64 float field: split in the float domain. floor() yields the
-        // whole-second count (≤ ~3.46e13 for any in-spec delta, exact in float and
-        // int64), and the remainder stays < 1e9 ns.
-        $wholeFloat = floor($value / (float) $unitsPerSecond);
-        $whole = (int) $wholeFloat;
-        $remainderUnits = $value - ($wholeFloat * (float) $unitsPerSecond);
-        return [$whole, (int) ($remainderUnits * (float) $nsPerUnit)];
+        // A validated Duration fits within 2^53 seconds, so its whole seconds
+        // and the Instant epoch can be added safely without a float estimate.
+        // Split before negating: a nanosecond field can equal PHP_INT_MIN.
+        [$seconds, $nanoseconds] = DurationTime::parts($duration);
+        return self::fromEpochParts($epochSec + ($direction * $seconds), $subNs + ($direction * $nanoseconds));
     }
 
     /**
