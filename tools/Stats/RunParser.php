@@ -6,7 +6,6 @@ namespace Calendrics\Tools\Stats;
 
 use DOMDocument;
 use DOMElement;
-use XMLReader;
 
 /**
  * Reads one replayed commit's PHPUnit artifacts and writes a single cache record.
@@ -27,8 +26,8 @@ final class RunParser
         private readonly string $sha,
         private readonly float $seconds,
         private readonly string $status,
-    ) {
-    }
+        private readonly ?array $provenance = null,
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -36,6 +35,9 @@ final class RunParser
     public function parse(): array
     {
         $record = [
+            'schema_version' => 2,
+            'collected_at' => gmdate('c'),
+            'provenance' => $this->provenance,
             'sha' => $this->sha,
             'status' => $this->status,
             'duration_seconds' => round($this->seconds, 1),
@@ -53,7 +55,14 @@ final class RunParser
 
         if ($record['coverage'] === null && $record['tests'] === null && $this->status === 'ok') {
             $record['status'] = 'no-artifacts';
+        } elseif (($record['coverage'] === null || $record['tests'] === null) && $this->status === 'ok') {
+            $record['status'] = 'partial-artifacts';
         }
+
+        $record['artifacts'] = [
+            'coverage' => $record['coverage'] === null ? 'missing-or-invalid' : 'available',
+            'junit' => $record['tests'] === null ? 'missing-or-invalid' : 'available',
+        ];
 
         return $record;
     }
@@ -64,7 +73,7 @@ final class RunParser
     private function parseCoverage(): ?array
     {
         $dom = new DOMDocument();
-        if (@$dom->load($this->coveragePath) === false) {
+        if (@$dom->load($this->coveragePath, LIBXML_NONET) === false) {
             return null;
         }
 
@@ -173,38 +182,43 @@ final class RunParser
     }
 
     /**
-     * The JUnit log nests one testsuite per test class inside a single wrapper
-     * suite; those class-level nodes already aggregate their data-provider
-     * children, so reading depth 2 gives an exact split without loading the
-     * thousands of individual testcase nodes.
+     * Count leaf testcases once, independent of suite nesting. PHPUnit emits
+     * the same empty skipped element for incomplete and skipped tests.
      *
      * @return array<string, mixed>|null
      */
     private function parseJunit(): ?array
     {
-        $reader = new XMLReader();
-        if (@$reader->open($this->coverageSafePath($this->junitPath)) === false) {
+        $dom = new DOMDocument();
+        if (@$dom->load($this->junitPath, LIBXML_NONET) === false) {
+            return null;
+        }
+        if (!in_array($dom->documentElement?->tagName, ['testsuites', 'testsuite'], true)) {
             return null;
         }
 
         $totals = $this->emptySuiteTotals();
-        $bySuite = ['porcelain' => $this->emptySuiteTotals(), 'test262' => $this->emptySuiteTotals(), 'other' => $this->emptySuiteTotals()];
+        $bySuite = [
+            'porcelain' => $this->emptySuiteTotals(),
+            'test262' => $this->emptySuiteTotals(),
+            'other' => $this->emptySuiteTotals(),
+        ];
 
-        while ($reader->read()) {
-            if ($reader->nodeType !== XMLReader::ELEMENT || $reader->name !== 'testsuite' || $reader->depth !== 2) {
-                continue;
-            }
-
+        foreach ($dom->getElementsByTagName('testcase') as $test) {
+            $failed = $test->getElementsByTagName('failure')->length > 0;
+            $errored = $test->getElementsByTagName('error')->length > 0;
+            $skipped = $test->getElementsByTagName('skipped')->length > 0;
             $counts = [
-                'tests' => (int) $reader->getAttribute('tests'),
-                'assertions' => (int) $reader->getAttribute('assertions'),
-                'failures' => (int) $reader->getAttribute('failures'),
-                'errors' => (int) $reader->getAttribute('errors'),
-                'skipped' => (int) $reader->getAttribute('skipped'),
-                'time' => (float) $reader->getAttribute('time'),
+                'tests' => 1,
+                'assertions' => (int) $test->getAttribute('assertions'),
+                'failures' => (int) (!$errored && $failed),
+                'errors' => (int) $errored,
+                'skipped' => (int) (!$errored && !$failed && $skipped),
+                'passed' => (int) (!$errored && !$failed && !$skipped),
+                'time' => (float) $test->getAttribute('time'),
             ];
 
-            $name = (string) $reader->getAttribute('name');
+            $name = $test->getAttribute('class') ?: $test->getAttribute('classname');
             $bucket = 'other';
             foreach (self::SUITES as $candidate => $marker) {
                 if (str_contains($name, $marker)) {
@@ -219,14 +233,17 @@ final class RunParser
             }
         }
 
-        $reader->close();
-
         $totals['time'] = round($totals['time'], 2);
         foreach ($bySuite as $bucket => $counts) {
             $bySuite[$bucket]['time'] = round($counts['time'], 2);
         }
 
-        return [...$totals, 'by_suite' => $bySuite];
+        return [
+            ...$totals,
+            'by_suite' => $bySuite,
+            'denominator' => 'reported JUnit testcases (generated variants counted separately)',
+            'skipped_semantics' => 'skipped or incomplete; JUnit cannot distinguish',
+        ];
     }
 
     /**
@@ -234,11 +251,14 @@ final class RunParser
      */
     private function emptySuiteTotals(): array
     {
-        return ['tests' => 0, 'assertions' => 0, 'failures' => 0, 'errors' => 0, 'skipped' => 0, 'time' => 0.0];
-    }
-
-    private function coverageSafePath(string $path): string
-    {
-        return str_starts_with($path, '/') ? $path : './' . $path;
+        return [
+            'tests' => 0,
+            'assertions' => 0,
+            'failures' => 0,
+            'errors' => 0,
+            'skipped' => 0,
+            'passed' => 0,
+            'time' => 0.0,
+        ];
     }
 }

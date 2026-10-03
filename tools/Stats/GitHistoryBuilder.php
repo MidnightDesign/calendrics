@@ -9,9 +9,8 @@ namespace Calendrics\Tools\Stats;
  *
  * Reads build/stats/raw/numstat.txt (written by collect-git.sh) plus a stream of
  * per-commit `git ls-tree` output on stdin. Line counts are accumulated from the
- * churn rather than read out of every blob: master is linear, so summing each
- * commit's added/deleted per bucket reproduces the tree's line count for a
- * fraction of the I/O.
+ * first-parent text churn rather than read out of every blob. Binary files
+ * and text/binary transitions are excluded, so these are text churn estimates.
  */
 final class GitHistoryBuilder
 {

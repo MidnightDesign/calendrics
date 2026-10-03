@@ -18,8 +18,7 @@ final class DashboardRenderer
         private readonly string $runsDir,
         private readonly string $templatePath,
         private readonly string $outputPath,
-    ) {
-    }
+    ) {}
 
     public function render(): void
     {
@@ -64,7 +63,7 @@ final class DashboardRenderer
             $this->fail(sprintf('cannot read %s', $this->templatePath));
         }
 
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP);
         if ($json === false) {
             $this->fail('cannot encode dashboard data');
         }
@@ -81,7 +80,7 @@ final class DashboardRenderer
             $this->outputPath,
             count($records),
             $measured,
-            count($records) > 0 ? $measured / count($records) * 100 : 0.0,
+            count($records) > 0 ? ($measured / count($records)) * 100 : 0.0,
         );
     }
 
@@ -100,32 +99,35 @@ final class DashboardRenderer
         $run = $this->readJson($path);
         $coverage = $run['coverage'] ?? null;
         $tests = $run['tests'] ?? null;
-        if (!is_array($coverage) || !is_array($tests)) {
-            return null;
-        }
+        $coverage = is_array($coverage) ? $coverage : [];
+        $tests = is_array($tests) ? $tests : [];
 
         $suites = $tests['by_suite'] ?? [];
 
         return [
             'status' => $run['status'],
+            'provenance' => $run['provenance'] ?? null,
+            'artifacts' => $run['artifacts'] ?? null,
+            'passed' => $tests['passed'] ?? null,
+            'errors' => $tests['errors'] ?? null,
             'seconds' => $run['duration_seconds'],
-            'suite_time' => $tests['time'],
-            'tests' => $tests['tests'],
-            'assertions' => $tests['assertions'],
-            'failures' => $tests['failures'] + $tests['errors'],
-            'skipped' => $tests['skipped'],
-            'test262_tests' => $suites['test262']['tests'] ?? 0,
-            'porcelain_tests' => $suites['porcelain']['tests'] ?? 0,
-            'other_tests' => $suites['other']['tests'] ?? 0,
-            'coverage' => $coverage['lines']['percent'],
-            'executable' => $coverage['lines']['executable'],
-            'executed' => $coverage['lines']['executed'],
-            'code_lines' => $coverage['lines']['code'],
-            'comment_lines' => $coverage['lines']['comments'],
-            'methods' => $coverage['methods']['count'],
-            'methods_covered' => $coverage['methods']['percent'],
-            'classes' => $coverage['classes']['count'],
-            'classes_covered' => $coverage['classes']['percent'],
+            'suite_time' => $tests['time'] ?? null,
+            'tests' => $tests['tests'] ?? null,
+            'assertions' => $tests['assertions'] ?? null,
+            'failures' => $tests['failures'] ?? null,
+            'skipped' => $tests['skipped'] ?? null,
+            'test262_tests' => $suites['test262']['tests'] ?? null,
+            'porcelain_tests' => $suites['porcelain']['tests'] ?? null,
+            'other_tests' => $suites['other']['tests'] ?? null,
+            'coverage' => $coverage['lines']['percent'] ?? null,
+            'executable' => $coverage['lines']['executable'] ?? null,
+            'executed' => $coverage['lines']['executed'] ?? null,
+            'code_lines' => $coverage['lines']['code'] ?? null,
+            'comment_lines' => $coverage['lines']['comments'] ?? null,
+            'methods' => $coverage['methods']['count'] ?? null,
+            'methods_covered' => $coverage['methods']['percent'] ?? null,
+            'classes' => $coverage['classes']['count'] ?? null,
+            'classes_covered' => $coverage['classes']['percent'] ?? null,
             'spec_coverage' => $coverage['by_dir']['/Spec']['lines']['percent'] ?? null,
         ];
     }

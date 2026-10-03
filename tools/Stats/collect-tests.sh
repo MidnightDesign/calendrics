@@ -18,7 +18,8 @@
 
 set -euo pipefail
 
-JOBS=3
+JOBS=1
+CONTAINER_ROOT="${STATS_CONTAINER_ROOT:-/app}"
 LIMIT=0
 FORCE=0
 REF="origin/master"
@@ -86,7 +87,7 @@ for ((w = 0; w < JOBS; w++)); do
         echo "==> preparing worker $w"
         git worktree add --detach --quiet "$WT" "${COMMITS[0]}"
         docker compose exec -T php \
-            cp -a /app/vendor "/app/build/stats/work/w$w/vendor"
+            cp -a /app/vendor "$CONTAINER_ROOT/build/stats/work/w$w/vendor"
     fi
 done
 
@@ -99,18 +100,18 @@ replay_one() {
     # commit writes into build/ — hence --force. build/ and vendor/ are then
     # excluded from the clean because they hold this worker's scratch: the
     # shared vendor copy and the coverage output about to be parsed.
-    (cd "$wt" && git checkout --detach --force --quiet "$sha" && git clean -qfd -e build -e vendor)
+    (cd "$wt" && git checkout --detach --force --quiet "$sha" && git clean -qfd -e build -e vendor) || return 1
 
     # A crashed run must not leave the previous commit's artifacts behind for
     # the parser to read as if they belonged to this commit.
-    docker compose exec -T php rm -rf "/app/$rel/build/coverage" || true
+    docker compose exec -T php rm -rf "$CONTAINER_ROOT/$rel/build/coverage" || return 1
 
     local start end seconds status=ok exit_code=0
     start=$(date +%s)
 
     docker compose exec -T php sh -c "
-        cd /app/$rel &&
-        composer dump-autoload --no-scripts --quiet 2>/dev/null;
+        cd \"$CONTAINER_ROOT/$rel\" &&
+        composer dump-autoload --no-scripts --quiet 2>/dev/null &&
         timeout $TIMEOUT php -d memory_limit=1G vendor/bin/phpunit tests/ \
             --coverage-xml build/coverage/coverage-xml \
             --log-junit build/coverage/junit.xml" >/dev/null 2>&1 || exit_code=$?
@@ -125,13 +126,20 @@ replay_one() {
         *) status="crashed-$exit_code" ;;
     esac
 
+    docker compose exec -T php php "$CONTAINER_ROOT/tools/Stats/bin/provenance.php" \
+        "$CONTAINER_ROOT/$rel" "$sha" "$(git rev-parse HEAD)" \
+        "$(git rev-parse "$sha:tests/Test262/data" 2>/dev/null || true)" \
+        "$(git rev-parse "$sha:tests/Test262/scripts" 2>/dev/null || true)" \
+        "$CONTAINER_ROOT/$rel/build/provenance.json" || return 1
+
     local summary
     summary=$(docker compose exec -T php \
-        php -d memory_limit=1G /app/tools/Stats/bin/parse-run.php \
-        "/app/$rel/build/coverage/coverage-xml/index.xml" \
-        "/app/$rel/build/coverage/junit.xml" \
+        php -d memory_limit=1G "$CONTAINER_ROOT/tools/Stats/bin/parse-run.php" \
+        "$CONTAINER_ROOT/$rel/build/coverage/coverage-xml/index.xml" \
+        "$CONTAINER_ROOT/$rel/build/coverage/junit.xml" \
         "$sha" "$seconds" "$status" \
-        "/app/tools/Stats/data/runs/$sha.json" 2>&1) || summary="parse-failed"
+        "$CONTAINER_ROOT/tools/Stats/data/runs/$sha.json" \
+        "$CONTAINER_ROOT/$rel/build/provenance.json" 2>&1) || return 1
 
     local done_count
     done_count=$(find "$RUNS" -name '*.json' | wc -l)

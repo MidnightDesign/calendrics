@@ -306,7 +306,7 @@
     <div>
       <div class="eyebrow">MidnightDesign / calendrics</div>
       <h1>Calendrics Chronograph</h1>
-      <p>Every commit on <code>master</code>, measured. Size and churn come straight from git; the test, assertion and coverage series come from replaying the PHPUnit suite at each commit.</p>
+      <p>History of <code>master</code>, with measured and unmeasured commits. Size and churn come straight from git; the test, assertion and coverage series come from replaying the PHPUnit suite at each commit.</p>
     </div>
     <div class="runmeta" id="runmeta"></div>
   </header>
@@ -361,6 +361,9 @@
   <footer>
     Regenerate with <code>tools/Stats/collect-git.sh</code>, <code>tools/Stats/collect-tests.sh</code> and <code>tools/Stats/bin/render.php</code>.
     Coverage is line coverage of <code>src/</code> reported by PHPUnit; tests and assertions come from the same run's JUnit log.
+    Tests count reported cases, including generated variants. Skipped includes incomplete tests.
+    Missing values and legacy provenance are unknown. Compare corpus, scope and runtime before interpreting changes.
+    Replay cost includes coverage overhead and is not a performance benchmark. Open the table for outcomes and provenance.
   </footer>
 </div>
 
@@ -375,11 +378,11 @@
   var lastRun = measured.length ? measured[measured.length - 1].run : null;
 
   var fmt = {
-    int: function (n) { return Math.round(n).toLocaleString("en-US"); },
+    int: function (n) { return n == null ? "—" : Math.round(n).toLocaleString("en-US"); },
     pct: function (n) { return n.toFixed(1) + "%"; },
-    pct2: function (n) { return n.toFixed(2) + "%"; },
+    pct2: function (n) { return n == null ? "—" : n.toFixed(2) + "%"; },
     ratio: function (n) { return n.toFixed(2); },
-    sec: function (n) { return n < 10 ? n.toFixed(1) + "s" : Math.round(n) + "s"; },
+    sec: function (n) { return n == null ? "—" : n < 10 ? n.toFixed(1) + "s" : Math.round(n) + "s"; },
     compact: function (n) {
       if (n >= 1000000) { return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1) + "M"; }
       if (n >= 1000) { return (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k"; }
@@ -400,7 +403,10 @@
 
   document.getElementById("measurednote").textContent = measured.length === rows.length
     ? "one PHPUnit run per commit, replayed across the whole history"
-    : "replay in progress — " + measured.length + " of " + rows.length + " commits measured so far";
+    : measured.length + " of " + rows.length + " commits have replay records; remaining commits are unmeasured";
+  if (measured.length) {
+    document.getElementById("measurednote").textContent += "; latest test record: " + measured[measured.length - 1].sha;
+  }
 
   var tiles = [
     { k: "src", v: fmt.int(last.loc.src), c: "lines of library code" },
@@ -413,7 +419,7 @@
       ? { k: "line coverage", v: fmt.pct2(lastRun.coverage), c: fmt.int(lastRun.executed) + " of " + fmt.int(lastRun.executable) + " lines" }
       : { k: "line coverage", v: "—", c: "replay pending" },
     lastRun
-      ? { k: "public surface", v: fmt.int(lastRun.methods), c: lastRun.classes + " classes in src/" }
+      ? { k: "public surface", v: fmt.int(lastRun.methods), c: fmt.int(lastRun.classes) + " classes in src/" }
       : { k: "public surface", v: "—", c: "replay pending" }
   ];
 
@@ -723,7 +729,7 @@
     },
     runtime: {
       title: "Suite runtime",
-      sub: "Wall time PHPUnit reports for the run, with coverage enabled.",
+      sub: "Replay cost with coverage enabled; differing machines, dependencies and corpus sizes prevent benchmark comparisons.",
       zero: true,
       tick: function (v) { return Math.round(v) + "s"; },
       value: fmt.sec,
@@ -783,13 +789,18 @@
 
   /* ---------- table view ---------- */
 
-  var head = ["Date", "Commit", "src LOC", "test LOC", "Tests", "Assertions", "Coverage", "Runtime"];
+  var head = ["Date", "Commit", "src LOC", "test LOC", "Tests", "Assertions", "Coverage", "Replay cost", "Run status", "Passed", "Failures", "Errors", "Skipped / incomplete", "Provenance"];
   var body = rows.slice().reverse().map(function (r) {
     return "<tr><td>" + r.date + "</td><td>" + r.sha + "</td><td>" + fmt.int(r.loc.src) + "</td><td>" + fmt.int(r.loc.tests) + "</td>" +
       "<td>" + (r.run ? fmt.int(r.run.tests) : "—") + "</td>" +
       "<td>" + (r.run ? fmt.int(r.run.assertions) : "—") + "</td>" +
       "<td>" + (r.run ? fmt.pct2(r.run.coverage) : "—") + "</td>" +
-      "<td>" + (r.run ? fmt.sec(r.run.suite_time) : "—") + "</td></tr>";
+      "<td>" + (r.run ? fmt.sec(r.run.suite_time) : "—") + "</td>" +
+      "<td>" + (r.run ? esc(r.run.status) : "unmeasured") + "</td>" +
+      ["passed", "failures", "errors", "skipped"].map(function (key) {
+        return "<td>" + (r.run ? fmt.int(r.run[key]) : "—") + "</td>";
+      }).join("") +
+      "<td>" + (r.run && r.run.provenance ? "<details><summary>recorded</summary><pre>" + esc(JSON.stringify(r.run.provenance, null, 2)) + "</pre></details>" : "unknown") + "</td></tr>";
   }).join("");
 
   document.getElementById("tablehost").innerHTML =

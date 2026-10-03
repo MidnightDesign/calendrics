@@ -25,6 +25,7 @@ for arg in "$@"; do
 done
 REF="${REF:-origin/master}"
 
+CONTAINER_ROOT="${STATS_CONTAINER_ROOT:-/app}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 RAW="$ROOT/build/stats/raw"
 OUT="$ROOT/tools/Stats/data/git.json"
@@ -58,7 +59,7 @@ git for-each-ref --format='%(refname:short)%09%(objectname)%09%(*objectname)' re
     >"$RAW/tags.tsv"
 
 echo "==> Pass 1/2: churn"
-git log "$REF" --first-parent --reverse --no-renames --numstat \
+git log "$REF" --first-parent --diff-merges=first-parent --reverse --no-renames --numstat \
     --format='C%x1fH%H%x1fT%ct%x1fA%an%x1fS%s' >"$RAW/numstat.txt"
 echo "    $(wc -l <"$RAW/numstat.txt") lines"
 
@@ -74,4 +75,4 @@ echo "==> Pass 2/2: trees"
         printf '\r    [%4d/%d] %s' "$i" "$TOTAL" "${sha:0:9}" >&2
     done
     printf '\r    [%4d/%d] done%*s\n' "$TOTAL" "$TOTAL" 20 '' >&2
-} | docker compose exec -T php php /app/tools/Stats/bin/build-git-json.php
+} | docker compose exec -T php php "$CONTAINER_ROOT/tools/Stats/bin/build-git-json.php"

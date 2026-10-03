@@ -12,7 +12,8 @@ if (count($argv) < 7) {
     exit(1);
 }
 
-$record = (new RunParser($argv[1], $argv[2], $argv[3], (float) $argv[4], $argv[5]))->parse();
+$provenance = isset($argv[7]) ? json_decode(file_get_contents($argv[7]), true, flags: JSON_THROW_ON_ERROR) : null;
+$record = new RunParser($argv[1], $argv[2], $argv[3], (float) $argv[4], $argv[5], $provenance)->parse();
 
 $json = json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 if ($json === false) {
@@ -25,7 +26,7 @@ file_put_contents($argv[6], $json . "\n");
 $tests = $record['tests'];
 $coverage = $record['coverage'];
 printf(
-    "%s tests=%s asserts=%s fail=%s line=%s",
+    '%s tests=%s asserts=%s fail=%s line=%s',
     $record['status'],
     is_array($tests) ? number_format($tests['tests']) : '-',
     is_array($tests) ? number_format($tests['assertions']) : '-',
