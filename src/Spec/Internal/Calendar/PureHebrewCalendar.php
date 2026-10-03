@@ -464,6 +464,12 @@ final class PureHebrewCalendar implements CalendarProtocol
 
             $calMonth += $months;
 
+            // Every 19 consecutive Hebrew years contain 235 months.
+            // Skip complete cycles before resolving the remaining month ordinal.
+            $cycles = intdiv($calMonth - 1, num2: 235);
+            $calYear += 19 * $cycles;
+            $calMonth -= 235 * $cycles;
+
             // Handle month overflow/underflow.
             while ($calMonth < 1) {
                 $calYear--;
@@ -516,8 +522,8 @@ final class PureHebrewCalendar implements CalendarProtocol
 
         $sign = $jdn2 > $jdn1 ? 1 : -1;
 
-        [$calY1] = self::isoToHebrew($isoY1, $isoM1, $isoD1);
-        [$calY2] = self::isoToHebrew($isoY2, $isoM2, $isoD2);
+        [$calY1, $calM1] = self::isoToHebrew($isoY1, $isoM1, $isoD1);
+        [$calY2, $calM2] = self::isoToHebrew($isoY2, $isoM2, $isoD2);
 
         $years = 0;
         $months = 0;
@@ -542,10 +548,11 @@ final class PureHebrewCalendar implements CalendarProtocol
         }
 
         if ($largestUnit === 'month') {
-            $yearDiff = abs($calY2 - $calY1);
-            if ($yearDiff > 1) {
-                $months = max(0, (($yearDiff - 1) * 12) - 14);
-            }
+            // Count actual elapsed months, including leap months, then let the
+            // existing trial account for the day within the destination month.
+            $monthIndex1 = (int) floor(((235 * $calY1) - 234) / 19) + $calM1;
+            $monthIndex2 = (int) floor(((235 * $calY2) - 234) / 19) + $calM2;
+            $months = max(0, abs($monthIndex2 - $monthIndex1) - 1);
             while ($this->trialDoesNotSurpass($isoY1, $isoM1, $isoD1, 0, $sign * ($months + 1), $jdn2, $sign)) {
                 $months++;
             }
