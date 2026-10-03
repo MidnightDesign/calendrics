@@ -12,4 +12,17 @@ $dtf = new \Calendrics\Tests\Test262\IntlDateTimeFormat('en', ['weekday' => 'lon
 $minDate = new \Calendrics\Spec\PlainDate(-271_821, 4, 19);
 $minResult = $dtf->format($minDate);
 $weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-Assert::incomplete('untranslatable: Array.prototype.some()');
+$hasWeekday = \Calendrics\Tests\Test262\Js::arraySome($weekdays, function ($d) use (&$minResult) { return \Calendrics\Tests\Test262\Js::includes($minResult, $d); });
+Assert::assertTrue($hasWeekday, 'min date formatted with weekday should include a weekday name, got: ' . $minResult);
+Assert::assertTrue(\Calendrics\Tests\Test262\Js::includes($minResult, '19'), 'min date result includes day 19, got: ' . $minResult);
+$maxDate = new \Calendrics\Spec\PlainDate(275_760, 9, 13);
+$maxResult = $dtf->format($maxDate);
+$hasWeekday = \Calendrics\Tests\Test262\Js::arraySome($weekdays, function ($d) use (&$maxResult) { return \Calendrics\Tests\Test262\Js::includes($maxResult, $d); });
+Assert::assertTrue($hasWeekday, 'max date formatted with weekday should include a weekday name, got: ' . $maxResult);
+Assert::assertTrue(\Calendrics\Tests\Test262\Js::includes($maxResult, '13'), 'max date result includes day 13, got: ' . $maxResult);
+$dtfDateTime = new \Calendrics\Tests\Test262\IntlDateTimeFormat('en', ['weekday' => 'short', 'year' => 'numeric', 'month' => 'numeric', 'day' => 'numeric', 'hour' => 'numeric', 'minute' => 'numeric', 'calendar' => 'iso8601']);
+$minDateTime = new \Calendrics\Spec\PlainDateTime(-271_821, 4, 19, 0, 0, 0, 0, 0, 1);
+$minDTResult = $dtfDateTime->format($minDateTime);
+$shortWeekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+$hasDTWeekday = \Calendrics\Tests\Test262\Js::arraySome($shortWeekdays, function ($d) use (&$minDTResult) { return \Calendrics\Tests\Test262\Js::includes($minDTResult, $d); });
+Assert::assertTrue($hasDTWeekday, 'min datetime formatted with weekday should include a weekday name, got: ' . $minDTResult);

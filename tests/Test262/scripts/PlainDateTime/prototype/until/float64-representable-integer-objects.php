@@ -8,4 +8,9 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-Assert::incomplete('PHP keeps Duration fields as exact int64; the fixture pins JS BigInt → Number float64 narrowing (see README deviation)');
+$dt1 = new \Calendrics\Spec\PlainDateTime(1970, 1, 1);
+$dt2 = new \Calendrics\Spec\PlainDateTime(2554, 7, 21, 23, 34, 33, 709, 551, 616);
+$result = $dt1->until($dt2, (object) ['largestUnit' => 'microseconds']);
+Assert::sameValue($result->microseconds, 18_446_744_073_709_552, 'microseconds result should have FP precision loss');
+Assert::sameValue((string) ($result), 'PT18446744073.709552616S', 'Duration.p.toString() should not use more precise internal representation than the spec prescribes');
+Assert::sameValue(\Calendrics\Spec\Duration::compare($result->add((object) ['microseconds' => 1]), $result), 0, 'subsequent ops on duration should not use more precise internal representation than the spec prescribes');
