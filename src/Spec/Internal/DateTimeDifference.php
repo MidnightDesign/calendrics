@@ -453,11 +453,18 @@ final class DateTimeDifference
             if ($outputSign < 0) {
                 $effTimeMode = EpochRounding::negateMode($roundingMode);
             }
-            $absTimeNs = EpochRounding::roundAsIfPositive($timeDiffNs, $nsIncrement, $effTimeMode);
-
-            // Handle day overflow from rounding time (e.g., 23:59 rounds up to 24:00).
-            $overflowDays = intdiv(num1: $absTimeNs, num2: EpochLimits::NS_PER_DAY);
-            $absTimeNs %= EpochLimits::NS_PER_DAY;
+            // NudgeToDayOrTime rounds the day remainder and time together. Keep
+            // whole seconds separate so long spans retain half-even tie parity.
+            $timeSeconds = ($days * 86_400) + intdiv($timeDiffNs, EpochLimits::NS_PER_SECOND);
+            [$roundedSeconds, $roundedSubNs] = EpochRounding::round(
+                $timeSeconds,
+                $timeDiffNs % EpochLimits::NS_PER_SECOND,
+                $nsIncrement,
+                $effTimeMode,
+            );
+            $roundedDays = intdiv($roundedSeconds, num2: 86_400);
+            $overflowDays = $roundedDays - $days;
+            $absTimeNs = (($roundedSeconds % 86_400) * EpochLimits::NS_PER_SECOND) + $roundedSubNs;
 
             $roundedDate = new DateSpan($years, $months, $weeks, $days + $overflowDays);
             if ($overflowDays > 0) {
