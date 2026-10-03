@@ -201,6 +201,11 @@ final class TimeZoneHelper
         $epoch1 = $wallSec - $approxOffset;
         $transitions = self::safeGetTransitions($tz, $epoch1 - 86_400, $epoch1 + 86_400);
         $nTransitions = count($transitions);
+        if ($nTransitions === 1) {
+            // The regular resolver uses this same epoch and transition window.
+            // With no transition to inspect, reuse its final offset lookup here.
+            return $wallSec - $tz->getOffset(\DateTimeImmutable::createFromTimestamp($epoch1));
+        }
         if ($nTransitions >= 2) {
             for ($i = 1; $i < $nTransitions; $i++) {
                 $tEpoch = $transitions[$i]['ts'];
