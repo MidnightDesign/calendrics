@@ -10,6 +10,7 @@ use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\DateArithmetic;
 use Calendrics\Spec\Internal\DateDifference;
+use Calendrics\Spec\Internal\DateFieldNumber;
 use Calendrics\Spec\Internal\DateFields;
 use Calendrics\Spec\Internal\DateParse;
 use Calendrics\Spec\Internal\EpochLimits;
@@ -234,12 +235,12 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
         $this->calendarId = CalendarFactory::resolveConstructorCalendar($calendar, 'PlainDate');
         // TC39 ToIntegerWithTruncation: null → 0, bool → 0/1, string/float → truncated int.
         $this->isoYear = CalendarMath::toConstructorInt($year, 'PlainDate year');
-        $monthInt = CalendarMath::toConstructorInt($month, 'PlainDate month');
+        $monthInt = DateFieldNumber::month($month ?? 0, 'PlainDate month');
         if ($monthInt < 1 || $monthInt > 12) {
             throw new RangeError("Invalid PlainDate: month {$monthInt} is out of range 1–12.");
         }
         $this->isoMonth = $monthInt;
-        $dayInt = CalendarMath::toConstructorInt($day, 'PlainDate day');
+        $dayInt = DateFieldNumber::day($day ?? 0, 'PlainDate day');
         if ($dayInt < 1) {
             throw new RangeError("Invalid PlainDate: day {$dayInt} must be at least 1.");
         }
