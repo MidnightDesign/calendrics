@@ -13,4 +13,7 @@ $weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', '
 $minDate = new \Calendrics\Spec\PlainDate(-271_821, 4, 19);
 $maxDate = new \Calendrics\Spec\PlainDate(275_760, 9, 13);
 $result = $dtf->formatRange($minDate, $maxDate);
-Assert::incomplete('untranslatable: Array.prototype.some()');
+$hasWeekday = \Calendrics\Tests\Test262\Js::arraySome($weekdays, function ($d) use (&$result) { return \Calendrics\Tests\Test262\Js::includes($result, $d); });
+Assert::assertTrue($hasWeekday, 'formatRange with extreme dates should include weekday names, got: ' . $result);
+Assert::assertTrue(\Calendrics\Tests\Test262\Js::includes($result, '19'), 'formatRange result includes min day 19, got: ' . $result);
+Assert::assertTrue(\Calendrics\Tests\Test262\Js::includes($result, '13'), 'formatRange result includes max day 13, got: ' . $result);
