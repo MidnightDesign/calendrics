@@ -20,9 +20,32 @@ use Calendrics\Spec\Internal\IntlFormatter;
  */
 final class JsDate
 {
+    public readonly int|float $epochMilliseconds;
+
     public function __construct(
-        public readonly int|float $epochMilliseconds = 0,
-    ) {}
+        int|float $epochMilliseconds = 0,
+        ?int $monthIndex = null,
+        int $day = 1,
+        int $hour = 0,
+        int $minute = 0,
+        int $second = 0,
+        int $millisecond = 0,
+    ) {
+        if ($monthIndex === null) {
+            $this->epochMilliseconds = $epochMilliseconds;
+            return;
+        }
+
+        // The field-list overload uses local time (UTC in this harness), a
+        // zero-based month, and maps years 0..99 to 1900..1999 like JS Date.
+        $year = (int) $epochMilliseconds;
+        if ($year >= 0 && $year <= 99) {
+            $year += 1900;
+        }
+        $date = new \DateTimeImmutable('1970-01-01', new \DateTimeZone('UTC'));
+        $date = $date->setDate($year, $monthIndex + 1, $day)->setTime($hour, $minute, $second);
+        $this->epochMilliseconds = ($date->getTimestamp() * 1000) + $millisecond;
+    }
 
     /** JS Date.prototype.getTime(). */
     public function getTime(): int|float

@@ -6,9 +6,8 @@
 #   ./tools/sync-test262.sh            # sync all implemented classes
 #   ./tools/sync-test262.sh Duration   # sync only Duration
 #
-# This does a sparse checkout of just the Temporal directories we need, plus the
-# Temporal-tagged fixtures under the ECMA-402 formatters, then rsyncs them into
-# tests/Test262/data/.
+# Sparse-checkout the Temporal directories plus ECMA-402 formatters, then sync
+# Temporal-tagged and selected shared fixtures into tests/Test262/data/.
 
 set -euo pipefail
 
@@ -23,6 +22,12 @@ DATA_DIR="$(cd "$(dirname "$0")/../tests/Test262/data" && pwd)"
 INTL_FORMATTERS=(
     DateTimeFormat
     DurationFormat
+)
+
+# Untagged fixtures that pin shared IntlFormatter behavior with literal oracles.
+# Keep these explicit: most legacy Intl tests exercise JS-only object semantics.
+INTL_SHARED_FIXTURES=(
+    DateTimeFormat/prototype/format/numbering-system.js
 )
 
 # All Temporal classes we track
@@ -110,7 +115,9 @@ sync_tree() {
     mkdir -p "$dst"
 
     local changes
-    changes=$(rsync -rl --no-group --no-owner --delete --itemize-changes --out-format='%i %n%L' \
+    # Each fresh clone has new mtimes; compare content so unchanged fixtures do
+    # not all get rewritten (particularly expensive on Docker bind mounts).
+    changes=$(rsync -rl --checksum --no-group --no-owner --delete --itemize-changes --out-format='%i %n%L' \
         --include='*/' --include='*.js' --exclude='*' "$src/" "$dst/")
 
     local after
@@ -161,8 +168,8 @@ done
 #
 #   test/intl402/{DateTimeFormat,DurationFormat}/ ->
 #       data/intl402/{DateTimeFormat,DurationFormat}/
-#     Only fixtures tagged with the Temporal feature are synced. The remaining
-#     files exercise Intl surface that this project does not implement.
+#     Temporal-tagged fixtures plus INTL_SHARED_FIXTURES above are synced.
+#     The latter exercise formatting used by Temporal via legacy Date values.
 #
 # Deliberately NOT synced:
 #
@@ -181,11 +188,11 @@ if [[ $SYNC_NON_CLASS_AREAS == true ]]; then
     sync_tree "$CLONE_DIR/test/staging/Temporal" "$DATA_DIR/staging" staging
 fi
 
-# Sync the Temporal-tagged subset of the ECMA-402 formatter tests. Build a
+# Sync Temporal-tagged and explicitly selected shared ECMA-402 formatter tests. Build a
 # filtered source tree first so sync_tree can retain its update detection and
 # deletion behavior.
 echo ""
-echo "==> Syncing Temporal-tagged Intl formatter test files..."
+echo "==> Syncing Temporal and shared Intl formatter test files..."
 
 for formatter in "${INTL_FORMATTERS[@]}"; do
     src="$CLONE_DIR/test/intl402/$formatter"
@@ -199,6 +206,18 @@ for formatter in "${INTL_FORMATTERS[@]}"; do
 
     # Upstream tags these with `features: [Temporal]` in the YAML frontmatter.
     (cd "$src" && grep -rl --include='*.js' -E '^features:.*\bTemporal\b' . | sed 's|^\./||' | sort) > "$tagged"
+
+    for fixture in "${INTL_SHARED_FIXTURES[@]}"; do
+        if [[ "$fixture" == "$formatter/"* ]]; then
+            relative=${fixture#"$formatter/"}
+            if [[ ! -f "$src/$relative" ]]; then
+                echo "    ERROR: required shared formatter fixture missing: $fixture" >&2
+                exit 1
+            fi
+            printf '%s\n' "$relative" >> "$tagged"
+        fi
+    done
+    sort -u -o "$tagged" "$tagged"
 
     mkdir -p "$filtered"
     rsync -rl --no-group --no-owner --files-from="$tagged" "$src/" "$filtered/"
