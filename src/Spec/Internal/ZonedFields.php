@@ -377,9 +377,7 @@ final class ZonedFields
         if (!is_string($raw)) {
             throw new TypeError('ZonedDateTime monthCode must be a string.');
         }
-        if (preg_match('/^M(\d{2})(L?)$/', $raw) !== 1) {
-            throw new RangeError("Invalid monthCode for ISO calendar: \"{$raw}\".");
-        }
+        MonthCode::validate($raw);
     }
 
     /**
