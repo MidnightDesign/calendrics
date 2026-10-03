@@ -1321,7 +1321,7 @@ final class Instant implements Stringable
 
         $suIdx = $unitOrder[$suRaw];
 
-        if ($luProvided) {
+        if ($luProvided && $luVal !== 'auto') {
             $luRaw = (string) $luVal;
             if (!array_key_exists($luRaw, $unitOrder)) {
                 throw new RangeError("Invalid largestUnit \"{$luRaw}\".");
