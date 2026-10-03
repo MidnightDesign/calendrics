@@ -18,6 +18,9 @@ final class DurationTime
     public static function parts(Duration $duration): array
     {
         $seconds = ((int) $duration->hours * 3_600) + ((int) $duration->minutes * 60) + (int) $duration->seconds;
+        if ($duration->milliseconds === 0 && $duration->microseconds === 0 && $duration->nanoseconds === 0) {
+            return [$seconds, 0];
+        }
         $subNs = 0;
         foreach ([
             [$duration->milliseconds, 3, 1_000_000],
