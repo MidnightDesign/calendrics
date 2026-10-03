@@ -367,12 +367,10 @@ final class DateTimeDifference
             if ($isSmallestCalendar) {
                 // Calendar-unit rounding: zero out time and round the calendar part.
                 if ($normSmallest === 'year') {
-                    $totalMonths = ($years * 12) + $months;
                     $roundedYears = self::roundCalendarYears(
                         $years,
-                        $totalMonths,
-                        $days,
-                        $timeDiffNs,
+                        $otherJdn,
+                        $otherNs - $tdNs,
                         $temporalDate,
                         $roundingIncrement,
                         $roundingMode,
@@ -593,21 +591,28 @@ final class DateTimeDifference
         // floor-count (rounded down to nearest multiple of increment).
         $floorCount = intdiv(num1: $totalMonths, num2: $increment) * $increment;
 
-        $anchorJdn = self::addSignedMonths($receiver, $dir * $floorCount);
-        $nextJdn = self::addSignedMonths($receiver, $dir * ($floorCount + $increment));
+        $anchorJdn = self::addSigned($receiver, 0, $dir * $floorCount);
+        $nextJdn = self::addSigned($receiver, 0, $dir * ($floorCount + $increment));
 
         $intervalDays = abs($nextJdn - $anchorJdn);
 
-        // Total fractional progress: remaining days + remaining time as fraction of a day.
-        $totalRemNs = ($remainingDays * EpochLimits::NS_PER_DAY) + $remainingTimeNs;
-        $progress = (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY);
-
-        $roundUp = CalendarMath::applyCalendarRoundingProgress($totalMonths, $progress, $increment, $mode, $sign);
+        // Measure all progress from the lower increment boundary, including
+        // whole months that do not fill the requested increment.
+        $unroundedJdn = self::addSigned($receiver, 0, $dir * $totalMonths);
+        $remainingDistance = abs($unroundedJdn - $anchorJdn) + $remainingDays;
+        $roundUp = self::roundCalendarProgress(
+            $remainingDistance,
+            $remainingTimeNs,
+            $intervalDays,
+            $mode,
+            $sign,
+            intdiv($floorCount, $increment),
+        );
 
         $roundedAbsMonths = $roundUp ? $floorCount + $increment : $floorCount;
 
         // Validate: the rounded result must not exceed the valid PlainDate range.
-        self::addSignedMonths($receiver, $dir * $roundedAbsMonths);
+        self::addSigned($receiver, 0, $dir * $roundedAbsMonths);
 
         return $roundedAbsMonths;
     }
@@ -619,9 +624,8 @@ final class DateTimeDifference
      */
     private static function roundCalendarYears(
         int $years,
-        int $totalMonths,
-        int $remainingDays,
-        int $remainingTimeNs,
+        int $targetJdn,
+        int $timeDifferenceNs,
         PlainDateTime $receiver,
         int $increment,
         string $mode,
@@ -632,42 +636,77 @@ final class DateTimeDifference
 
         $floorCount = intdiv(num1: $years, num2: $increment) * $increment;
 
-        // For year rounding, we go by year increments (12 months each).
-        $anchorJdn = self::addSignedMonths($receiver, $dir * $floorCount * 12);
-        $nextJdn = self::addSignedMonths($receiver, $dir * ($floorCount + $increment) * 12);
+        // Calendar years can contain leap months, so do not convert them to months.
+        $anchorJdn = self::addSigned($receiver, $dir * $floorCount, 0);
+        $nextJdn = self::addSigned($receiver, $dir * ($floorCount + $increment), 0);
 
         $intervalDays = abs($nextJdn - $anchorJdn);
 
-        // Compute the total distance from anchor (floorCount years) to actual position.
-        $remMonths = $totalMonths - ($floorCount * 12);
-        $monthsJdn = self::addSignedMonths($receiver, $dir * (($floorCount * 12) + $remMonths));
-        $remDaysFromMonths = abs($monthsJdn - $anchorJdn);
-        $totalRemNs = (($remDaysFromMonths + $remainingDays) * EpochLimits::NS_PER_DAY) + $remainingTimeNs;
-        $progress = (float) $totalRemNs / ((float) $intervalDays * (float) EpochLimits::NS_PER_DAY);
-
-        $roundUp = CalendarMath::applyCalendarRoundingProgress($years, $progress, $increment, $mode, $sign);
+        // Measure the actual endpoint, keeping its sub-day part exact.
+        $remainingDays = $dir * ($targetJdn - $anchorJdn);
+        $remainingTimeNs = $dir * $timeDifferenceNs;
+        if ($remainingTimeNs < 0) {
+            $remainingDays--;
+            $remainingTimeNs += EpochLimits::NS_PER_DAY;
+        }
+        $roundUp = self::roundCalendarProgress(
+            $remainingDays,
+            $remainingTimeNs,
+            $intervalDays,
+            $mode,
+            $sign,
+            intdiv($floorCount, $increment),
+        );
 
         $roundedAbsYears = $roundUp ? $floorCount + $increment : $floorCount;
 
         // Validate range.
-        self::addSignedMonths($receiver, $dir * $roundedAbsYears * 12);
+        self::addSigned($receiver, $dir * $roundedAbsYears, 0);
 
         return $roundedAbsYears;
     }
 
     /**
-     * Adds $signedMonths months to $receiver's date and returns the resulting Julian Day Number.
+     * Compare whole days and sub-day nanoseconds separately so a one-nanosecond
+     * difference from the midpoint survives even a multi-year rounding window.
+     */
+    private static function roundCalendarProgress(
+        int $days,
+        int $timeNs,
+        int $intervalDays,
+        string $mode,
+        int $sign,
+        int $floorMultiple,
+    ): bool {
+        $halfDays = intdiv(num1: $intervalDays, num2: 2);
+        $halfTimeNs = ($intervalDays % 2) * intdiv(num1: EpochLimits::NS_PER_DAY, num2: 2);
+        $comparison = $days <=> $halfDays;
+        if ($comparison === 0) {
+            $comparison = $timeNs <=> $halfTimeNs;
+        }
+        // The mode helper needs only zero, below-half, tie, or above-half.
+        $progress = match (true) {
+            $days === 0 && $timeNs === 0 => 0.0,
+            $comparison < 0 => 0.25,
+            $comparison === 0 => 0.5,
+            default => 0.75,
+        };
+        return CalendarMath::applyRoundingProgress($progress, $mode, $sign, $floorMultiple);
+    }
+
+    /**
+     * Adds calendar years and months to the receiver and returns the Julian Day Number.
      *
      * @throws RangeError if the resulting date is outside the valid ISO range.
      */
-    private static function addSignedMonths(PlainDateTime $receiver, int $signedMonths): int
+    private static function addSigned(PlainDateTime $receiver, int $signedYears, int $signedMonths): int
     {
         $cal = CalendarFactory::get($receiver->calendarId);
         [$y, $m, $d] = $cal->dateAdd(
             $receiver->isoYear,
             $receiver->isoMonth,
             $receiver->isoDay,
-            0,
+            $signedYears,
             $signedMonths,
             0,
             0,
