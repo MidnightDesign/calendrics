@@ -82,6 +82,7 @@ final class ZonedParse
         }
 
         $monthNum = (int) substr(string: $dateRest, offset: 1, length: 2);
+        $dayNum = (int) substr(string: $dateRest, offset: 4, length: 2);
         $hourNum = (int) $hourStr;
         $minNum = (int) $minStr;
         $secNum = $secStr !== '' ? (int) $secStr : 0;
@@ -90,7 +91,16 @@ final class ZonedParse
             throw new RangeError("Invalid ZonedDateTime string \"{$text}\": month out of range.");
         }
 
-        // Leap second: :60 names the last nanosecond of :59.
+        $daysInMonth = CalendarMath::calcDaysInMonth($yearNum, $monthNum);
+        if ($dayNum < 1 || $dayNum > $daysInMonth) {
+            throw new RangeError("Invalid ZonedDateTime string \"{$text}\": day out of range.");
+        }
+        DateParse::validateOptionalTime($hourStr, $minStr, $secStr, $text, 'ZonedDateTime');
+        if ($fractionRaw !== '' && $secStr === '') {
+            throw new RangeError("Invalid ZonedDateTime string \"{$text}\": a fraction requires seconds.");
+        }
+
+        // Leap second: 60 maps to second 59 while retaining the fractional part.
         $normalSec = $secNum === 60 ? 59 : $secNum;
 
         [$tzId, $calendarId] = self::extractAnnotations($annotationSection, $text);
@@ -101,6 +111,13 @@ final class ZonedParse
         // the offset is matched against the zone below.
         $inlineOffsetHasSeconds = false;
         if ($hasInlineOffset) {
+            if (
+                $offsetRaw !== 'Z'
+                && $offsetRaw !== 'z'
+                && preg_match(sprintf('/^(?:%s)$/D', DateParse::NUMERIC_OFFSET_PATTERN), $offsetRaw) !== 1
+            ) {
+                throw new RangeError("Invalid ZonedDateTime string \"{$text}\": UTC offset out of range.");
+            }
             [$inlineSign, $inlineAbsSec] = IsoOffset::parts($offsetRaw);
             $inlineOffsetSec = $inlineSign * $inlineAbsSec;
             $inlineOffsetHasSeconds =
