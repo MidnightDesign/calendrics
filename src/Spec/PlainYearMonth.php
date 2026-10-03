@@ -805,7 +805,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
                     $su = Options::coerceEnumOption($su, 'smallestUnit');
                 }
                 if (is_string($su)) {
-                    if (!in_array($su, $validUnits, strict: true)) {
+                    if ($su === 'auto' || !in_array($su, $validUnits, strict: true)) {
                         throw new RangeError("Invalid smallestUnit value: \"{$su}\".");
                     }
                     $smallestUnit = $su;
