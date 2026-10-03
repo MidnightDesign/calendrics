@@ -1635,7 +1635,7 @@ final class ZonedDateTime implements Stringable
         $absEpochSec = abs($epochSec);
         if (
             $absEpochSec > EpochLimits::MAX_EPOCH_SECONDS
-            || $absEpochSec === EpochLimits::MAX_EPOCH_SECONDS && $subNs > 0
+            || $epochSec === EpochLimits::MAX_EPOCH_SECONDS && $subNs > 0
         ) {
             throw new RangeError('ZonedDateTime arithmetic result is outside the representable range.');
         }
