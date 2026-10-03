@@ -621,7 +621,8 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
         // Also handles MM-DD (without --) as a bare month-day string.
         // date: year + rest, optional T+time, optional offset, bracket annotations
         $datePattern = sprintf(
-            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:[Zz]|%s)?)?((?:\[[^\]]*\])*)$/',
+            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ]%s(?:[Zz]|%s)?)?((?:\[[^\]]*\])*)$/',
+            DateParse::TIME_PATTERN,
             DateParse::NUMERIC_OFFSET_PATTERN,
         );
 

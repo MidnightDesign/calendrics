@@ -25,6 +25,13 @@ use Calendrics\Spec\PlainDate;
  */
 final class DateParse
 {
+    /**
+     * TimeSpec captures hour, minute, second, and fraction in that order.
+     * The branch-reset group (?|...) keeps those four captures identical for
+     * extended and compact forms; fractions require an explicit seconds field.
+     */
+    public const string TIME_PATTERN = '(\d{2})(?|:(\d{2})(?::(\d{2})([.,]\d+)?)?|(\d{2})(?:(\d{2})([.,]\d+)?)?)?';
+
     /** Numeric UTC offset grammar; offset seconds exclude wall-clock leap second 60. */
     public const string NUMERIC_OFFSET_PATTERN = '[+-](?:[01]\d|2[0-3])(?::[0-5]\d(?::[0-5]\d(?:[.,]\d+)?)?|[0-5]\d(?:[0-5]\d(?:[.,]\d+)?)?)?';
 
@@ -62,7 +69,8 @@ final class DateParse
         // Z (UTC designator) is NEVER valid for PlainDate.
         // date: year + rest, optional T+HH:MM:SS.frac, optional offset, bracket annotations
         $pattern = sprintf(
-            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:%s)?)?((?:\[[^\]]*\])*)$/',
+            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ]%s(?:%s)?)?((?:\[[^\]]*\])*)$/',
+            self::TIME_PATTERN,
             self::NUMERIC_OFFSET_PATTERN,
         );
 
