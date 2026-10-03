@@ -665,6 +665,8 @@ class Emitter {
     // Used to generate the `<name>-objects.php` companion variants that exercise
     // the `is_object($x)` branches of Spec\* property-bag consumers.
     this.objectMode = objectMode;
+    this.logicalTemporary = 0;
+    this.requiresCompactDateTimeRange = false;
     // Variables known to hold PHP arrays (assigned from JS object literals).
     // Member access on these uses ['key'] instead of ->key.
     this.objectVars = new Set();
@@ -2000,6 +2002,7 @@ class Emitter {
       case 'TemplateLiteral':   return this.transpileTemplate(node);
       case 'ArrayExpression':   return this.transpileArray(node);
       case 'MemberExpression':  return this.transpileMember(node);
+      case 'ChainExpression':   return this.transpileChain(node);
       case 'CallExpression':    return this.transpileCall(node);
       case 'NewExpression':     return this.transpileNew(node);
       case 'ArrowFunctionExpression':
@@ -2327,6 +2330,17 @@ class Emitter {
 
   transpileCall(node) {
     const callee = node.callee;
+
+    // ext-intl exposes no interval formatter. Our range shim can join full
+    // endpoints, but this fixture additionally requires collapsing a shared
+    // date. Keep its earlier plain-date assertion, then report that gap.
+    if (this.requiresCompactDateTimeRange && callee.type === 'MemberExpression'
+        && !callee.computed && callee.property.name === 'formatRange'
+        && node.arguments[0]?.type === 'Identifier'
+        && this.instanceVarClasses.get(node.arguments[0].name) === 'PlainDateTime') {
+      this.emitIncomplete('Intl range harness does not support compact shared-date intervals');
+      return null;
+    }
 
     // Computed method call: obj["methodName"](args) → $obj->{$method}($args)
     // In PHP, $obj["method"]($args) tries to dereference an array element, which
@@ -3324,11 +3338,40 @@ class Emitter {
     return `${left} ${node.operator} ${right}`;
   }
 
+  transpileChain(node) {
+    // The Intl fixtures optionally read a field of Array.find's parts result.
+    // The helper represents a missing match as null; PHP's nullsafe access
+    // therefore preserves both that result and single receiver evaluation.
+    const member = node.expression;
+    const find = member.object;
+    const parts = find?.callee?.object;
+    if (member.type !== 'MemberExpression' || !member.optional || member.computed
+        || !['type', 'value', 'source'].includes(member.property.name)
+        || find?.type !== 'CallExpression' || find.optional
+        || find.callee.type !== 'MemberExpression' || find.callee.computed || find.callee.optional
+        || find.callee.property.name !== 'find'
+        || parts?.type !== 'CallExpression' || parts.optional
+        || parts.callee.type !== 'MemberExpression' || parts.callee.computed || parts.callee.optional
+        || !['formatToParts', 'formatRangeToParts'].includes(parts.callee.property.name)) {
+      this.emitIncomplete('untranslatable: optional chain beyond an Intl parts find result field');
+      return null;
+    }
+    const receiver = this.transpileExpr(member.object);
+    return receiver === null ? null : `${receiver}?->${member.property.name}`;
+  }
+
   transpileLogical(node) {
     const left  = this.transpileExpr(node.left);
     const right = this.transpileExpr(node.right);
     if (left === null || right === null) return null;
     const op = node.operator;
+    // Optional-field fallbacks carry a value, not a PHP boolean. Preserve JS
+    // truthiness (notably "0" and empty arrays), evaluate the left once, and
+    // leave the right in the lazy branch of the conditional.
+    if (op === '||' && node.left.type === 'ChainExpression') {
+      const temporary = `$__logical${this.logicalTemporary++}`;
+      return `(${HARNESS_NS}Js::truthy(${temporary} = ${left}) ? ${temporary} : ${right})`;
+    }
     return `${parenthesizeOperand(left, node.left, op, 'left')} ${op} ${parenthesizeOperand(right, node.right, op, 'right')}`;
   }
 
@@ -5234,6 +5277,7 @@ function processFile(jsPath, dataDir, scriptsDir) {
 
   const renderPass = (objectMode) => {
     const emitter = new Emitter(stripped, objectMode);
+    emitter.requiresCompactDateTimeRange = relPath === 'intl402/DateTimeFormat/prototype/formatRange/temporal-objects-resolved-time-zone.js';
     emitter.localeSpaceComparison = relPath === 'intl402/DateTimeFormat/prototype/format/numbering-system.js';
     emitter.observersInUse = observersInUse;
     emitter.observerTrackers = new Set(observerTrackers);
