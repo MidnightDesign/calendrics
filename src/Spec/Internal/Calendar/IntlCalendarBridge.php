@@ -624,18 +624,26 @@ final class IntlCalendarBridge implements CalendarProtocol
 
             $calMonth += $months;
 
-            // Handle month overflow/underflow.
-            while ($calMonth < 1) {
-                $calYear--;
-                $calMonth += $this->calendarMonthsInCalYear($calYear);
-            }
-            while (true) {
-                $monthsInYear = $this->calendarMonthsInCalYear($calYear);
-                if ($calMonth <= $monthsInYear) {
-                    break;
+            // Fixed-month calendars can carry directly across years. Chinese
+            // and Dangi must count each year's variable number of months.
+            if ($this->calendarId !== 'chinese' && $this->calendarId !== 'dangi') {
+                $monthsInYear = $this->isCopticLike ? 13 : 12;
+                $yearCarry = CalendarMath::floorDiv($calMonth - 1, $monthsInYear);
+                $calYear += $yearCarry;
+                $calMonth -= $yearCarry * $monthsInYear;
+            } else {
+                while ($calMonth < 1) {
+                    $calYear--;
+                    $calMonth += $this->calendarMonthsInCalYear($calYear);
                 }
-                $calMonth -= $monthsInYear;
-                $calYear++;
+                while (true) {
+                    $monthsInYear = $this->calendarMonthsInCalYear($calYear);
+                    if ($calMonth <= $monthsInYear) {
+                        break;
+                    }
+                    $calMonth -= $monthsInYear;
+                    $calYear++;
+                }
             }
 
             // Resolve new date with day constraining. When maxCalDayCache
@@ -869,6 +877,10 @@ final class IntlCalendarBridge implements CalendarProtocol
      */
     private function totalMonthsInYearsDirectional(int $isoY, int $isoM, int $isoD, int $yearCount, int $sign): int
     {
+        if ($this->calendarId !== 'chinese' && $this->calendarId !== 'dangi') {
+            return $yearCount * ($this->isCopticLike ? 13 : 12);
+        }
+
         $total = 0;
         $curIsoY = $isoY;
         $curIsoM = $isoM;
