@@ -548,6 +548,8 @@ final class Instant implements Stringable
             $tzStr = $timeZoneRaw;
             $resolved = self::resolveTimeZoneOffsetSeconds($tzStr);
             if ($resolved !== null) {
+                // Direct numeric offsets must pass the same validation as other timezone paths.
+                TimeZoneHelper::normalizeTimezoneId($tzStr);
                 $tzOffsetSec = $resolved;
             } else {
                 // IANA timezone: extract the timezone name from the string.
