@@ -380,21 +380,42 @@ final class DateTimeDifference
                     return new Duration(years: $outputSign * $roundedYears);
                 }
                 if ($normSmallest === 'month') {
-                    $totalMonths = ($years * 12) + $months;
+                    // ComputeNudgeWindow keeps years fixed while rounding months.
+                    // Borrow at the actual target before asking for the receiver's
+                    // calendar difference; reversing endpoints changes month ends.
+                    $monthTargetJdn = $otherJdn;
+                    if (($sign * ($otherNs - $tdNs)) < 0) {
+                        $monthTargetJdn -= $sign;
+                    }
+                    [$years, $months] = self::absoluteCalendarDiff(
+                        CalendarFactory::get($calId),
+                        $temporalDate,
+                        $monthTargetJdn,
+                        $normLargest === 'year' ? 'year' : 'month',
+                    );
                     $roundedMonths = self::roundCalendarMonths(
-                        $totalMonths,
-                        $days,
-                        $timeDiffNs,
+                        $months,
+                        $otherJdn,
+                        $otherNs - $tdNs,
                         $temporalDate,
                         $roundingIncrement,
                         $roundingMode,
                         $receiverIsLater,
                         $outputSign,
+                        $years,
                     );
                     if ($normLargest === 'year') {
-                        $roundedYears = intdiv(num1: $roundedMonths, num2: 12);
-                        $roundedMonths -= $roundedYears * 12;
-                        return new Duration(years: $outputSign * $roundedYears, months: $outputSign * $roundedMonths);
+                        if ($roundedMonths > $months) {
+                            // BubbleRelativeDuration checks the next year once,
+                            // even when the month increment spans several years.
+                            $roundedJdn = self::addSigned($temporalDate, $sign * $years, $sign * $roundedMonths);
+                            $nextYearJdn = self::addSigned($temporalDate, $sign * ($years + 1), 0);
+                            if (($sign * ($roundedJdn - $nextYearJdn)) >= 0) {
+                                $years++;
+                                $roundedMonths = 0;
+                            }
+                        }
+                        return new Duration(years: $outputSign * $years, months: $outputSign * $roundedMonths);
                     }
                     return new Duration(months: $outputSign * $roundedMonths);
                 }
@@ -571,48 +592,54 @@ final class DateTimeDifference
     /**
      * Calendar-aware rounding for months (NudgeToCalendarUnit, unit=months).
      *
-     * Rounds $totalMonths (non-negative) + $remainingDays + $remainingTimeNs to the
-     * nearest $increment months, anchored from the later date.
+     * Rounds the month field while preserving calendar years in both anchors.
      *
      * @throws RangeError if the rounded date is out of the valid ISO range.
      */
     private static function roundCalendarMonths(
         int $totalMonths,
-        int $remainingDays,
-        int $remainingTimeNs,
+        int $targetJdn,
+        int $timeDifferenceNs,
         PlainDateTime $receiver,
         int $increment,
         string $mode,
         bool $receiverIsLater,
         int $sign = 1,
+        int $years = 0,
     ): int {
         $dir = $receiverIsLater ? -1 : 1;
 
         // floor-count (rounded down to nearest multiple of increment).
         $floorCount = intdiv(num1: $totalMonths, num2: $increment) * $increment;
 
-        $anchorJdn = self::addSigned($receiver, 0, $dir * $floorCount);
-        $nextJdn = self::addSigned($receiver, 0, $dir * ($floorCount + $increment));
+        $anchorJdn = self::addSigned($receiver, $dir * $years, $dir * $floorCount);
+        $nextJdn = self::addSigned($receiver, $dir * $years, $dir * ($floorCount + $increment));
 
         $intervalDays = abs($nextJdn - $anchorJdn);
 
         // Measure all progress from the lower increment boundary, including
         // whole months that do not fill the requested increment.
-        $unroundedJdn = self::addSigned($receiver, 0, $dir * $totalMonths);
-        $remainingDistance = abs($unroundedJdn - $anchorJdn) + $remainingDays;
-        $roundUp = self::roundCalendarProgress(
-            $remainingDistance,
-            $remainingTimeNs,
-            $intervalDays,
-            $mode,
-            $sign,
-            intdiv($floorCount, $increment),
-        );
+        $remainingDistance = $dir * ($targetJdn - $anchorJdn);
+        $remainingTimeNs = $dir * $timeDifferenceNs;
+        if ($remainingTimeNs < 0) {
+            $remainingDistance--;
+            $remainingTimeNs += EpochLimits::NS_PER_DAY;
+        }
+        $roundUp =
+            $remainingDistance >= $intervalDays
+            || self::roundCalendarProgress(
+                $remainingDistance,
+                $remainingTimeNs,
+                $intervalDays,
+                $mode,
+                $sign,
+                intdiv($floorCount, $increment),
+            );
 
         $roundedAbsMonths = $roundUp ? $floorCount + $increment : $floorCount;
 
         // Validate: the rounded result must not exceed the valid PlainDate range.
-        self::addSigned($receiver, 0, $dir * $roundedAbsMonths);
+        self::addSigned($receiver, $dir * $years, $dir * $roundedAbsMonths);
 
         return $roundedAbsMonths;
     }
