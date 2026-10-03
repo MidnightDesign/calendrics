@@ -23,6 +23,9 @@ use Calendrics\Spec\Internal\Calendar\IntlCalendarFactory;
  */
 final class IntlFormatter
 {
+    /** @var array<string, string> */
+    private static array $patterns = [];
+
     /**
      * Every option name toLocaleString() reads, for snapshotting an object options bag
      * through {@see Options::bagSnapshot()}.
@@ -481,8 +484,7 @@ final class IntlFormatter
         }
 
         // Default: use skeleton-based patterns to match JS Intl.DateTimeFormat defaults
-        $generator = new \IntlDatePatternGenerator($locale);
-        $pattern = $generator->getBestPattern($defaultComponents->defaultSkeleton());
+        $pattern = self::bestPattern($locale, $defaultComponents->defaultSkeleton());
         if ($pattern === false) {
             $pattern = null;
         }
@@ -524,8 +526,7 @@ final class IntlFormatter
             $skeleton .= $match[0];
         }
 
-        $generator = new \IntlDatePatternGenerator($locale);
-        $result = $generator->getBestPattern($skeleton);
+        $result = self::bestPattern($locale, $skeleton);
 
         return $result !== false ? $result : $skeleton;
     }
@@ -702,8 +703,27 @@ final class IntlFormatter
         }
 
         // Use ICU's DateTimePatternGenerator to get a best-fit pattern
+        $result = self::bestPattern($locale, $skeleton);
+        return $result !== false ? $result : $skeleton;
+    }
+
+    private static function bestPattern(string $locale, string $skeleton): string|false
+    {
+        // Resolve options into scalar inputs before caching, so coercion and
+        // validation remain observable on every public call.
+        $key = serialize([\Locale::getDefault(), $locale, $skeleton]);
+        if (isset(self::$patterns[$key])) {
+            return self::$patterns[$key];
+        }
+
         $generator = new \IntlDatePatternGenerator($locale);
         $result = $generator->getBestPattern($skeleton);
-        return $result !== false ? $result : $skeleton;
+        if ($result === false || strlen($key) > 4096 || strlen($result) > 4096) {
+            return $result;
+        }
+        if (count(self::$patterns) >= 64) {
+            array_shift(self::$patterns);
+        }
+        return self::$patterns[$key] = $result;
     }
 }
