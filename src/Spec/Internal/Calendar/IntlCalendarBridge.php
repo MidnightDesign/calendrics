@@ -615,8 +615,7 @@ final class IntlCalendarBridge implements CalendarProtocol
             // For calendars with leap months, year addition must preserve monthCode
             // (not ordinal position), because leap months shift ordinals between years.
             if ($years !== 0 && in_array($this->calendarId, ['chinese', 'dangi'], strict: true)) {
-                $icuMonth = $this->intlCal->get(\IntlCalendar::FIELD_MONTH);
-                $isLeap = $this->intlCal->get(self::FIELD_IS_LEAP_MONTH);
+                [$icuMonth, $isLeap] = $this->correctedChineseMonthFields();
                 $calYear += $years;
                 $calMonth = $this->chineseIcuMonthToOrdinal($calYear, $icuMonth, $isLeap, $overflow);
             } else {
@@ -1417,6 +1416,18 @@ final class IntlCalendarBridge implements CalendarProtocol
         }
 
         $icuYear = $calYear + ($this->calendarId === 'chinese' ? self::CHINESE_YEAR_OFFSET : self::DANGI_YEAR_OFFSET);
+
+        // Invert the field correction when resolving a corrected Chinese month
+        // back through ICU's original leap slot.
+        $correctLeap = $this->calendarId === 'chinese' ? self::CHINESE_LEAP_MONTH_CORRECTIONS[$calYear] ?? null : null;
+        if ($correctLeap !== null) {
+            if ($icuMonth === $correctLeap && $isLeap === 1) {
+                $icuMonth = $correctLeap + 1;
+                $isLeap = 0;
+            } elseif ($icuMonth === ($correctLeap + 1) && $isLeap === 0) {
+                $isLeap = 1;
+            }
+        }
 
         $this->intlCal->clear();
         $this->intlCal->set(self::FIELD_EXTENDED_YEAR, $icuYear);
