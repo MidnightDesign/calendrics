@@ -64,71 +64,28 @@ final class TimeZoneHelper
             return 'UTC';
         }
 
-        // Reject minus-zero extended year.
-        if (preg_match('/^-0{6}(?:[^0-9]|$)/', $id) === 1) {
-            throw new RangeError("Invalid timeZoneId \"{$id}\": minus-zero year.");
+        // Offset identifiers have minute precision and must consume the whole input.
+        $offset = [];
+        if (preg_match('/\A([+-])([01][0-9]|2[0-3])(?::?([0-5][0-9]))?\z/', $id, $offset) === 1) {
+            return sprintf('%s%s:%s', $offset[1], $offset[2], $offset[3] ?? '00');
+        }
+        if (preg_match('~\A[A-Za-z._][A-Za-z._0-9+-]*(?:/[A-Za-z._][A-Za-z._0-9+-]*)*\z~', $id) === 1) {
+            return self::canonicalIanaName($id, $id);
+        }
+        if ($rejectDatetimeStrings) {
+            throw new RangeError(sprintf('Invalid timeZoneId "%s": expected a time zone identifier.', $id));
         }
 
-        // Datetime strings (have a T-separator after a date part).
-        $isDatetime = preg_match('/\d{4,}-\d{2}-\d{2}[Tt]|\d{8}[Tt]/', $id) === 1;
-
-        if ($isDatetime) {
-            if ($rejectDatetimeStrings) {
-                throw new RangeError(
-                    "Invalid timeZoneId \"{$id}\": ISO date-time string is not a valid timezone identifier for ZonedDateTime constructor.",
-                );
-            }
-            // Bracket annotation takes precedence.
-            $bm = null;
-            if (preg_match('/\[!?([^\]]+)\]/', $id, $bm) === 1) {
-                $bracket = $bm[1];
-                if (preg_match('/^[+\-]\d{2}:\d{2}:\d{2}/', $bracket) === 1) {
-                    throw new RangeError("Invalid timeZoneId \"{$id}\": sub-minute offset in bracket annotation.");
-                }
-                if (strtoupper($bracket) === 'UTC') {
-                    return 'UTC';
-                }
-                $obm = null;
-                if (preg_match('/^([+\-](?:[01]\d|2[0-3])):([0-5]\d)$/', $bracket, $obm) === 1) {
-                    return sprintf('%s:%s', $obm[1], $obm[2]);
-                }
-                return self::canonicalIanaName($bracket, $id);
-            }
-            // No bracket: use inline offset.
-            if (preg_match('/[+\-]\d{2}:\d{2}:\d{2}/i', $id) === 1) {
-                throw new RangeError("Invalid timeZoneId \"{$id}\": inline offset contains a seconds component.");
-            }
-            if (preg_match('/[Zz](?:\[|$)/', $id) === 1) {
-                return 'UTC';
-            }
-            // Extended (±HH:MM) and basic (±HHMM) spellings are both valid inline offsets.
-            $om = null;
-            if (preg_match('/([+\-])([01]\d|2[0-3]):?([0-5]\d)(?:\[|$)/', $id, $om) === 1) {
-                return sprintf('%s%s:%s', $om[1], $om[2], $om[3]);
-            }
-            throw new RangeError("Invalid timeZoneId \"{$id}\": bare datetime without Z, offset, or bracket.");
+        $parsed = IsoString::parse($id);
+        $identifier = $parsed['timeZone'] ?? $parsed['offset'];
+        if ($identifier === null) {
+            throw new RangeError(sprintf('Invalid timeZoneId "%s": string has no time zone information.', $id));
         }
-
-        // Pure UTC-offset strings.
-        // ±HH:MM
-        if (preg_match('/^([+\-](?:[01]\d|2[0-3])):([0-5]\d)$/', $id) === 1) {
-            return $id;
+        if ($parsed['timeZone'] === null && ($identifier === 'Z' || $identifier === 'z')) {
+            return 'UTC';
         }
-        // ±HHMM → ±HH:MM
-        $m = null;
-        if (preg_match('/^([+\-])([01]\d|2[0-3])([0-5]\d)$/', $id, $m) === 1) {
-            return sprintf('%s%s:%s', $m[1], $m[2], $m[3]);
-        }
-        // ±HH → ±HH:00
-        if (preg_match('/^([+\-])([01]\d|2[0-3])$/', $id, $m) === 1) {
-            return sprintf('%s%s:00', $m[1], $m[2]);
-        }
-        // Sub-minute offsets → reject.
-        if (preg_match('/^[+\-]\d{2}:\d{2}[:.].*/i', $id) === 1) {
-            throw new RangeError("Invalid timeZoneId \"{$id}\": sub-minute offset is not a valid timezone identifier.");
-        }
-
-        return self::canonicalIanaName($id, $id);
+        // Reuse the identifier-only path for both annotations and inline offsets.
+        return self::normalizeTimezoneId($identifier, rejectDatetimeStrings: true);
     }
 
     /**
