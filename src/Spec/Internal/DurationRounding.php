@@ -705,7 +705,8 @@ final class DurationRounding
             if ($progress < 0.5) {
                 return $r1;
             }
-            return ($r1 % 2) === 0 ? $r1 : $r2;
+            $lowerMultiple = intdiv($r1, $r2 - $r1);
+            return ($lowerMultiple % 2) === 0 ? $r1 : $r2;
         }
         return match ($mode) {
             'trunc' => $r1,
