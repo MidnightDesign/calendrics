@@ -171,7 +171,7 @@ final class DurationTotal
         $timeRemainderNs = (($timeSeconds % 86_400) * 1_000_000_000) + $timeSubNs;
         $fracNs = ($timeSeconds * 1_000_000_000) + $timeSubNs;
         $calendarWholeDays = $totalWholeDays + $timeWholeDays;
-        if ($zdtInfo !== null && ($unit === 'months' || $unit === 'years')) {
+        if ($zdtInfo !== null && ($unit === 'months' || $unit === 'years' || $unit === 'weeks')) {
             [$calendarWholeDays, $timeRemainderNs] = self::zonedCalendarPosition(
                 $zdtInfo,
                 $totalWholeDays,
@@ -232,16 +232,7 @@ final class DurationTotal
         return match ($unit) {
             'months' => self::calendarMonths($d, $start, $calendarWholeDays, $timeRemainderNs, $zdtInfo, $calendarId),
             'years' => self::calendarYears($d, $start, $calendarWholeDays, $timeRemainderNs, $zdtInfo, $calendarId),
-            'weeks' => self::toIntIfWhole(
-                (float) $d->sign
-                * self::divideExact(
-                    (abs($totalWholeDays + $timeWholeDays) * 86_400)
-                    + intdiv(abs($timeRemainderNs), num2: 1_000_000_000),
-                    abs($timeRemainderNs) % 1_000_000_000,
-                    604_800,
-                    0,
-                ),
-            ),
+            'weeks' => self::calendarWeeks($d, $start, $calendarWholeDays, $timeRemainderNs, $zdtInfo),
             'days' => self::toIntIfWhole((float) $totalWholeDays + $fracDay),
             'hours' => self::toIntIfWhole(((float) $totalWholeDays * 24.0) + ((float) $fracNs / 3_600_000_000_000.0)),
             'minutes' => self::toIntIfWhole(((float) $totalWholeDays * 1_440.0) + ((float) $fracNs / 60_000_000_000.0)),
@@ -252,6 +243,40 @@ final class DurationTotal
             + ((float) $fracNs / 1_000.0)),
             'nanoseconds' => self::toIntIfWhole(((float) $totalWholeDays * 86_400_000_000_000.0) + (float) $fracNs),
         };
+    }
+
+    /**
+     * @param array{epochSec:int,subNs:int,tzId:string,year:int,month:int,day:int,hour:int,minute:int,second:int}|null $anchor
+     */
+    private static function calendarWeeks(
+        Duration $duration,
+        \DateTimeImmutable $start,
+        int $wholeDays,
+        int $remainderNs,
+        ?array $anchor,
+    ): int|float {
+        $sign = $duration->sign < 0 ? -1 : 1;
+        $weeks = intdiv(abs($wholeDays), num2: 7);
+        $lowerDays = $sign * $weeks * 7;
+        $upperDays = $lowerDays + ($sign * 7);
+        if ($anchor !== null) {
+            // The next week boundary must exist even when the elapsed endpoint is in range.
+            self::zonedCalendarPosition($anchor, $upperDays, 0, 0, $sign);
+            return self::toIntIfWhole(
+                (float) $sign
+                * self::zonedCalendarTotal($anchor, $weeks, $lowerDays, $upperDays, $wholeDays, $remainderNs),
+            );
+        }
+        AnchorMath::assertCalendarBoundaryInRange($start->modify(sprintf('%+d days', $upperDays)));
+        return self::toIntIfWhole(
+            (float) $sign
+            * self::divideExact(
+                (abs($wholeDays) * 86_400) + intdiv(abs($remainderNs), num2: 1_000_000_000),
+                abs($remainderNs) % 1_000_000_000,
+                604_800,
+                0,
+            ),
+        );
     }
 
     /**
