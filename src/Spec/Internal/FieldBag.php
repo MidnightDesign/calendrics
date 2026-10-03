@@ -24,9 +24,9 @@ use Calendrics\Spec\Internal\Calendar\CalendarFactory;
  * `era`/`eraYear` when — and only when — the bag's calendar has eras, plus the caller's
  * non-calendar fields (`timeZone`, `offset`), all sorted together.
  *
- * Array bags are returned unchanged: their keys are already a snapshot, there is no
- * accessor to fire, and passing them through preserves entries the caller inspects but
- * did not list.
+ * Array bags preserve their entries, including keys the caller inspects but did not
+ * list. Calendar-aware bags still resolve their calendar before options are read;
+ * partial and non-calendar snapshots need no such normalization.
  *
  * @internal
  */
@@ -47,10 +47,6 @@ final class FieldBag
         array $nonCalendarFields,
         string $context,
     ): array {
-        if (is_array($bag)) {
-            return $bag;
-        }
-
         // GetTemporalCalendarIdentifierWithISODefault precedes PrepareCalendarFields, so
         // `calendar` is read — and an unusable one rejected — before any field is touched.
         /** @var mixed $calendarRaw */
