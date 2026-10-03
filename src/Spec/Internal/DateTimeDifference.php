@@ -28,8 +28,8 @@ use Calendrics\Spec\PlainDateTime;
  * (TC39 NudgeToCalendarUnit), which needs the true length of that unit: the interval
  * between two real calendar anchors reached by adding whole months from the receiver,
  * not a nominal 30 days. A time `smallestUnit` rounds the nanosecond remainder, and an
- * overflow day from that rounding (23:59 → 24:00) forces the calendar part to be
- * re-measured from the shifted endpoint so months and years rebalance.
+ * overflow day from that rounding (23:59 → 24:00) can promote the calendar part
+ * when the nudged endpoint reaches the receiver's next larger-unit boundary.
  *
  * Throughout, the difference is computed in the positive direction and the sign is
  * applied last; `since()` flips it. Directional rounding modes are mirrored to match,
@@ -417,19 +417,23 @@ final class DateTimeDifference
                     $roundingMode,
                     $outputSign,
                 );
-                if ($normLargest === 'day') {
-                    return new Duration(days: $outputSign * $roundedDays);
-                }
-                if ($normLargest === 'week') {
-                    $totalDays = ($weeks * 7) + $roundedDays;
-                    $roundedWeeks = intdiv(num1: $totalDays, num2: 7);
-                    $remDays = $totalDays - ($roundedWeeks * 7);
-                    return new Duration(weeks: $outputSign * $roundedWeeks, days: $outputSign * $remDays);
+                $roundedDate = new DateSpan($years, $months, $weeks, $roundedDays);
+                if ($roundedDays > $days) {
+                    [$roundedDate] = self::bubbleExpandedDays(
+                        $temporalDate,
+                        $otherJdn + ($sign * ($roundedDays - $days)),
+                        $otherNs - ($sign * $timeDiffNs),
+                        $roundedDate,
+                        0,
+                        $normLargest,
+                        $sign,
+                    );
                 }
                 return new Duration(
-                    years: $outputSign * $years,
-                    months: $outputSign * $months,
-                    days: $outputSign * $roundedDays,
+                    years: $outputSign * $roundedDate->years,
+                    months: $outputSign * $roundedDate->months,
+                    weeks: $outputSign * $roundedDate->weeks,
+                    days: $outputSign * $roundedDate->days,
                 );
             }
 
@@ -455,29 +459,26 @@ final class DateTimeDifference
             $overflowDays = intdiv(num1: $absTimeNs, num2: EpochLimits::NS_PER_DAY);
             $absTimeNs %= EpochLimits::NS_PER_DAY;
 
-            // When time overflow produces extra days, recompute the calendar diff
-            // from the updated position to properly rebalance months/years.
-            if ($overflowDays > 0 && $normLargest !== 'day' && $normLargest !== 'week') {
-                // Overflow from time rounding: recompute calendar diff.
-                $calendarUnit = $normLargest === 'month' ? 'month' : 'year';
-                $cal = CalendarFactory::get($calId);
-                [$years, $months, $days] = self::absoluteCalendarDiff(
-                    $cal,
+            $roundedDate = new DateSpan($years, $months, $weeks, $days + $overflowDays);
+            if ($overflowDays > 0) {
+                [$roundedDate, $absTimeNs] = self::bubbleExpandedDays(
                     $temporalDate,
-                    $adjustedTargetJdn + ($sign * $overflowDays),
-                    $calendarUnit,
+                    $otherJdn + ($sign * $overflowDays),
+                    $otherNs + ($sign * ($absTimeNs - $timeDiffNs)),
+                    $roundedDate,
+                    $absTimeNs,
+                    $normLargest,
+                    $sign,
                 );
-            } else {
-                $days += $overflowDays;
             }
 
             [$h, $min, $sec, $ms, $us, $ns] = CalendarMath::nsToTime($absTimeNs);
 
             return new Duration(
-                years: $outputSign * $years,
-                months: $outputSign * $months,
-                weeks: $outputSign * $weeks,
-                days: $outputSign * $days,
+                years: $outputSign * $roundedDate->years,
+                months: $outputSign * $roundedDate->months,
+                weeks: $outputSign * $roundedDate->weeks,
+                days: $outputSign * $roundedDate->days,
                 hours: $outputSign * $h,
                 minutes: $outputSign * $min,
                 seconds: $outputSign * $sec,
@@ -514,6 +515,64 @@ final class DateTimeDifference
         $roundUp = CalendarMath::applyCalendarRoundingProgress($days, $progress, $increment, $mode, $sign);
         $q = intdiv(num1: $days, num2: $increment);
         return $roundUp ? ($q + 1) * $increment : $q * $increment;
+    }
+
+    /**
+     * BubbleRelativeDuration checks each larger unit once, preserving the existing
+     * prefix until the nudged endpoint reaches that receiver-anchored boundary.
+     *
+     * @return array{DateSpan, int}
+     */
+    private static function bubbleExpandedDays(
+        PlainDateTime $receiver,
+        int $nudgedJdn,
+        int $nudgedTimeNs,
+        DateSpan $span,
+        int $timeNs,
+        string $largestUnit,
+        int $direction,
+    ): array {
+        // Keep the nudged endpoint exact even when its full epoch cannot fit int64.
+        $carry = CalendarMath::floorDiv($nudgedTimeNs, EpochLimits::NS_PER_DAY);
+        $nudgedJdn += $carry;
+        $nudgedTimeNs -= $carry * EpochLimits::NS_PER_DAY;
+        $receiverTimeNs = CalendarMath::timeToNs(
+            $receiver->hour,
+            $receiver->minute,
+            $receiver->second,
+            $receiver->millisecond,
+            $receiver->microsecond,
+            $receiver->nanosecond,
+        );
+        $units = match ($largestUnit) {
+            'year' => ['month', 'year'],
+            'month' => ['month'],
+            'week' => ['week'],
+            default => [],
+        };
+        foreach ($units as $unit) {
+            $next = match ($unit) {
+                'year' => new DateSpan(years: $span->years + 1, days: 0),
+                'month' => new DateSpan(years: $span->years, months: $span->months + 1, days: 0),
+                default => new DateSpan(weeks: $span->weeks + 1, days: 0),
+            };
+            $boundaryJdn = self::addSigned(
+                $receiver,
+                $direction * $next->years,
+                $direction * $next->months,
+                $direction * $next->weeks,
+            );
+            $comparison = $nudgedJdn <=> $boundaryJdn;
+            if ($comparison === 0) {
+                $comparison = $nudgedTimeNs <=> $receiverTimeNs;
+            }
+            if (($direction * $comparison) < 0) {
+                break;
+            }
+            $span = $next;
+            $timeNs = 0;
+        }
+        return [$span, $timeNs];
     }
 
     /**
@@ -674,12 +733,16 @@ final class DateTimeDifference
     }
 
     /**
-     * Adds calendar years and months to the receiver and returns the Julian Day Number.
+     * Adds calendar years, months, and weeks to the receiver and returns its Julian Day Number.
      *
      * @throws RangeError if the resulting date is outside the valid ISO range.
      */
-    private static function addSigned(PlainDateTime $receiver, int $signedYears, int $signedMonths): int
-    {
+    private static function addSigned(
+        PlainDateTime $receiver,
+        int $signedYears,
+        int $signedMonths,
+        int $signedWeeks = 0,
+    ): int {
         $cal = CalendarFactory::get($receiver->calendarId);
         [$y, $m, $d] = $cal->dateAdd(
             $receiver->isoYear,
@@ -687,7 +750,7 @@ final class DateTimeDifference
             $receiver->isoDay,
             $signedYears,
             $signedMonths,
-            0,
+            $signedWeeks,
             0,
             'constrain',
         );
