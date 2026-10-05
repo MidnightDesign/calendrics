@@ -32,8 +32,8 @@ use Stringable;
  */
 final class MonthCode
 {
-    /** Well-formed ISO/extended monthCode: "M" + two digits + optional leap marker "L". */
-    private const string SYNTAX_PATTERN = '/^M\d{2}L?$/';
+    /** Complete MonthCode grammar: M00 requires L; M01–M99 may carry L. */
+    private const string SYNTAX_PATTERN = '/\AM(?:00L|0[1-9]L?|[1-9][0-9]L?)\z/';
 
     /**
      * Validates a freshly-read monthCode field value and returns the well-formed

@@ -7,6 +7,7 @@ namespace Calendrics\Tests\Test262;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Instant;
 use Calendrics\Spec\Internal\IntlFormatter;
+use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormat;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Calendrics\Spec\ZonedDateTime;
@@ -87,8 +88,10 @@ final class IntlDateTimeFormat
     {
         $this->locales = is_string($locales) || is_array($locales) ? $locales : null;
         /** @var array<string, mixed> $opts */
-        $opts = is_object($options) ? get_object_vars($options) : (is_array($options) ? $options : []);
-        $this->options = IntlDateTimeFormatOptions::withConstructorDefaults($opts);
+        $opts = is_object($options) || is_array($options)
+            ? Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES)
+            : [];
+        $this->options = IntlDateTimeFormatOptions::withConstructorDefaults(IntlFormatter::normalizeOptions($opts));
     }
 
     /**

@@ -135,7 +135,7 @@ $copy = $instant->toDateTime(new \DateTimeZone('Europe/Vienna'));
 echo $copy->format('Y-m-d H:i:s.u P'); // 2026-04-03 17:00:00.123456 +02:00
 ```
 
-PHP date-time objects preserve microseconds, not nanoseconds. Converting a value with finer precision drops its final three fractional digits. The `Instant` and `ZonedDateTime` native conversions also depend on integer nanosecond epochs; see [timestamp range limits](compatibility.md#timestamp-range-limits).
+PHP date-time objects preserve microseconds, not nanoseconds. Converting a value with finer precision truncates the epoch toward zero to microsecond precision. `Instant` and `ZonedDateTime` can convert their full supported timestamp range to native objects; converting native objects into these types remains limited by integer nanosecond epochs. See [timestamp range limits](compatibility.md#timestamp-range-limits).
 
 ## Current time
 

@@ -167,69 +167,10 @@ final class CalendarFactory
      */
     public static function extractCalendarFromString(string $s): string
     {
-        if ($s === '') {
-            throw new RangeError('Calendar ID must not be empty.');
+        if (self::isKnownCalendar($s)) {
+            return self::canonicalize($s);
         }
-        // Reject minus-zero extended year ("-000000" with no further digits).
-        if (preg_match(pattern: '/^-0{6}(?:[^0-9]|$)/', subject: $s) === 1) {
-            throw new RangeError("Invalid calendar \"{$s}\": minus-zero year.");
-        }
-        // Per ParseTemporalCalendarString, a string with a bracket annotation
-        // must parse as a Temporal date/time string — i.e. the prefix before
-        // '[' must be a valid ISO date or time prefix. Bare bracket annotations
-        // and bracket annotations following non-Temporal prefixes are RangeError.
-        if (str_contains($s, '[')) {
-            $prefix = substr($s, offset: 0, length: (int) strpos($s, needle: '['));
-            if (!self::looksLikeIsoDateOrTime($prefix)) {
-                throw new RangeError(
-                    "Invalid calendar string \"{$s}\": bracket annotation must follow an ISO date or time prefix.",
-                );
-            }
-            $m = null;
-            if (preg_match(pattern: '/\[!?u-ca=([^\]]+)\]/', subject: $s, matches: $m) === 1) {
-                return self::canonicalize($m[1]);
-            }
-            // Bracket without u-ca (e.g. timezone annotation) → default iso8601.
-            return 'iso8601';
-        }
-        // ISO date / datetime / time strings (no annotation) → iso8601.
-        if (self::looksLikeIsoDateOrTime($s)) {
-            return 'iso8601';
-        }
-        // Plain calendar ID.
-        return self::canonicalize($s);
-    }
-
-    /**
-     * Returns true if $s starts with anything that looks like an ISO date or
-     * time prefix: date (YYYY-MM, MM-DD, ±YYYYYY-), datetime (digit-T-digit),
-     * or time form (T-prefix, HH:MM, bare HH, compact HHMM/HHMMSS).
-     */
-    private static function looksLikeIsoDateOrTime(string $s): bool
-    {
-        // Date / datetime.
-        if (
-            preg_match(pattern: '/^\d{2}-\d{2}|^\d{4}-\d{2}|^[+-]\d{6}-/', subject: $s) === 1
-            || preg_match(pattern: '/\d[Tt]\d/', subject: $s) === 1
-        ) {
-            return true;
-        }
-        // Time-only forms.
-        if (preg_match(pattern: '/^[Tt]\d/', subject: $s) === 1) {
-            return true;
-        }
-        if (preg_match(pattern: '/^\d{2}:/', subject: $s) === 1) {
-            return true;
-        }
-        // Bare hour: exactly 2 digits.
-        if (preg_match(pattern: '/^\d{2}$/', subject: $s) === 1) {
-            return true;
-        }
-        // Compact time HHMM/HHMMSS: 4–6 digits NOT followed by '-DD-'.
-        return (
-            preg_match(pattern: '/^\d{4,6}(?:[.,]|\+|$)/', subject: $s) === 1
-            || preg_match(pattern: '/^\d{4,6}-(?!\d{2}-)/', subject: $s) === 1
-        );
+        return CalendarString::parse($s);
     }
 
     /**

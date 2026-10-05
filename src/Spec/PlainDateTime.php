@@ -8,6 +8,7 @@ use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DateFieldNumber;
 use Calendrics\Spec\Internal\DateTimeArithmetic;
 use Calendrics\Spec\Internal\DateTimeDifference;
 use Calendrics\Spec\Internal\DateTimeFields;
@@ -279,12 +280,12 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         $this->calendarId = CalendarFactory::resolveConstructorCalendar($calendar, 'PlainDateTime');
         // TC39 ToIntegerWithTruncation: null/omitted → 0, bool → 0/1, string/float → truncated int.
         $this->isoYear = CalendarMath::toConstructorInt($year, 'PlainDateTime year');
-        $monthInt = CalendarMath::toConstructorInt($month, 'PlainDateTime month');
+        $monthInt = DateFieldNumber::month($month ?? 0, 'PlainDateTime month');
         if ($monthInt < 1 || $monthInt > 12) {
             throw new RangeError("Invalid PlainDateTime: month {$monthInt} is out of range 1–12.");
         }
         $this->isoMonth = $monthInt;
-        $dayInt = CalendarMath::toConstructorInt($day, 'PlainDateTime day');
+        $dayInt = DateFieldNumber::day($day ?? 0, 'PlainDateTime day');
         if ($dayInt < 1) {
             throw new RangeError("Invalid PlainDateTime: day {$dayInt} must be at least 1.");
         }
@@ -489,6 +490,9 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         ];
         $hasRecognized = false;
         foreach ($recognized as $key) {
+            if (($key === 'era' || $key === 'eraYear') && !CalendarMath::readsEraFields($this->calendarId)) {
+                continue;
+            }
             if (!array_key_exists($key, $fields)) {
                 continue;
             }

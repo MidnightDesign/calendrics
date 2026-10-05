@@ -10,6 +10,7 @@ use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
 use Calendrics\Spec\Internal\DateArithmetic;
 use Calendrics\Spec\Internal\DateDifference;
+use Calendrics\Spec\Internal\DateFieldNumber;
 use Calendrics\Spec\Internal\DateFields;
 use Calendrics\Spec\Internal\DateParse;
 use Calendrics\Spec\Internal\EpochLimits;
@@ -234,12 +235,12 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
         $this->calendarId = CalendarFactory::resolveConstructorCalendar($calendar, 'PlainDate');
         // TC39 ToIntegerWithTruncation: null → 0, bool → 0/1, string/float → truncated int.
         $this->isoYear = CalendarMath::toConstructorInt($year, 'PlainDate year');
-        $monthInt = CalendarMath::toConstructorInt($month, 'PlainDate month');
+        $monthInt = DateFieldNumber::month($month ?? 0, 'PlainDate month');
         if ($monthInt < 1 || $monthInt > 12) {
             throw new RangeError("Invalid PlainDate: month {$monthInt} is out of range 1–12.");
         }
         $this->isoMonth = $monthInt;
-        $dayInt = CalendarMath::toConstructorInt($day, 'PlainDate day');
+        $dayInt = DateFieldNumber::day($day ?? 0, 'PlainDate day');
         if ($dayInt < 1) {
             throw new RangeError("Invalid PlainDate: day {$dayInt} must be at least 1.");
         }
@@ -367,14 +368,14 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
 
         // PrepareCalendarFields step 10 (partial): at least one recognized date field must
         // be present. An empty-property object (e.g. JS undefined / sentinel) has no fields.
-        // For non-ISO calendars, era and eraYear are also valid date fields.
+        // Era fields are recognized only for calendars that support eras.
         $hasAnyField =
             array_key_exists('year', $fields)
             || array_key_exists('month', $fields)
             || array_key_exists('monthCode', $fields)
             || array_key_exists('day', $fields)
-            || array_key_exists('era', $fields)
-            || array_key_exists('eraYear', $fields);
+            || CalendarMath::readsEraFields($this->calendarId)
+            && (array_key_exists('era', $fields) || array_key_exists('eraYear', $fields));
         if (!$hasAnyField) {
             throw new TypeError(
                 'PlainDate::with() requires at least one of: year, month, monthCode, day, era, eraYear.',

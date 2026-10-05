@@ -27,6 +27,8 @@ INTL_FORMATTERS=(
 # Untagged fixtures that pin shared IntlFormatter behavior with literal oracles.
 # Keep these explicit: most legacy Intl tests exercise JS-only object semantics.
 INTL_SHARED_FIXTURES=(
+    DateTimeFormat/constructor-options-fractionalSecondDigits-invalid.js
+    DateTimeFormat/prototype/format/fractionalSecondDigits.js
     DateTimeFormat/prototype/format/numbering-system.js
 )
 
