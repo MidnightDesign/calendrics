@@ -131,7 +131,7 @@ final class DateTimeFields
             if ($monthRaw === null) {
                 throw new TypeError('PlainDateTime property bag month field must not be undefined.');
             }
-            $newMonth = CalendarMath::toFiniteInt($monthRaw, 'PlainDateTime month');
+            $newMonth = DateFieldNumber::month($monthRaw, 'PlainDateTime month');
             if ($hasMonthCode && $newMonth !== $month) {
                 throw new RangeError('Conflicting month and monthCode fields.');
             }
@@ -145,7 +145,7 @@ final class DateTimeFields
         if ($dayRaw === null) {
             throw new TypeError('PlainDateTime property bag day field must not be undefined.');
         }
-        $day = CalendarMath::toFiniteInt($dayRaw, 'PlainDateTime day');
+        $day = DateFieldNumber::day($dayRaw, 'PlainDateTime day');
 
         // Time fields default to 0 when absent.
         $h = CalendarMath::extractIntField($bag, 'hour', 0, 'PlainDateTime');

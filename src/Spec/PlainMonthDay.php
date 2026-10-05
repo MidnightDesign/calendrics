@@ -8,6 +8,7 @@ use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DateFieldNumber;
 use Calendrics\Spec\Internal\DateParse;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
@@ -126,12 +127,12 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
         $this->calendarId = CalendarFactory::resolveConstructorCalendar($calendar, 'PlainMonthDay');
         // TC39 ToIntegerWithTruncation: null/omitted → 0, bool → 0/1, string/float → truncated int.
         // referenceISOYear defaults to 1972 when omitted/null.
-        $monthInt = CalendarMath::toConstructorInt($isoMonth, 'PlainMonthDay isoMonth');
+        $monthInt = DateFieldNumber::month($isoMonth ?? 0, 'PlainMonthDay isoMonth');
         if ($monthInt < 1 || $monthInt > 12) {
             throw new RangeError("Invalid PlainMonthDay: month {$monthInt} is out of range 1–12.");
         }
         $this->isoMonth = $monthInt;
-        $dayInt = CalendarMath::toConstructorInt($isoDay, 'PlainMonthDay isoDay');
+        $dayInt = DateFieldNumber::day($isoDay ?? 0, 'PlainMonthDay isoDay');
         if ($dayInt < 1) {
             throw new RangeError("Invalid PlainMonthDay: day {$dayInt} must be at least 1.");
         }
@@ -315,12 +316,12 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
 
             $month = null;
             if ($hasMonth) {
-                $month = CalendarMath::toFiniteInt($bag['month'], 'PlainMonthDay::with() month');
+                $month = DateFieldNumber::month($bag['month'], 'PlainMonthDay::with() month');
             }
 
             $day = $this->day;
             if ($hasDay) {
-                $day = CalendarMath::toFiniteInt($bag['day'], 'PlainMonthDay::with() day');
+                $day = DateFieldNumber::day($bag['day'], 'PlainMonthDay::with() day');
             }
 
             if ($day < 1) {
@@ -383,12 +384,12 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
             $monthCode = MonthCode::validate($bag['monthCode']);
         }
         if ($hasMonth) {
-            $month = CalendarMath::toFiniteInt($bag['month'], 'PlainMonthDay::with() month');
+            $month = DateFieldNumber::month($bag['month'], 'PlainMonthDay::with() month');
         }
 
         $day = $this->isoDay;
         if ($hasDay) {
-            $day = CalendarMath::toFiniteInt($bag['day'], 'PlainMonthDay::with() day');
+            $day = DateFieldNumber::day($bag['day'], 'PlainMonthDay::with() day');
         }
 
         $refYear = $this->referenceISOYear;
@@ -620,7 +621,10 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
         // Try full date string formats: YYYY-MM-DD, ±YYYYYY-MM-DD, YYYYMMDD, ±YYYYYYMMDD
         // Also handles MM-DD (without --) as a bare month-day string.
         // date: year + rest, optional T+time, optional offset, bracket annotations
-        $datePattern = '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:[Zz]|[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)?)?((?:\[[^\]]*\])*)$/';
+        $datePattern = sprintf(
+            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:[Zz]|%s)?)?((?:\[[^\]]*\])*)$/',
+            DateParse::NUMERIC_OFFSET_PATTERN,
+        );
 
         /** @var list<string> $m */
         $m = [];
@@ -709,7 +713,8 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
 
         $calendar = CalendarFactory::get($calendarId ?? 'iso8601');
         $isNonIso = $calendarId !== null && $calendarId !== 'iso8601';
-        $hasYearLike = $hasYear || $isNonIso && $hasEraAndEraYear;
+        $readsEraFields = CalendarMath::readsEraFields($calendarId);
+        $hasYearLike = $hasYear || $readsEraFields && $hasEraAndEraYear;
 
         // For non-ISO calendars, year is required when using month (without monthCode).
         if ($isNonIso) {
@@ -746,10 +751,10 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
             $monthCode = MonthCode::validate($bag['monthCode']);
         }
         if ($hasMonth) {
-            $month = CalendarMath::toFiniteInt($bag['month'] ?? null, 'PlainMonthDay::from() month');
+            $month = DateFieldNumber::month($bag['month'] ?? null, 'PlainMonthDay::from() month');
         }
 
-        $day = CalendarMath::toFiniteInt($bag['day'], 'PlainMonthDay::from() day');
+        $day = DateFieldNumber::day($bag['day'], 'PlainMonthDay::from() day');
 
         // Determine the year for overflow/validation.
         $year = null;
@@ -758,7 +763,7 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
         }
 
         // Resolve era + eraYear if present (overrides year for era-based calendars).
-        if ($isNonIso && $hasEraAndEraYear) {
+        if ($readsEraFields && $hasEraAndEraYear) {
             $resolved = CalendarMath::resolveYearFromEra(
                 $calendar,
                 $bag['era'],
