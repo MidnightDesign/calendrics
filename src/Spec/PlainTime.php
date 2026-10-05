@@ -14,6 +14,7 @@ use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
 use Calendrics\Spec\Internal\IsoFraction;
+use Calendrics\Spec\Internal\IsoLexical;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
 use Stringable;
@@ -658,49 +659,18 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             );
         }
 
-        // Try full datetime first (YYYY-MM-DDTHH:...) to extract the time portion.
-        // Compact date variants: YYYYMMDD, ±YYYYYYMMDD.
-        // After the time, an optional UTC offset is allowed — but NOT bare 'Z'.
-        // Offset hours restricted to 00-23; minutes/seconds to 00-59.
-        $offsetHH = '(?:[01]\d|2[0-3])';
-        $offsetMM = '[0-5]\d';
-        $offsetSS = '[0-5]\d';
-        $offsetPattern = sprintf(
-            '[+-]%s(?::%s(?::%s(?:[.,]\d+)?)?|%s(?:%s(?:[.,]\d+)?)?)?',
-            $offsetHH,
-            $offsetMM,
-            $offsetSS,
-            $offsetMM,
-            $offsetSS,
-        );
-
-        $fullDatetimePattern = sprintf(
-            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})[T ](\d{2}):?(\d{2})(?::?(\d{2})([.,]\d+)?)?(?:Z|%s)?((?:\[[^\]]*\])*)$/i',
-            $offsetPattern,
-        );
-
-        /** @var list<string> $m */
-        $m = [];
-        if (preg_match($fullDatetimePattern, $s, $m) === 1) {
-            // Reject minus-zero extended year (-000000).
-            if ($m[1] === '-000000') {
-                throw new RangeError("PlainTime::from() cannot parse \"{$s}\": -000000 year is not allowed.");
+        $parsed = IsoLexical::date($s);
+        if ($parsed !== null && $parsed->hour !== '') {
+            if ($parsed->year === '-000000' || $parsed->hasUtcDesignator()) {
+                throw new RangeError('Invalid PlainTime date-time string.');
             }
-            $annotationSection = $m[7] !== '' ? $m[7] : '';
-            // Reject if the string has a bare 'Z' UTC designator (before any bracket annotations).
-            // A 'Z' immediately followed by '[', end-of-string, or whitespace in the non-annotation part.
-            if (preg_match('/Z(?:\[|$)/i', $s) === 1) {
-                throw new RangeError("PlainTime::from() cannot parse \"{$s}\": UTC designator 'Z' is not allowed.");
-            }
-            CalendarMath::validateAnnotations($annotationSection, $s, false);
-
-            $hourNum = (int) $m[3];
-            $minNum = (int) $m[4];
-            $secNum = $m[5] !== '' ? (int) $m[5] : 0;
-            $fracRaw = $m[6] !== '' ? $m[6] : '';
-            $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
-
-            return self::fromParsedTime($hourNum, $minNum, $secNum, $subNs);
+            CalendarMath::validateAnnotations($parsed->annotations, $s, false);
+            return self::fromParsedTime(
+                (int) $parsed->hour,
+                (int) $parsed->minute,
+                (int) $parsed->second,
+                $parsed->fraction !== '' ? IsoFraction::toNanoseconds($parsed->fraction) : 0,
+            );
         }
 
         // Try pure time string (with optional T prefix and optional offset/annotations).
@@ -723,64 +693,17 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             ));
         }
 
-        // Pattern: HH:MM[:SS[.frac]][offset][annotations]  (colon-separated)
-        //       or HHMM[SS[.frac]][offset][annotations]     (compact, no colons)
-        //       or HH[offset][annotations]                  (hours only)
-        // offset: NOT bare Z; [+-]HH variants only.
-        // For pure time strings, Z is also rejected.
-
-        // Check for bare Z before trying to match (reject first).
-        // A 'Z' immediately after the time digits (before any bracket) is invalid.
-        if (preg_match('/\d[Zz](\[|$)/', $timeStr) === 1 || preg_match('/\d[Zz]$/', $timeStr) === 1) {
-            throw new RangeError("PlainTime::from() cannot parse \"{$s}\": UTC designator 'Z' is not allowed.");
+        $parsed = IsoLexical::time($s);
+        if ($parsed === null || $parsed->hasUtcDesignator()) {
+            throw new RangeError('Invalid ISO 8601 time string.');
         }
-
-        // Colon-separated format: HH:MM[:SS[.frac]][offset][annotations]
-        $colonTimePattern = sprintf(
-            '/^(\d{2}):(\d{2})(?::(\d{2})([.,]\d+)?)?(?:%s)?((?:\[[^\]]*\])*)$/i',
-            $offsetPattern,
+        CalendarMath::validateAnnotations($parsed->annotations, $s, false);
+        return self::fromParsedTime(
+            (int) $parsed->hour,
+            (int) $parsed->minute,
+            (int) $parsed->second,
+            $parsed->fraction !== '' ? IsoFraction::toNanoseconds($parsed->fraction) : 0,
         );
-
-        // Compact format: HHMMSS[.frac][offset][annotations] or HHMM[offset][annotations] or HH[offset][annotations]
-        $compactTimePattern = sprintf('/^(\d{2})(\d{2})?(\d{2})?([.,]\d+)?(?:%s)?((?:\[[^\]]*\])*)$/i', $offsetPattern);
-
-        /** @var list<string> $m2 */
-        $m2 = [];
-        if (preg_match($colonTimePattern, $timeStr, $m2) === 1) {
-            $annotationSection = $m2[5] !== '' ? $m2[5] : '';
-            CalendarMath::validateAnnotations($annotationSection, $s, false);
-
-            $hourNum = (int) $m2[1];
-            $minNum = (int) $m2[2];
-            $secNum = $m2[3] !== '' ? (int) $m2[3] : 0;
-            $fracRaw = $m2[4] !== '' ? $m2[4] : '';
-            $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
-
-            return self::fromParsedTime($hourNum, $minNum, $secNum, $subNs);
-        }
-
-        /** @var list<string> $m3 */
-        $m3 = [];
-        if (preg_match($compactTimePattern, $timeStr, $m3) === 1) {
-            // Compact: m3[1]=HH, m3[2]=MM (or ''), m3[3]=SS (or ''), m3[4]=.frac (or ''), m3[5]=annotations
-            $hourNum = (int) $m3[1];
-            $minNum = $m3[2] !== '' ? (int) $m3[2] : 0;
-            $secNum = $m3[3] !== '' ? (int) $m3[3] : 0;
-            $fracRaw = $m3[4] !== '' ? $m3[4] : '';
-            $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
-            $annotationSection = $m3[5] !== '' ? $m3[5] : '';
-            CalendarMath::validateAnnotations($annotationSection, $s, false);
-
-            // If MM was not provided (hours-only), minNum stays 0; that's fine.
-            // Disallow fractional seconds without HHMMSS (e.g., HH.frac or HHMM.frac is invalid).
-            if ($m3[3] === '' && $fracRaw !== '') {
-                throw new RangeError("PlainTime::from() cannot parse \"{$s}\": invalid ISO 8601 time string.");
-            }
-
-            return self::fromParsedTime($hourNum, $minNum, $secNum, $subNs);
-        }
-
-        throw new RangeError("PlainTime::from() cannot parse \"{$s}\": invalid ISO 8601 time string.");
     }
 
     private static function fromParsedTime(int $hour, int $minute, int $second, int $subNs): self
