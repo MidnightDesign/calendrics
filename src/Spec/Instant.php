@@ -7,6 +7,7 @@ namespace Calendrics\Spec;
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DurationRounding;
 use Calendrics\Spec\Internal\DurationTime;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\EpochRounding;
@@ -1052,53 +1053,11 @@ final class Instant implements Stringable
             ? [$absSec, $absSubNs]
             : EpochRounding::round($absSec, $absSubNs, $nsInc, $effectiveMode);
 
-        // ---- Balance ----
-        // The rounded magnitude (roundedSec, roundedSubNs) is non-negative; build
-        // the Duration from the seconds and sub-second parts separately so no
-        // intermediate nanosecond value can overflow int64. Sign restored last.
-        $sign = $diffSign;
-
-        // Sub-second components (ns/us/ms) come entirely from roundedSubNs after
-        // rounding has settled below the second boundary.
-        $ns = $roundedSubNs;
-        $us = 0;
-        $ms = 0;
-        if ($luIdx >= 1) { // at least microseconds
-            $us = intdiv(num1: $ns, num2: 1_000);
-            $ns -= $us * 1_000;
-        }
-        if ($luIdx >= 2) { // at least milliseconds
-            $ms = intdiv(num1: $us, num2: 1_000);
-            $us -= $ms * 1_000;
-        }
-
-        // Seconds and coarser components come from roundedSec.
-        $s = $roundedSec;
-        $min = 0;
-        $h = 0;
-        if ($luIdx >= 4) { // at least minutes
-            $min = intdiv(num1: $s, num2: 60);
-            $s -= $min * 60;
-        }
-        if ($luIdx >= 5) { // hours
-            $h = intdiv(num1: $min, num2: 60);
-            $min -= $h * 60;
-        }
-
-        // When largestUnit is below seconds, fold whole seconds back down into the
-        // largest available sub-second unit (ms/us/ns) so the Duration still
-        // represents the full magnitude.
-        if ($luIdx < 3 && $roundedSec !== 0) {
-            $s = 0;
-            if ($luIdx === 2) {
-                $ms += $roundedSec * 1_000;
-            } elseif ($luIdx === 1) {
-                $us += $roundedSec * 1_000_000;
-            } else {
-                $ns += $roundedSec * 1_000_000_000;
-            }
-        }
-
-        return new Duration(0, 0, 0, 0, $sign * $h, $sign * $min, $sign * $s, $sign * $ms, $sign * $us, $sign * $ns);
+        // Convert the exact rounded pair to the requested largest field once.
+        // Float multiplication followed by addition can round a large Number twice.
+        return DurationRounding::round(
+            new Duration(seconds: $diffSign * $roundedSec, nanoseconds: $diffSign * $roundedSubNs),
+            ['largestUnit' => $luRaw, 'smallestUnit' => 'nanosecond'],
+        );
     }
 }
