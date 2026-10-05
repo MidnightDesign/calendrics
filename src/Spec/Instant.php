@@ -7,6 +7,7 @@ namespace Calendrics\Spec;
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DurationTime;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\EpochValue;
@@ -533,36 +534,12 @@ final class Instant implements Stringable
         /** @var mixed $timeZoneRaw */
         $timeZoneRaw = array_key_exists('timeZone', $options) ? $options['timeZone'] : Options::ABSENT;
         $hasTimeZone = $timeZoneRaw !== Options::ABSENT;
+        $timeZoneId = null;
         if ($hasTimeZone) {
             if (!is_string($timeZoneRaw)) {
                 throw new TypeError('timeZone must be a string.');
             }
-            self::validateTimeZoneString($timeZoneRaw);
-        }
-
-        // Resolve timezone offset in seconds (null = UTC / 'Z' suffix).
-        $tzOffsetSec = null;
-        $ianaTimeZone = null;
-        if ($hasTimeZone) {
-            /** @var non-empty-string $timeZoneRaw */
-            $tzStr = $timeZoneRaw;
-            $resolved = self::resolveTimeZoneOffsetSeconds($tzStr);
-            if ($resolved !== null) {
-                $tzOffsetSec = $resolved;
-            } else {
-                // IANA timezone: extract the timezone name from the string.
-                // For bracket annotations, extract the bracket content (dropping the
-                // `!` critical flag, which is not part of the identifier).
-                $bm2 = null;
-                if (preg_match('/\[!?([^\]]+)\]/', $tzStr, $bm2) === 1) {
-                    $ianaTimeZone = $bm2[1];
-                } else {
-                    $ianaTimeZone = $tzStr;
-                }
-                // An unrecognized name is a RangeError; a bracket annotation's inline
-                // offset is not a fallback for one.
-                $ianaTimeZone = TimeZoneHelper::normalizeTimezoneId($ianaTimeZone);
-            }
+            $timeZoneId = TimeZoneHelper::normalizeTimezoneId($timeZoneRaw);
         }
 
         // Determine the rounding increment in nanoseconds.
@@ -586,10 +563,8 @@ final class Instant implements Stringable
             ? [$trueSec, $trueSubNs]
             : EpochRounding::round($trueSec, $trueSubNs, $increment, $roundMode);
 
-        // For IANA timezones, compute the offset at this epoch.
-        if ($ianaTimeZone !== null) {
-            $tzOffsetSec = self::ianaOffsetSeconds($ianaTimeZone, $secs);
-        }
+        // Resolve the normalized identifier at the rounded epoch.
+        $tzOffsetSec = $timeZoneId === null ? null : self::timeZoneOffsetSeconds($timeZoneId, $secs);
 
         // Apply timezone offset to get local datetime.
         $localSecs = $tzOffsetSec !== null ? $secs + $tzOffsetSec : $secs;
@@ -645,122 +620,14 @@ final class Instant implements Stringable
     }
 
     /**
-     * Validates a timezone identifier string for the toString() timeZone option.
+     * Resolves a normalized named or numeric timezone at a given epoch second.
      *
-     * Rules (from TC39 Temporal spec):
-     *   - Minus-zero extended year (-000000) → reject.
-     *   - Bracket annotation offset with seconds (e.g. [+23:59:60]) → reject.
-     *   - Pure UTC-offset strings (start with ±HH): must be ±HH:MM or ±HHMM (no seconds).
-     *   - Datetime strings (contain T): must have Z, an offset, or a bracket annotation;
-     *     an inline offset must not include a seconds component.
-     *
-     * @throws RangeError for invalid timezone strings.
-     *
-     * @phpstan-assert non-empty-string $tz
-     * @psalm-assert non-empty-string $tz
+     * @param non-empty-string $tz
      */
-    private static function validateTimeZoneString(string $tz): void
-    {
-        // Reject empty string.
-        if ($tz === '') {
-            throw new RangeError('Invalid timeZone "": empty string is not a valid timezone identifier.');
-        }
-        // Reject minus-zero extended year.
-        if (preg_match('/^-0{6}(?:[^0-9]|$)/', $tz) === 1) {
-            throw new RangeError("Invalid timeZone \"{$tz}\": minus-zero year.");
-        }
-        // Reject bracket annotation with a seconds component (e.g. [+23:59:60]).
-        $bm = null;
-        if (preg_match('/\[([^\]]+)\]/', $tz, $bm) === 1) {
-            if (preg_match('/^[+\-]\d{2}:\d{2}:\d{2}/', $bm[1]) === 1) {
-                throw new RangeError("Invalid timeZone \"{$tz}\": sub-minute seconds in bracket annotation.");
-            }
-        }
-        // Pure UTC-offset strings (no T date/time part): must be ±HH:MM or ±HHMM.
-        if (preg_match('/^[+\-]\d{2}/', $tz) === 1 && !str_contains($tz, 'T') && !str_contains($tz, 't')) {
-            if (preg_match('/^[+\-]\d{2}:\d{2}(?:$|[^:\d])/', $tz) !== 1 && preg_match('/^[+\-]\d{4}$/', $tz) !== 1) {
-                throw new RangeError("Invalid timeZone \"{$tz}\": offset contains seconds or is in an invalid format.");
-            }
-            return;
-        }
-        // Datetime strings: must have Z, an offset, or a bracket annotation.
-        if (preg_match('/\d{4,}-\d{2}-\d{2}[Tt]|\d{8}[Tt]/', $tz) === 1) {
-            if (preg_match('/T\d{2}:?\d{2}(?::?\d{2})?(?:\.\d+)?(?:Z|[+\-]|\[)/i', $tz) !== 1) {
-                throw new RangeError("Invalid timeZone \"{$tz}\": bare datetime without Z, offset, or bracket.");
-            }
-            // Inline offset must not include a seconds component (e.g. -07:00:01).
-            if (preg_match('/[+\-]\d{2}:\d{2}:\d{2}(?!\])/i', $tz) === 1) {
-                throw new RangeError("Invalid timeZone \"{$tz}\": inline offset contains a seconds component.");
-            }
-        }
-    }
-
-    /**
-     * Extracts the UTC offset in minutes from a validated timezone string.
-     *
-     * Priority: bracket annotation > inline offset/Z.
-     * Returns 0 for 'UTC' or 'Z', the offset minutes for ±HH:MM strings,
-     * and the bracket annotation offset for datetime strings with [±HH:MM] or [UTC].
-     */
-    private static function resolveTimeZoneOffsetSeconds(string $tz): ?int
-    {
-        // 'UTC' (case-insensitive)
-        if (strtoupper($tz) === 'UTC') {
-            return 0;
-        }
-        // Pure UTC-offset strings: ±HH:MM or ±HHMM
-        $m = null;
-        if (preg_match('/^([+\-])(\d{2}):?(\d{2})$/', $tz, $m) === 1) {
-            $sign = $m[1] === '+' ? 1 : -1;
-            return $sign * (((int) $m[2] * 3600) + ((int) $m[3] * 60));
-        }
-        // Datetime strings: bracket annotation takes precedence.
-        $bm = null;
-        if (preg_match('/\[([^\]]+)\]/', $tz, $bm) === 1) {
-            /** @var non-empty-string $bracket */
-            $bracket = $bm[1];
-            if (strtoupper($bracket) === 'UTC') {
-                return 0;
-            }
-            $om = null;
-            if (preg_match('/^([+\-])(\d{2}):(\d{2})$/', $bracket, $om) === 1) {
-                $sign = $om[1] === '+' ? 1 : -1;
-                return $sign * (((int) $om[2] * 3600) + ((int) $om[3] * 60));
-            }
-            // IANA timezone in bracket: return null to signal epoch-dependent
-            // resolution. Whether the name is recognized is decided by the caller's
-            // normalization — an unknown one is a RangeError, and the inline offset
-            // is not a fallback for it.
-            return null;
-        }
-        // Datetime strings without bracket: use inline offset or Z.
-        $om = null;
-        if (preg_match('/[Tt].*?(Z|([+\-])(\d{2}):(\d{2}))/i', $tz, $om) === 1) {
-            if ($om[1] === 'Z' || $om[1] === 'z') {
-                return 0;
-            }
-            /** @var array{non-falsy-string, non-falsy-string, '+'|'-', non-falsy-string, non-falsy-string} $om */
-            $sign = $om[2] === '+' ? 1 : -1;
-            return $sign * (((int) $om[3] * 3600) + ((int) $om[4] * 60));
-        }
-        // IANA timezone name: look up the offset at the current epoch.
-        // This method doesn't have access to the instant's epoch, so we
-        // validate the timezone now and defer the offset computation to the caller.
-        self::validateTimeZoneString($tz);
-        return null; // Signal to caller that it's an IANA timezone needing epoch-relative offset.
-    }
-
-    /**
-     * Resolves an IANA timezone to an offset in seconds at a given epoch second.
-     *
-     * @param non-empty-string $tz the IANA timezone name; the empty string is excluded
-     *   by the type because every call site derives it from a non-empty source (a
-     *   `[^\]]+` bracket capture, or a string already accepted by validateTimeZoneString)
-     */
-    private static function ianaOffsetSeconds(string $tz, int $epochSec): int
+    private static function timeZoneOffsetSeconds(string $tz, int $epochSec): int
     {
         $phpTz = new \DateTimeZone($tz);
-        return $phpTz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
+        return $phpTz->getOffset(\DateTimeImmutable::createFromTimestamp($epochSec));
     }
 
     #[\Override]
@@ -820,105 +687,9 @@ final class Instant implements Stringable
      */
     public function toZonedDateTimeISO(string $timeZone): ZonedDateTime
     {
-        $tzId = self::parseTimeZoneId($timeZone);
+        $tzId = TimeZoneHelper::normalizeTimezoneId($timeZone);
         [$epochSec, $subNs] = $this->epochParts();
         return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId);
-    }
-
-    /**
-     * Parses a timezone string and returns its canonical timezone ID.
-     *
-     * Accepts: 'UTC' (case-insensitive), '±HH:MM', or ISO datetime strings
-     * with an inline offset (Z or ±HH:MM) or a bracket annotation [tzId].
-     * Sub-minute offsets, bare datetimes, and empty strings are rejected.
-     *
-     * @throws RangeError for invalid timezone strings.
-     */
-    private static function parseTimeZoneId(string $tz): string
-    {
-        if ($tz === '') {
-            throw new RangeError('Time zone string must not be empty.');
-        }
-        // 'UTC' (case-insensitive).
-        if (strtoupper($tz) === 'UTC') {
-            return 'UTC';
-        }
-        // Reject minus-zero extended year.
-        if (preg_match('/^-0{6}(?:[^0-9]|$)/', $tz) === 1) {
-            throw new RangeError("Invalid time zone string \"{$tz}\": minus-zero year.");
-        }
-
-        // Determine if this looks like a datetime (has a T-separator after a date part).
-        $isDatetime = preg_match('/\d{4,}-\d{2}-\d{2}[Tt]|\d{8}[Tt]/', $tz) === 1;
-
-        if ($isDatetime) {
-            // Bracket annotation takes precedence over the inline offset.
-            $bm = null;
-            if (preg_match('/\[(!?[^\]]+)\]/', $tz, $bm) === 1) {
-                /** @var non-empty-string $bracket */
-                $bracket = $bm[1];
-                // Sub-minute offset in bracket: reject.
-                if (preg_match('/^[+\-]\d{2}:\d{2}:\d{2}/', $bracket) === 1) {
-                    throw new RangeError(
-                        "Invalid time zone string \"{$tz}\": sub-minute offset in bracket annotation.",
-                    );
-                }
-                if (strtoupper($bracket) === 'UTC') {
-                    return 'UTC';
-                }
-                if (preg_match('/^[+\-]\d{2}:\d{2}$/', $bracket) === 1) {
-                    return $bracket;
-                }
-                // Try as IANA timezone name.
-                try {
-                    new \DateTimeZone($bracket);
-                    return TimeZoneHelper::normalizeTimezoneId($bracket);
-                } catch (\Exception) {
-                    throw new RangeError(
-                        "Invalid time zone string \"{$tz}\": unsupported bracket timezone \"{$bracket}\".",
-                    );
-                }
-            }
-            // No bracket: inline offset (Z or ±HH:MM) required.
-            // Reject sub-minute inline offset.
-            if (preg_match('/[+\-]\d{2}:\d{2}:\d{2}/i', $tz) === 1) {
-                throw new RangeError("Invalid time zone string \"{$tz}\": inline offset contains a seconds component.");
-            }
-            // Extract inline offset (Z or ±HH:MM at end or after time part).
-            if (preg_match('/[Zz](?:\[|$)/', $tz) === 1) {
-                return 'UTC';
-            }
-            $om = null;
-            if (preg_match('/([+\-]\d{2}:\d{2})(?:\[|$)/', $tz, $om) === 1) {
-                return $om[1];
-            }
-            // Bare datetime with no offset and no bracket.
-            throw new RangeError("Invalid time zone string \"{$tz}\": bare datetime without Z, offset, or bracket.");
-        }
-
-        // Pure UTC-offset strings: accept only ±HH:MM (no seconds component).
-        if (preg_match('/^[+\-]\d{2}:\d{2}$/', $tz) === 1) {
-            return $tz;
-        }
-        // ±HHMM (compact form) → normalize to ±HH:MM.
-        $m = null;
-        if (preg_match('/^([+\-])(\d{2})(\d{2})$/', $tz, $m) === 1) {
-            return sprintf('%s%s:%s', $m[1], $m[2], $m[3]);
-        }
-        // Anything with more than ±HH:MM (seconds or fractional) → reject.
-        if (preg_match('/^[+\-]\d{2}:\d{2}[:.].*/i', $tz) === 1) {
-            throw new RangeError(
-                "Invalid time zone string \"{$tz}\": sub-minute offset is not a valid timezone identifier.",
-            );
-        }
-
-        // IANA timezone name: validate via PHP DateTimeZone.
-        try {
-            new \DateTimeZone($tz);
-            return TimeZoneHelper::normalizeTimezoneId($tz);
-        } catch (\Exception) {
-            throw new RangeError("Invalid time zone string \"{$tz}\": not a recognized timezone identifier.");
-        }
     }
 
     /**
@@ -941,16 +712,7 @@ final class Instant implements Stringable
             );
         }
         [$epochSec, $subNs] = $this->epochParts();
-        return self::addNsOffset(
-            $epochSec,
-            $subNs,
-            $d->hours,
-            $d->minutes,
-            $d->seconds,
-            $d->milliseconds,
-            $d->microseconds,
-            $d->nanoseconds,
-        );
+        return self::addNsOffset($epochSec, $subNs, $d, direction: 1);
     }
 
     /**
@@ -971,16 +733,7 @@ final class Instant implements Stringable
             );
         }
         [$epochSec, $subNs] = $this->epochParts();
-        return self::addNsOffset(
-            $epochSec,
-            $subNs,
-            -$d->hours,
-            -$d->minutes,
-            -$d->seconds,
-            -$d->milliseconds,
-            -$d->microseconds,
-            -$d->nanoseconds,
-        );
+        return self::addNsOffset($epochSec, $subNs, $d, direction: -1);
     }
 
     /**
@@ -1125,89 +878,13 @@ final class Instant implements Stringable
      *
      * @throws RangeError if the resulting instant is outside the Temporal spec range.
      */
-    private static function addNsOffset(
-        int $epochSec,
-        int $subNs,
-        int|float $hours,
-        int|float $minutes,
-        int|float $seconds,
-        int|float $milliseconds,
-        int|float $microseconds,
-        int|float $nanoseconds,
-    ): self {
-        // Float approximation — used only to reject deltas so large their whole-
-        // second magnitude could itself overflow int64 before decomposition.
-        $floatDeltaSec =
-            ((float) $hours * 3_600.0)
-            + ((float) $minutes * 60.0)
-            + (float) $seconds
-            + ((float) $milliseconds / 1_000.0)
-            + ((float) $microseconds / 1_000_000.0)
-            + ((float) $nanoseconds / 1_000_000_000.0);
-        // Spec range in seconds: |epochSec| ≤ 8_640_000_000_000. A delta whose
-        // magnitude exceeds twice that can never land in range; reject early so
-        // the integer seconds sum below cannot overflow.
-        $specMaxSec = (float) EpochLimits::MAX_EPOCH_SECONDS;
-        if ($floatDeltaSec > (4.0 * $specMaxSec) || $floatDeltaSec < (-4.0 * $specMaxSec)) {
-            throw new RangeError('Instant result is outside the representable nanosecond range.');
-        }
-
-        // Decompose each field into whole seconds + sub-second nanoseconds.
-        // Crucially, ms/us/ns are each split into a whole-second part (added in
-        // the seconds domain) and a sub-second remainder, so that a huge field
-        // value (e.g. microseconds ≈ 9e18) never forms an int64-overflowing
-        // nanosecond product — which would silently wrap and skip the range check.
-        $h = (int) $hours;
-        $m = (int) $minutes;
-        $s = (int) $seconds;
-
-        // Each sub-second field is split via decomposeUnit(): exact integer math
-        // when the field fits int64 (so values up to 9.2e18 stay precise), or a
-        // float-domain split when the field exceeds int64 (so over-int64-but-in-spec
-        // float fields like nanoseconds ≈ 1.728e22 don't overflow on the int cast).
-        [$msSec, $msSubNs] = self::decomposeUnit($milliseconds, 1_000_000, 1_000);
-        [$usSec, $usSubNs] = self::decomposeUnit($microseconds, 1_000, 1_000_000);
-        [$nsSec, $nsSubNs] = self::decomposeUnit($nanoseconds, 1, 1_000_000_000);
-
-        // Whole-second contribution from every field.
-        $deltaSec = ($h * 3_600) + ($m * 60) + $s + $msSec + $usSec + $nsSec;
-
-        // Sub-second contribution in nanoseconds: each field's remainder is < 1e9 ns
-        // apiece (sum < 3e9, well within int64).
-        $subDeltaNs = $msSubNs + $usSubNs + $nsSubNs;
-
-        // fromEpochParts() normalizes the sub-ns carry and enforces the spec range.
-        return self::fromEpochParts($epochSec + $deltaSec, $subNs + $subDeltaNs);
-    }
-
-    /**
-     * Splits one sub-second duration field into a whole-second part and a
-     * sub-second nanosecond remainder, without ever forming an int64-overflowing
-     * nanosecond product.
-     *
-     * @param int|float $value          The field value (e.g. nanoseconds, microseconds).
-     * @param int       $nsPerUnit      Nanoseconds per one of this unit (ns=1, us=1_000, ms=1_000_000).
-     * @param int       $unitsPerSecond Units of this kind per second (ns=1e9, us=1e6, ms=1e3).
-     * @return array{int, int} [wholeSeconds, subNanoseconds] where subNanoseconds
-     *                         carries the sign of $value and |subNanoseconds| < 1e9.
-     */
-    private static function decomposeUnit(int|float $value, int $nsPerUnit, int $unitsPerSecond): array
+    private static function addNsOffset(int $epochSec, int $subNs, Duration $duration, int $direction): self
     {
-        // Fast exact path: the field fits int64, so integer division and the
-        // sub-second remainder (always < 1e9 ns) are computed without precision loss.
-        if (is_int($value)) {
-            $whole = CalendarMath::floorDiv($value, $unitsPerSecond);
-            $remainderUnits = $value - ($whole * $unitsPerSecond);
-            return [$whole, $remainderUnits * $nsPerUnit];
-        }
-
-        // Over-int64 float field: split in the float domain. floor() yields the
-        // whole-second count (≤ ~3.46e13 for any in-spec delta, exact in float and
-        // int64), and the remainder stays < 1e9 ns.
-        $wholeFloat = floor($value / (float) $unitsPerSecond);
-        $whole = (int) $wholeFloat;
-        $remainderUnits = $value - ($wholeFloat * (float) $unitsPerSecond);
-        return [$whole, (int) ($remainderUnits * (float) $nsPerUnit)];
+        // A validated Duration fits within 2^53 seconds, so its whole seconds
+        // and the Instant epoch can be added safely without a float estimate.
+        // Split before negating: a nanosecond field can equal PHP_INT_MIN.
+        [$seconds, $nanoseconds] = DurationTime::parts($duration);
+        return self::fromEpochParts($epochSec + ($direction * $seconds), $subNs + ($direction * $nanoseconds));
     }
 
     /**
@@ -1321,7 +998,7 @@ final class Instant implements Stringable
 
         $suIdx = $unitOrder[$suRaw];
 
-        if ($luProvided) {
+        if ($luProvided && $luVal !== 'auto') {
             $luRaw = (string) $luVal;
             if (!array_key_exists($luRaw, $unitOrder)) {
                 throw new RangeError("Invalid largestUnit \"{$luRaw}\".");

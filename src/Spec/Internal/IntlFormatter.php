@@ -22,6 +22,9 @@ use Calendrics\Spec\Internal\Calendar\IntlCalendarFactory;
  */
 final class IntlFormatter
 {
+    /** @var array<string, string> */
+    private static array $patterns = [];
+
     /**
      * Every option name toLocaleString() reads, for snapshotting an object options bag
      * through {@see Options::bagSnapshot()}.
@@ -216,10 +219,8 @@ final class IntlFormatter
      * the TypeErrors they raise for style conflicts and inapplicable styles, which
      * CreateDateTimeFormat only reaches after reading every component option.
      *
-     * Only options with a fixed value set are checked here. `calendar` and `timeZone`
-     * are identifiers, resolved by their own lookups; `hour12` is a boolean; and
-     * `fractionalSecondDigits` is a number, which ECMA-402 range-checks to 1-3 and
-     * this layer does not.
+     * Returns the bag with boolean and numeric values normalized once. Calendar
+     * and time-zone identifiers are resolved separately.
      *
      * @param array<string, mixed> $opts
      * @return array<string, mixed>
@@ -237,6 +238,9 @@ final class IntlFormatter
             }
             $opts[$name] = LocaleIdentifier::canonicalType($name === 'calendar' ? 'ca' : 'nu', strtolower($value));
         }
+        if (($opts['hour12'] ?? null) !== null) {
+            $opts['hour12'] = self::booleanValue($opts['hour12']);
+        }
         self::checkedKeyword($opts, 'hourCycle', self::HOUR_CYCLES);
         self::checkedKeyword($opts, 'weekday', self::TEXT_WIDTHS);
         self::checkedKeyword($opts, 'era', self::TEXT_WIDTHS);
@@ -247,10 +251,52 @@ final class IntlFormatter
         self::checkedKeyword($opts, 'hour', self::NUMBER_WIDTHS);
         self::checkedKeyword($opts, 'minute', self::NUMBER_WIDTHS);
         self::checkedKeyword($opts, 'second', self::NUMBER_WIDTHS);
+        if (($opts['fractionalSecondDigits'] ?? null) !== null) {
+            $opts['fractionalSecondDigits'] = self::fractionalDigits($opts['fractionalSecondDigits']);
+        }
         self::checkedKeyword($opts, 'timeZoneName', self::TIME_ZONE_NAME_STYLES);
         self::checkedKeyword($opts, 'dateStyle', self::FORMAT_STYLES);
         self::checkedKeyword($opts, 'timeStyle', self::FORMAT_STYLES);
         return $opts;
+    }
+
+    /** ECMAScript ToBoolean, including nonempty string "0" and NaN. */
+    private static function booleanValue(mixed $value): bool
+    {
+        return (
+            $value !== null
+            && $value !== false
+            && $value !== 0
+            && $value !== 0.0
+            && $value !== ''
+            && (!is_float($value) || !is_nan($value))
+        );
+    }
+
+    /**
+     * ECMA-402 GetNumberOption with bounds 1–3, checked before flooring.
+     * @return int<1, 3>
+     */
+    private static function fractionalDigits(mixed $value): int
+    {
+        if ($value instanceof \Stringable) {
+            $value = (string) $value;
+        }
+        if (is_string($value)) {
+            $number = StringNumericLiteral::fromString($value);
+        } elseif (is_int($value) || is_float($value) || is_bool($value)) {
+            $number = (float) $value;
+        } else {
+            throw new RangeError('fractionalSecondDigits must be a number between 1 and 3.');
+        }
+        if (!is_finite($number) || $number < 1 || $number > 3) {
+            throw new RangeError('fractionalSecondDigits must be a number between 1 and 3.');
+        }
+        return match (true) {
+            $number < 2 => 1,
+            $number < 3 => 2,
+            default => 3,
+        };
     }
 
     /**
@@ -400,12 +446,7 @@ final class IntlFormatter
         if (($opts['hour12'] ?? null) !== null) {
             /** @var mixed $hour12Raw */
             $hour12Raw = $opts['hour12'];
-            $isTrue =
-                $hour12Raw !== false
-                && $hour12Raw !== 0
-                && $hour12Raw !== 0.0
-                && $hour12Raw !== ''
-                && $hour12Raw !== '0';
+            $isTrue = self::booleanValue($hour12Raw);
             $hc = self::preferredHourCycle($locale, $isTrue);
             $locale = self::applyHourCycle($locale, $hc);
         } elseif ($hourCycle !== null) {
@@ -488,8 +529,7 @@ final class IntlFormatter
         }
 
         // Default: use skeleton-based patterns to match JS Intl.DateTimeFormat defaults
-        $generator = new \IntlDatePatternGenerator($locale);
-        $pattern = $generator->getBestPattern($defaultComponents->defaultSkeleton());
+        $pattern = self::bestPattern($locale, $defaultComponents->defaultSkeleton());
         if ($pattern === false) {
             $pattern = null;
         }
@@ -531,8 +571,7 @@ final class IntlFormatter
             $skeleton .= $match[0];
         }
 
-        $generator = new \IntlDatePatternGenerator($locale);
-        $result = $generator->getBestPattern($skeleton);
+        $result = self::bestPattern($locale, $skeleton);
 
         return $result !== false ? $result : $skeleton;
     }
@@ -686,8 +725,8 @@ final class IntlFormatter
         if (($opts['fractionalSecondDigits'] ?? null) !== null) {
             /** @var mixed $fsd */
             $fsd = $opts['fractionalSecondDigits'];
-            $digits = is_int($fsd) ? $fsd : (int) (is_string($fsd) ? $fsd : 0);
-            $parts[] = str_repeat('S', times: max(0, $digits));
+            $digits = self::fractionalDigits($fsd);
+            $parts[] = str_repeat('S', times: $digits);
         }
         $dayPeriod = self::checkedKeyword($opts, 'dayPeriod', self::TEXT_WIDTHS);
         if ($dayPeriod !== null) {
@@ -742,8 +781,27 @@ final class IntlFormatter
         }
 
         // Use ICU's DateTimePatternGenerator to get a best-fit pattern
+        $result = self::bestPattern($locale, $skeleton);
+        return $result !== false ? $result : $skeleton;
+    }
+
+    private static function bestPattern(string $locale, string $skeleton): string|false
+    {
+        // Resolve options into scalar inputs before caching, so coercion and
+        // validation remain observable on every public call.
+        $key = serialize([\Locale::getDefault(), $locale, $skeleton]);
+        if (isset(self::$patterns[$key])) {
+            return self::$patterns[$key];
+        }
+
         $generator = new \IntlDatePatternGenerator($locale);
         $result = $generator->getBestPattern($skeleton);
-        return $result !== false ? $result : $skeleton;
+        if ($result === false || strlen($key) > 4096 || strlen($result) > 4096) {
+            return $result;
+        }
+        if (count(self::$patterns) >= 64) {
+            array_shift(self::$patterns);
+        }
+        return self::$patterns[$key] = $result;
     }
 }

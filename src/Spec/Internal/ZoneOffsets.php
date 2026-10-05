@@ -102,7 +102,7 @@ final class ZoneOffsets
      *
      * Per TC39, zones compare by canonical primary identifier: IANA aliases collapse, and
      * two distinct primaries stay distinct even when their rules are identical. UTC
-     * aliases and the `+00:00` / `-00:00` fixed offsets all fold to `'UTC'`.
+     * aliases fold to `'UTC'`; zero fixed offsets share a separate `'+00:00'` key.
      *
      * Deliberately does NOT apply the McMurdo → Auckland fixup that {@see canonicalize()}
      * uses: those are separate IANA primaries, and folding them here would make two
@@ -141,7 +141,7 @@ final class ZoneOffsets
             $tz = new \DateTimeZone($resolvedTzId);
             $tzCache[$resolvedTzId] = $tz;
         }
-        return $tz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
+        return $tz->getOffset(\DateTimeImmutable::createFromTimestamp($epochSec));
     }
 
     private static function canonicalizeUncached(string $id): string
@@ -170,7 +170,7 @@ final class ZoneOffsets
             return 'UTC';
         }
         if ($id === '+00:00' || $id === '-00:00') {
-            return 'UTC';
+            return '+00:00';
         }
 
         // Case-fold via the properly-cased IANA ID from PHP's zone list; ICU's
