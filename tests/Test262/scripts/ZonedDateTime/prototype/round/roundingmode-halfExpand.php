@@ -13,5 +13,5 @@ $expected = [['day', 217_206_000_000_000_000], ['minute', 217_175_040_000_000_00
 $roundingMode = 'halfExpand';
 foreach ($expected as $__entry__) {
 [$smallestUnit, $expected] = array_pad($__entry__, 2, null);
-Assert::sameValue($instance->round(JsUndefined::strip(['smallestUnit' => $smallestUnit, 'roundingMode' => $roundingMode]))->epochNanoseconds, $expected, "rounds to {$smallestUnit} (roundingMode = {$roundingMode})");
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($instance->round(JsUndefined::strip(['smallestUnit' => $smallestUnit, 'roundingMode' => $roundingMode]))), $expected, "rounds to {$smallestUnit} (roundingMode = {$roundingMode})");
 }

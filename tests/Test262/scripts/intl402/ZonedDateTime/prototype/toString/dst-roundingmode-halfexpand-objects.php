@@ -12,4 +12,4 @@ $zdtNonExistent = \Calendrics\Spec\PlainDateTime::from('2000-04-02T01:59:59.9999
 $roundedString = $zdtNonExistent->toString((object) ['fractionalSecondDigits' => 8, 'roundingMode' => 'halfExpand']);
 Assert::sameValue($roundedString, '2000-04-02T03:00:00.00000000-07:00[America/Vancouver]', '');
 $instant = \Calendrics\Spec\Instant::from($roundedString);
-Assert::sameValue($instant->epochNanoseconds - $zdtNonExistent->epochNanoseconds, 1, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($instant) - \Calendrics\Tests\Test262\JsEpoch::read($zdtNonExistent), 1, '');

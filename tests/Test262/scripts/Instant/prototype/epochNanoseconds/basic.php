@@ -9,6 +9,6 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $afterEpoch = new \Calendrics\Spec\Instant(217_175_010_123_456_789);
-Assert::sameValue($afterEpoch->epochNanoseconds, 217_175_010_123_456_789, 'epochNanoseconds post epoch');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($afterEpoch), 217_175_010_123_456_789, 'epochNanoseconds post epoch');
 $beforeEpoch = new \Calendrics\Spec\Instant(-217_175_010_876_543_211);
-Assert::sameValue($beforeEpoch->epochNanoseconds, -217_175_010_876_543_211, 'epochNanoseconds pre epoch');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($beforeEpoch), -217_175_010_876_543_211, 'epochNanoseconds pre epoch');

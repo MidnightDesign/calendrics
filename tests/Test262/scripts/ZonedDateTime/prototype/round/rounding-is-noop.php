@@ -14,5 +14,5 @@ foreach ($noopRoundingOperations as $__entry__) {
 [$options, $descr] = array_pad($__entry__, 2, null);
 $result = $instance->round($options);
 Assert::notSameValue($result, $instance, 'rounding result should be a new object');
-Assert::sameValue($result->epochNanoseconds, $instance->epochNanoseconds, 'instant should be unchanged');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), \Calendrics\Tests\Test262\JsEpoch::read($instance), 'instant should be unchanged');
 }

@@ -10,4 +10,4 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\ZonedDateTime(1_572_342_398_271_986_102, '-07:00', 'gregory');
 $result = $instance->withCalendar('japanese');
-Assert::sameValue($result->epochNanoseconds, 1_572_342_398_271_986_102, 'Exact time is preserved in return value');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_572_342_398_271_986_102, 'Exact time is preserved in return value');

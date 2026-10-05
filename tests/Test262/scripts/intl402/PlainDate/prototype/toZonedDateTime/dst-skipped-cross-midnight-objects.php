@@ -13,5 +13,5 @@ $instance = new \Calendrics\Spec\PlainDate(1919, 3, 31);
 $startOfDay = $instance->toZonedDateTime('America/Toronto');
 $midnightDisambiguated = $instance->toZonedDateTime((object) JsUndefined::strip(['timeZone' => 'America/Toronto', 'plainTime' => new \Calendrics\Spec\PlainTime()]));
 TemporalHelpers::assertDuration($startOfDay->until($midnightDisambiguated), 0, 0, 0, 0, 0, 30, 0, 0, 0, 0, 'start of day is 30 minutes earlier than following the disambiguation strategy for midnight');
-Assert::sameValue($startOfDay->epochNanoseconds, $instance->toZonedDateTime((object) ['timeZone' => 'America/Toronto'])->epochNanoseconds, 'omitted plainTime is the same result as using the string shorthand');
-Assert::sameValue($startOfDay->epochNanoseconds, $instance->toZonedDateTime((object) ['timeZone' => 'America/Toronto'])->epochNanoseconds, 'explicitly undefined plainTime is the same result as using the string shorthand');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($startOfDay), \Calendrics\Tests\Test262\JsEpoch::read($instance->toZonedDateTime((object) ['timeZone' => 'America/Toronto'])), 'omitted plainTime is the same result as using the string shorthand');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($startOfDay), \Calendrics\Tests\Test262\JsEpoch::read($instance->toZonedDateTime((object) ['timeZone' => 'America/Toronto'])), 'explicitly undefined plainTime is the same result as using the string shorthand');

@@ -10,4 +10,4 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
 $instant = new \Calendrics\Spec\Instant(1_000_000_000_123_987_500);
-TemporalHelpers::checkStringOptionWrongType('smallestUnit', 'microsecond', function ($smallestUnit) use (&$instant) { return $instant->round(JsUndefined::strip(['smallestUnit' => $smallestUnit])); }, fn($result, $descr) => Assert::sameValue($result->epochNanoseconds, 1_000_000_000_123_988_000, $descr));
+TemporalHelpers::checkStringOptionWrongType('smallestUnit', 'microsecond', function ($smallestUnit) use (&$instant) { return $instant->round(JsUndefined::strip(['smallestUnit' => $smallestUnit])); }, fn($result, $descr) => Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_000_123_988_000, $descr));

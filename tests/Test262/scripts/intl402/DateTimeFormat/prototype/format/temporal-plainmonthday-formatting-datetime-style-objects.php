@@ -9,7 +9,7 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $ensureDateField = function ($result, $field, $dateStyle) use (&$expected) {
-[$searchValue, $present] = array_pad($expected[$dateStyle][$field], 2, null);
+[$searchValue, $present] = array_pad(\Calendrics\Tests\Test262\Js::computedProperty(\Calendrics\Tests\Test262\Js::computedProperty($expected, $dateStyle), $field), 2, null);
 $verb = ($present ? 'should' : 'should not');
 Assert::sameValue(\Calendrics\Tests\Test262\Js::includes($result, $searchValue), $present, "dateStyle={$dateStyle}: {$field} {$verb} appear");
 };

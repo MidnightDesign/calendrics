@@ -10,6 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\ZonedDateTime(0, 'UTC');
 $result1 = $instance->with((object) ['day' => 5], (object) []);
-Assert::sameValue($result1->epochNanoseconds, 345_600_000_000_000, 'UTC');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result1), 345_600_000_000_000, 'UTC');
 $result2 = $instance->with((object) ['day' => 5], function () {  });
-Assert::sameValue($result2->epochNanoseconds, 345_600_000_000_000, 'UTC');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result2), 345_600_000_000_000, 'UTC');

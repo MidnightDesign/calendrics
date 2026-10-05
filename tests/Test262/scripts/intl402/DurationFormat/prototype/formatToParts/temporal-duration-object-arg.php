@@ -11,9 +11,9 @@ use Calendrics\Tests\Test262\JsUndefined;
 $assertSameParts = function ($actual, $expected) {
 Assert::sameValue((is_string($actual) ? strlen($actual) : count($actual)), (is_string($expected) ? strlen($expected) : count($expected)), '');
 for ($i = 0; $i < (is_string($actual) ? strlen($actual) : count($actual)); ++$i) {
-Assert::sameValue($actual[$i]->type, $expected[$i]->type, '');
-Assert::sameValue($actual[$i]->value, $expected[$i]->value, '');
-Assert::sameValue($actual[$i]->unit, $expected[$i]->unit, '');
+Assert::sameValue(\Calendrics\Tests\Test262\Js::computedProperty($actual, $i)->type, \Calendrics\Tests\Test262\Js::computedProperty($expected, $i)->type, '');
+Assert::sameValue(\Calendrics\Tests\Test262\Js::computedProperty($actual, $i)->value, \Calendrics\Tests\Test262\Js::computedProperty($expected, $i)->value, '');
+Assert::sameValue(\Calendrics\Tests\Test262\Js::computedProperty($actual, $i)->unit, \Calendrics\Tests\Test262\Js::computedProperty($expected, $i)->unit, '');
 }
 };
 $durations = [JsUndefined::strip(['object' => new \Calendrics\Spec\Duration(), 'durationLike' => ['years' => 0]]), JsUndefined::strip(['object' => new \Calendrics\Spec\Duration(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 'durationLike' => ['years' => 1, 'months' => 2, 'weeks' => 3, 'days' => 4, 'hours' => 5, 'minutes' => 6, 'seconds' => 7, 'milliseconds' => 8, 'microseconds' => 9, 'nanoseconds' => 10]])];

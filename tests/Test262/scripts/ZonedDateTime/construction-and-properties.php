@@ -28,7 +28,7 @@ Assert::sameValue($zdt->millisecond, 123, '');
 Assert::sameValue($zdt->microsecond, 456, '');
 Assert::sameValue($zdt->nanosecond, 789, '');
 Assert::sameValue($zdt->epochMilliseconds, 217_178_610_123, '');
-Assert::sameValue($zdt->epochNanoseconds, 217_178_610_123_456_789, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($zdt), 217_178_610_123_456_789, '');
 Assert::sameValue($zdt->dayOfWeek, 4, '');
 Assert::sameValue($zdt->dayOfYear, 323, '');
 Assert::sameValue($zdt->weekOfYear, 47, '');

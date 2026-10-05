@@ -9,4 +9,4 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
-TemporalHelpers::checkToTemporalInstantFastPath(function ($datetime) use (&$result) { $result = \Calendrics\Spec\Instant::from($datetime); Assert::sameValue($result->epochNanoseconds, $result->epochNanoseconds, 'epochNanoseconds result'); });
+TemporalHelpers::checkToTemporalInstantFastPath(function ($datetime) use (&$result) { $result = \Calendrics\Spec\Instant::from($datetime); Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), \Calendrics\Tests\Test262\JsEpoch::read($result), 'epochNanoseconds result'); });

@@ -14,7 +14,7 @@ foreach ((object) JsUndefined::strip(['first' => $first, 'second' => $second]) a
 $transition = new \Calendrics\Spec\ZonedDateTime($epochSeconds * 1_000_000_000, $zone);
 $before = new \Calendrics\Spec\ZonedDateTime(($epochSeconds - 1800) * 1_000_000_000, $zone);
 $after = new \Calendrics\Spec\ZonedDateTime(($epochSeconds + 1800) * 1_000_000_000, $zone);
-Assert::sameValue($before->getTimeZoneTransition('next')->epochNanoseconds, $transition->epochNanoseconds, "{$zone} offset transitions close together, next to {$label} transition");
-Assert::sameValue($after->getTimeZoneTransition('previous')->epochNanoseconds, $transition->epochNanoseconds, "{$zone} offset transitions close together, previous to {$label} transition");
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($before->getTimeZoneTransition('next')), \Calendrics\Tests\Test262\JsEpoch::read($transition), "{$zone} offset transitions close together, next to {$label} transition");
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($after->getTimeZoneTransition('previous')), \Calendrics\Tests\Test262\JsEpoch::read($transition), "{$zone} offset transitions close together, previous to {$label} transition");
 }
 }

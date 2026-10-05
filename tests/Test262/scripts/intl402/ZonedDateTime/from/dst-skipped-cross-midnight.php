@@ -12,4 +12,4 @@ use Calendrics\Tests\Test262\TemporalHelpers;
 $startOfDay = \Calendrics\Spec\ZonedDateTime::from('1919-03-31[America/Toronto]');
 $midnightDisambiguated = \Calendrics\Spec\ZonedDateTime::from('1919-03-31T00[America/Toronto]');
 TemporalHelpers::assertDuration($startOfDay->until($midnightDisambiguated), 0, 0, 0, 0, 0, 30, 0, 0, 0, 0, 'start of day is 30 minutes earlier than following the disambiguation strategy for midnight');
-Assert::sameValue($midnightDisambiguated->epochNanoseconds, \Calendrics\Spec\ZonedDateTime::from(['year' => 1919, 'month' => 3, 'day' => 31, 'timeZone' => 'America/Toronto'])->epochNanoseconds, 'start of day magic doesn\'t happen with property bag, missing properties are zero');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($midnightDisambiguated), \Calendrics\Tests\Test262\JsEpoch::read(\Calendrics\Spec\ZonedDateTime::from(['year' => 1919, 'month' => 3, 'day' => 31, 'timeZone' => 'America/Toronto'])), 'start of day magic doesn\'t happen with property bag, missing properties are zero');

@@ -9,10 +9,10 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $i1 = new \Calendrics\Spec\Instant(1_582_966_647_747_612_578);
-Assert::sameValue($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => 9_007_199_254_740_991])))->epochNanoseconds, 1_573_959_448_492_871_587, '');
-Assert::sameValue($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => -9_007_199_254_740_991])))->epochNanoseconds, 1_591_973_847_002_353_569, '');
-Assert::sameValue($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['microseconds' => 9_007_199_254_740_991])))->epochNanoseconds, -7_424_232_606_993_378_422, '');
-// SKIP (int64 overflow): Assert::sameValue($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['microseconds' => -9_007_199_254_740_991])))->epochNanoseconds, 10590165902488603578, ...);
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => 9_007_199_254_740_991])))), 1_573_959_448_492_871_587, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => -9_007_199_254_740_991])))), 1_591_973_847_002_353_569, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['microseconds' => 9_007_199_254_740_991])))), -7_424_232_606_993_378_422, '');
+// SKIP (int64 overflow): Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['microseconds' => -9_007_199_254_740_991])))), 10590165902488603578, ...);
 \PHPUnit\Framework\Assert::assertTrue(true); // skip counted as assertion
 /* skipped */;
 Assert::throws(\RangeException::class, function () use (&$i1) { return $i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['milliseconds' => 9_007_199_254_740_991]))); }, '');
@@ -20,8 +20,8 @@ Assert::throws(\RangeException::class, function () use (&$i1) { return $i1->subt
 Assert::throws(\RangeException::class, function () use (&$i1) { return $i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['seconds' => 9_007_199_254_740_991]))); }, '');
 Assert::throws(\RangeException::class, function () use (&$i1) { return $i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['seconds' => -9_007_199_254_740_991]))); }, '');
 $bigNumber = 9_007_199_254_740_990_976;
-Assert::sameValue($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => $bigNumber])))->epochNanoseconds, -7_424_232_606_993_378_398, '');
-// SKIP (int64 overflow): Assert::sameValue($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => -$bigNumber])))->epochNanoseconds, 10590165902488603554, ...);
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => $bigNumber])))), -7_424_232_606_993_378_398, '');
+// SKIP (int64 overflow): Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => -$bigNumber])))), 10590165902488603554, ...);
 \PHPUnit\Framework\Assert::assertTrue(true); // skip counted as assertion
 /* skipped */;
 Assert::throws(\RangeException::class, function () use (&$i1, &$bigNumber) { return $i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['microseconds' => $bigNumber]))); }, '');
@@ -29,8 +29,8 @@ Assert::throws(\RangeException::class, function () use (&$i1, &$bigNumber) { ret
 Assert::throws(\RangeException::class, function () use (&$i1, &$bigNumber) { return $i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['milliseconds' => $bigNumber]))); }, '');
 Assert::throws(\RangeException::class, function () use (&$i1, &$bigNumber) { return $i1->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['milliseconds' => -$bigNumber]))); }, '');
 $i2 = new \Calendrics\Spec\Instant(0);
-Assert::sameValue($i2->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => $bigNumber])))->epochNanoseconds, -9_007_199_254_740_990_976, '');
-Assert::sameValue($i2->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => -$bigNumber])))->epochNanoseconds, 9_007_199_254_740_990_976, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($i2->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => $bigNumber])))), -9_007_199_254_740_990_976, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($i2->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['nanoseconds' => -$bigNumber])))), 9_007_199_254_740_990_976, '');
 Assert::throws(\RangeException::class, function () use (&$i2, &$bigNumber) { return $i2->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['microseconds' => $bigNumber]))); }, '');
 Assert::throws(\RangeException::class, function () use (&$i2, &$bigNumber) { return $i2->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['microseconds' => -$bigNumber]))); }, '');
 Assert::throws(\RangeException::class, function () use (&$i2, &$bigNumber) { return $i2->subtract(\Calendrics\Spec\Duration::from(JsUndefined::strip(['milliseconds' => $bigNumber]))); }, '');

@@ -11,4 +11,4 @@ use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
 $datetime = new \Calendrics\Spec\ZonedDateTime(1_000_000_000_987_654_321, 'UTC');
 $duration = new \Calendrics\Spec\Duration(0, 0, 0, 1);
-TemporalHelpers::checkStringOptionWrongType('overflow', 'constrain', function ($overflow) use (&$datetime, &$duration) { return $datetime->add($duration, JsUndefined::strip(['overflow' => $overflow])); }, fn($result, $descr) => Assert::sameValue($result->epochNanoseconds, 1_000_086_400_987_654_321, $descr));
+TemporalHelpers::checkStringOptionWrongType('overflow', 'constrain', function ($overflow) use (&$datetime, &$duration) { return $datetime->add($duration, JsUndefined::strip(['overflow' => $overflow])); }, fn($result, $descr) => Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_086_400_987_654_321, $descr));

@@ -14,7 +14,7 @@ $offset = 'ignore';
 foreach ([[$springForwardDatetime, (object) ['hour' => 2, 'minute' => 30], 954_671_401_000_000_000], [$fallBackDatetime, (object) ['hour' => 1, 'minute' => 30], 972_808_201_000_000_000]] as $__entry__) {
 [$datetime, $fields, $expected] = array_pad($__entry__, 3, null);
 $explicit = $datetime->with($fields, (object) JsUndefined::strip(['offset' => $offset]));
-Assert::sameValue($explicit->epochNanoseconds, $expected, 'default disambiguation is compatible');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($explicit), $expected, 'default disambiguation is compatible');
 $implicit = $datetime->with($fields, (object) JsUndefined::strip(['offset' => $offset]));
-Assert::sameValue($implicit->epochNanoseconds, $expected, 'default disambiguation is compatible');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($implicit), $expected, 'default disambiguation is compatible');
 }

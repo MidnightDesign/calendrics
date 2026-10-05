@@ -11,7 +11,7 @@ use Calendrics\Tests\Test262\JsUndefined;
 $daysPerMonth = JsUndefined::strip(['Cheshvan' => [29, 30, 30, 29, 29, 30, 30, 29, 29, 30, 29], 'Kislev' => [30, 30, 30, 29, 30, 30, 30, 30, 29, 30, 30]]);
 for ($year = 0; $year < (is_string($daysPerMonth['Cheshvan']) ? strlen($daysPerMonth['Cheshvan']) : count($daysPerMonth['Cheshvan'])); ++$year) {
 $endOfCheshvan = \Calendrics\Spec\PlainDate::from(JsUndefined::strip(['calendar' => 'hebrew', 'year' => $year, 'monthCode' => 'M02', 'day' => 30]));
-Assert::sameValue($endOfCheshvan->day, $daysPerMonth['Cheshvan'][$year], '');
+Assert::sameValue($endOfCheshvan->day, \Calendrics\Tests\Test262\Js::computedProperty($daysPerMonth['Cheshvan'], $year), '');
 $endOfKislev = \Calendrics\Spec\PlainDate::from(JsUndefined::strip(['calendar' => 'hebrew', 'year' => $year, 'monthCode' => 'M03', 'day' => 30]));
-Assert::sameValue($endOfKislev->day, $daysPerMonth['Kislev'][$year], '');
+Assert::sameValue($endOfKislev->day, \Calendrics\Tests\Test262\Js::computedProperty($daysPerMonth['Kislev'], $year), '');
 }

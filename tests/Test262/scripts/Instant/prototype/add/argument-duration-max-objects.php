@@ -13,7 +13,7 @@ $maxCases = [['PT2400000000H', 'string with max hours'], [(object) ['hours' => 2
 foreach ($maxCases as $__entry__) {
 [$arg, $descr] = array_pad($__entry__, 2, null);
 $result = $instance->add($arg);
-// SKIP (int64 overflow): Assert::sameValue($result->epochNanoseconds, 8640000000000000000000, ...);
+// SKIP (int64 overflow): Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 8640000000000000000000, ...);
 \PHPUnit\Framework\Assert::assertTrue(true); // skip counted as assertion
 /* skipped */;
 }

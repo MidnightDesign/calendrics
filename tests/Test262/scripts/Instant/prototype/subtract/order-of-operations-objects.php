@@ -14,5 +14,5 @@ $expected = ['get fields.days', 'get fields.hours', 'get fields.hours.valueOf', 
 $actual = new \Calendrics\Tests\Test262\ObserverTrace();
 $fields = TemporalHelpers::propertyBagObserver($actual, (object) ['hours' => 1, 'minutes' => 1, 'seconds' => 1, 'milliseconds' => 1, 'microseconds' => 1, 'nanoseconds' => 1], 'fields');
 $result = $instance->subtract($fields);
-Assert::sameValue($result->epochNanoseconds, -3_661_001_000_991, 'epochNanoseconds result');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), -3_661_001_000_991, 'epochNanoseconds result');
 Assert::compareObserverTrace($actual, $expected, 'order of operations');

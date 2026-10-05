@@ -10,6 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $dt = new \Calendrics\Spec\PlainDateTime(2020, 1, 1, 0, 0);
 $zdt = $dt->toZonedDateTime('UTC');
-Assert::sameValue($zdt->epochNanoseconds, 1_577_836_800_000_000_000, 'nanoseconds');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($zdt), 1_577_836_800_000_000_000, 'nanoseconds');
 Assert::sameValue($zdt->calendarId, 'iso8601', 'calendar');
 Assert::sameValue($zdt->timeZoneId, 'UTC', 'timezone');
