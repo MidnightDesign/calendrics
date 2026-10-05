@@ -1202,6 +1202,9 @@ final class ZonedDateTime implements Stringable
         ];
         $hasField = false;
         foreach ($recognized as $f) {
+            if (($f === 'era' || $f === 'eraYear') && !CalendarMath::readsEraFields($this->calendarId)) {
+                continue;
+            }
             if (!array_key_exists($f, $fields)) {
                 continue;
             }
