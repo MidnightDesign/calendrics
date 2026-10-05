@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Calendrics\Spec\Internal;
 
 use Calendrics\Exception\RangeError;
+use Calendrics\Spec\Instant;
+use Calendrics\Spec\ZonedDateTime;
 
 /**
- * Internal helpers for converting between epoch-nanosecond integers and PHP's
+ * Internal helpers for converting between Temporal values and PHP's
  * `\DateTimeInterface`/`\DateTimeImmutable`.
  *
  * Used by `Calendrics\Instant::{fromDateTime,toDateTime}` and
@@ -65,20 +67,26 @@ final class PhpDateTimeInterop
     }
 
     /**
-     * Builds a `\DateTimeImmutable` for the given epoch nanoseconds, displayed
+     * Builds a `\DateTimeImmutable` for the given value, displayed
      * in `$tz`.
      *
      * PHP's native date-time types only carry microsecond precision, so the
-     * sub-microsecond bits of `$epochNanoseconds` (the lowest three decimal
+     * sub-microsecond bits of the epoch (the lowest three decimal
      * digits) are dropped. This matches the loss-of-precision contract
      * documented on the porcelain `toDateTime()` methods.
      *
      * Because this helper lives in `Calendrics\Spec\Internal\`, it is not part
      * of the public BC contract and may change between any two releases.
      */
-    public static function toDateTime(int $epochNanoseconds, \DateTimeZone $tz): \DateTimeImmutable
+    public static function toDateTime(Instant|ZonedDateTime $value, \DateTimeZone $tz): \DateTimeImmutable
     {
-        $us = intdiv(num1: $epochNanoseconds, num2: 1_000);
+        [$epochSeconds, $subNanoseconds] = $value->epochParts();
+        // The full Temporal range fits an int64 microsecond epoch. For negative
+        // epochs, retain the existing truncation toward zero when dropping nanoseconds.
+        $us = ($epochSeconds * 1_000_000) + intdiv(num1: $subNanoseconds, num2: 1_000);
+        if ($epochSeconds < 0 && ($subNanoseconds % 1_000) !== 0) {
+            $us++;
+        }
         $secs = intdiv(num1: $us, num2: 1_000_000);
         $usOfSec = $us % 1_000_000;
         if ($usOfSec < 0) {

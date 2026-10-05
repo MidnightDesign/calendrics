@@ -621,7 +621,10 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
         // Try full date string formats: YYYY-MM-DD, ±YYYYYY-MM-DD, YYYYMMDD, ±YYYYYYMMDD
         // Also handles MM-DD (without --) as a bare month-day string.
         // date: year + rest, optional T+time, optional offset, bracket annotations
-        $datePattern = '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:[Zz]|[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)?)?((?:\[[^\]]*\])*)$/';
+        $datePattern = sprintf(
+            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:[Zz]|%s)?)?((?:\[[^\]]*\])*)$/',
+            DateParse::NUMERIC_OFFSET_PATTERN,
+        );
 
         /** @var list<string> $m */
         $m = [];

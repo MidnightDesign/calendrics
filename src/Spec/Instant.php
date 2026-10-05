@@ -760,7 +760,7 @@ final class Instant implements Stringable
     private static function ianaOffsetSeconds(string $tz, int $epochSec): int
     {
         $phpTz = new \DateTimeZone($tz);
-        return $phpTz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
+        return $phpTz->getOffset(\DateTimeImmutable::createFromTimestamp($epochSec));
     }
 
     #[\Override]
@@ -1321,7 +1321,7 @@ final class Instant implements Stringable
 
         $suIdx = $unitOrder[$suRaw];
 
-        if ($luProvided) {
+        if ($luProvided && $luVal !== 'auto') {
             $luRaw = (string) $luVal;
             if (!array_key_exists($luRaw, $unitOrder)) {
                 throw new RangeError("Invalid largestUnit \"{$luRaw}\".");
