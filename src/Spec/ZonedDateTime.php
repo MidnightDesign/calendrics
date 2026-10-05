@@ -821,7 +821,7 @@ final class ZonedDateTime implements Stringable
 
         $offsetSec = ZoneOffsets::offsetAt($epochSec, $this->resolvedTimeZoneId);
         $localSec = $epochSec + $offsetSec;
-        $dt = new \DateTimeImmutable(sprintf('@%d', $localSec));
+        $dt = \DateTimeImmutable::createFromTimestamp($localSec);
 
         $year = (int) $dt->format('Y');
         $month = (int) $dt->format('n');
@@ -928,7 +928,7 @@ final class ZonedDateTime implements Stringable
             throw new TypeError('toLocaleString(): timeZone option is not allowed for ZonedDateTime.');
         }
 
-        IntlFormatter::validateOptionValues($opts);
+        $opts = IntlFormatter::normalizeOptions($opts);
 
         $locale = IntlFormatter::resolveLocale($locales);
         IntlFormatter::validateCalendar(
@@ -1638,7 +1638,7 @@ final class ZonedDateTime implements Stringable
         $absEpochSec = abs($epochSec);
         if (
             $absEpochSec > EpochLimits::MAX_EPOCH_SECONDS
-            || $absEpochSec === EpochLimits::MAX_EPOCH_SECONDS && $subNs > 0
+            || $epochSec === EpochLimits::MAX_EPOCH_SECONDS && $subNs > 0
         ) {
             throw new RangeError('ZonedDateTime arithmetic result is outside the representable range.');
         }

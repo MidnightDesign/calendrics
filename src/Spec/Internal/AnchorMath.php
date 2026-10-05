@@ -46,45 +46,42 @@ final class AnchorMath
      * @param \DateTimeImmutable $date Base date (UTC midnight).
      * @param int $months Signed number of months to add (may be negative).
      */
-    public static function addMonthsClamped(\DateTimeImmutable $date, int $months): \DateTimeImmutable
-    {
-        if ($months === 0) {
-            return $date;
-        }
-        $y = (int) $date->format('Y');
-        $m = (int) $date->format('n');
-        $d = (int) $date->format('j');
-
-        [$y, $m, $clampedDay] = CalendarFactory::get('iso8601')->dateAdd($y, $m, $d, 0, $months, 0, 0, 'constrain');
-        return new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
-            ->setDate($y, $m, $clampedDay)
-            ->setTime(0, 0, 0);
+    public static function addMonthsClamped(
+        \DateTimeImmutable $date,
+        int $months,
+        string $calendarId = 'iso8601',
+    ): \DateTimeImmutable {
+        return self::addCalendarFields($date, 0, $months, 0, 0, $calendarId);
     }
 
-    /**
-     * Adds $years years to $date using TC39 year arithmetic (clamp Feb 29 to Feb 28 in non-leap years).
-     *
-     * @param \DateTimeImmutable $date Base date (UTC midnight).
-     * @param int $years Signed number of years to add.
-     */
-    public static function addYearsClamped(\DateTimeImmutable $date, int $years): \DateTimeImmutable
-    {
-        if ($years === 0) {
-            return $date;
-        }
-        [$y, $m, $clampedDay] = CalendarFactory::get('iso8601')->dateAdd(
+    public static function addYearsClamped(
+        \DateTimeImmutable $date,
+        int $years,
+        string $calendarId = 'iso8601',
+    ): \DateTimeImmutable {
+        return self::addCalendarFields($date, $years, 0, 0, 0, $calendarId);
+    }
+
+    /** Adds the calendar fields together so constrain is applied only once. */
+    public static function addCalendarFields(
+        \DateTimeImmutable $date,
+        int $years,
+        int $months,
+        int $weeks,
+        int $days,
+        string $calendarId,
+    ): \DateTimeImmutable {
+        [$year, $month, $day] = CalendarFactory::get($calendarId)->dateAdd(
             (int) $date->format('Y'),
             (int) $date->format('n'),
             (int) $date->format('j'),
             $years,
-            0,
-            0,
-            0,
+            $months,
+            $weeks,
+            $days,
             'constrain',
         );
-        return new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
-            ->setDate($y, $m, $clampedDay)
-            ->setTime(0, 0, 0);
+        return $date->setDate($year, $month, $day);
     }
 
     /**
@@ -121,17 +118,11 @@ final class AnchorMath
         int $second,
         string $tzId,
     ): int {
-        // Compute wall seconds (seconds since epoch if interpreted as UTC).
-        // gmmktime() normalizes out-of-range fields instead of rejecting them, so for
-        // valid components it never returns false on a 64-bit platform. Callers must
-        // pass already-validated date/time fields: invalid fields would silently roll
-        // over (e.g. month 13 -> next January), not throw. The false branch is thus
-        // unreachable here and the assert exists only to narrow gmmktime()'s int|false
-        // return for static analysis. On 32-bit builds gmmktime() can return false for
-        // years outside 1901-2038, where the assert would surface as an error rather
-        // than a clean result -- see the platform note in README.md.
-        $wallSec = gmmktime($hour, $minute, $second, $month, $day, $year);
-        assert($wallSec !== false);
+        // Interpret validated numeric fields literally, including years 0 through 100.
+        $wallSec = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+            ->setDate($year, $month, $day)
+            ->setTime($hour, $minute, $second)
+            ->getTimestamp();
         return TimeZoneHelper::wallSecToEpochSec($wallSec, $tzId);
     }
 
@@ -151,15 +142,9 @@ final class AnchorMath
     ): int {
         $todayEpoch = self::localToEpochSec($year, $month, $day, $hour, $minute, $second, $tzId);
         // Add 1 calendar day to the local date.
-        $dt = new \DateTimeImmutable(sprintf(
-            '%04d-%02d-%02dT%02d:%02d:%02d',
-            $year,
-            $month,
-            $day,
-            $hour,
-            $minute,
-            $second,
-        ));
+        $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+            ->setDate($year, $month, $day)
+            ->setTime(0, 0, 0);
         $next = $dt->modify('+1 day');
         $tomorrowEpoch = self::localToEpochSec(
             (int) $next->format('Y'),
@@ -202,7 +187,9 @@ final class AnchorMath
         $curDay = $day;
 
         while (true) {
-            $dt = new \DateTimeImmutable(sprintf('%04d-%02d-%02d', $curYear, $curMonth, $curDay));
+            $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+                ->setDate($curYear, $curMonth, $curDay)
+                ->setTime(0, 0, 0);
             $next = $dt->modify($sign > 0 ? '+1 day' : '-1 day');
             $nextYear = (int) $next->format('Y');
             $nextMonth = (int) $next->format('n');
@@ -247,7 +234,9 @@ final class AnchorMath
             return 0.0;
         }
         $startEpoch = $knownStartEpoch ?? self::localToEpochSec($year, $month, $day, $hour, $minute, $second, $tzId);
-        $dt = new \DateTimeImmutable(sprintf('%04d-%02d-%02d', $year, $month, $day));
+        $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+            ->setDate($year, $month, $day)
+            ->setTime(0, 0, 0);
         $end = $dt->modify(sprintf('%+d days', $days));
         $endEpoch = self::localToEpochSec(
             (int) $end->format('Y'),
@@ -284,7 +273,9 @@ final class AnchorMath
         ?int $knownStartEpoch = null,
     ): array {
         // Start from the date after adding absDays calendar days in the given direction.
-        $dt = new \DateTimeImmutable(sprintf('%04d-%02d-%02d', $year, $month, $day));
+        $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+            ->setDate($year, $month, $day)
+            ->setTime(0, 0, 0);
         if ($absDays > 0) {
             $dtAfterDays = $dt->modify(sprintf('%+d days', $direction * $absDays));
         } else {
@@ -306,7 +297,10 @@ final class AnchorMath
                 ? $knownStartEpoch
                 : self::localToEpochSec($curYear, $curMonth, $curDay, $hour, $minute, $second, $tzId);
             $useKnownEpoch = false;
-            $nextDt = new \DateTimeImmutable(sprintf('%04d-%02d-%02d', $curYear, $curMonth, $curDay))->modify($step);
+            $nextDt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+                ->setDate($curYear, $curMonth, $curDay)
+                ->setTime(0, 0, 0)
+                ->modify($step);
             $nextYear = (int) $nextDt->format('Y');
             $nextMonth = (int) $nextDt->format('n');
             $nextDay = (int) $nextDt->format('j');
@@ -334,9 +328,12 @@ final class AnchorMath
      * @return array{\DateTimeImmutable, int}
      * @throws RangeError if the resulting date falls outside the representable range.
      */
-    public static function applyCalendarToDate(Duration $d, \DateTimeImmutable $startDate): array
-    {
-        $endDate = self::applyYearsMonthsWeeks($d, $startDate);
+    public static function applyCalendarToDate(
+        Duration $d,
+        \DateTimeImmutable $startDate,
+        string $calendarId = 'iso8601',
+    ): array {
+        $endDate = self::applyYearsMonthsWeeks($d, $startDate, $calendarId);
         // Apply days.
         $calDays = (int) $d->days;
         if ($calDays !== 0) {
@@ -351,20 +348,11 @@ final class AnchorMath
         return [$endDate, $calendarDays];
     }
 
-    public static function applyYearsMonthsWeeks(Duration $d, \DateTimeImmutable $startDate): \DateTimeImmutable
-    {
-        $endDate = $startDate;
-        $applySign = $d->sign;
-        if ((int) $d->years !== 0) {
-            $endDate = self::addYearsClamped($endDate, $applySign * abs((int) $d->years));
-        }
-        if ((int) $d->months !== 0) {
-            $endDate = self::addMonthsClamped($endDate, $applySign * abs((int) $d->months));
-        }
-        if ((int) $d->weeks !== 0) {
-            $awDays = $applySign * abs((int) $d->weeks) * 7;
-            $endDate = $endDate->modify(sprintf('%+d days', $awDays));
-        }
-        return $endDate;
+    public static function applyYearsMonthsWeeks(
+        Duration $d,
+        \DateTimeImmutable $startDate,
+        string $calendarId = 'iso8601',
+    ): \DateTimeImmutable {
+        return self::addCalendarFields($startDate, (int) $d->years, (int) $d->months, (int) $d->weeks, 0, $calendarId);
     }
 }

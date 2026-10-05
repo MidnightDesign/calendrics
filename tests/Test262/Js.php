@@ -128,6 +128,105 @@ final class Js
     }
 
     /**
+     * String/Array.prototype.indexOf for UTF-8 strings and dense arrays.
+     *
+     * Numeric positions use ToIntegerOrInfinity semantics. String coercions,
+     * sparse arrays and PHP arrays used as JS object values are unsupported;
+     * they must not silently use PHP's different coercion or identity rules.
+     *
+     * @param string|array<array-key, mixed> $haystack
+     */
+    public static function indexOf(string|array $haystack, mixed $needle, mixed $fromIndex = 0): int
+    {
+        if ($fromIndex instanceof JsUndefined) {
+            $fromIndex = 0;
+        }
+        if (!is_int($fromIndex) && !is_float($fromIndex)) {
+            Assert::incomplete('indexOf requires a numeric fromIndex; JS coercion is not supported.');
+        }
+        if (is_float($fromIndex) && is_nan($fromIndex)) {
+            $fromIndex = 0;
+        }
+        // Truncate before choosing the negative-index branch: -0.5 becomes -0,
+        // which starts at zero rather than at the end of an array.
+        $fromIndex = $fromIndex < 0 ? ceil($fromIndex) : floor($fromIndex);
+        if (is_string($haystack)) {
+            if (!is_string($needle)) {
+                Assert::incomplete('String.indexOf requires a string needle; JS coercion is not supported.');
+            }
+            return self::stringIndexOf($haystack, $needle, $fromIndex);
+        }
+        if (!array_is_list($haystack) || is_array($needle)) {
+            Assert::incomplete('Array.indexOf requires a dense list and preserved JS value identity.');
+        }
+
+        $length = count($haystack);
+        $start = $fromIndex >= 0 ? (int) min($length, $fromIndex) : (int) max(0, (float) $length + $fromIndex);
+        for ($index = $start; $index < $length; $index++) {
+            /** @var mixed $item */
+            $item = $haystack[$index];
+            if (is_array($item)) {
+                Assert::incomplete('Array.indexOf cannot recover JS object identity from PHP array values.');
+            }
+            // JS has one Number type: int and float representations compare
+            // numerically, NaN never equals itself, and either zero sign matches.
+            if ((is_int($item) || is_float($item)) && (is_int($needle) || is_float($needle))) {
+                if ((float) $item === (float) $needle) {
+                    return $index;
+                }
+                continue;
+            }
+            // PHP's strict comparison preserves primitive types and object identity.
+            if ($item === $needle) {
+                return $index;
+            }
+        }
+        return -1;
+    }
+
+    private static function stringIndexOf(string $haystack, string $needle, int|float $fromIndex): int
+    {
+        $matches = [];
+        if (preg_match_all('/./us', $haystack, $matches) === false || preg_match('//u', $needle) !== 1) {
+            Assert::incomplete('String.indexOf requires well-formed UTF-8 strings.');
+        }
+        $characters = $matches[0];
+        $units = 0;
+        $startByte = strlen($haystack);
+        $startFound = false;
+        $bytePosition = 0;
+        foreach ($characters as $character) {
+            if (!$startFound && $units >= $fromIndex) {
+                $startByte = $bytePosition;
+                $startFound = true;
+            }
+            // Every four-byte UTF-8 character is a surrogate pair in UTF-16.
+            $byteLength = strlen($character);
+            $units += $byteLength === 4 ? 2 : 1;
+            $bytePosition += $byteLength;
+        }
+        if ($needle === '') {
+            return (int) max(0, min($units, $fromIndex));
+        }
+        $found = strpos($haystack, $needle, $startByte);
+        if ($found === false) {
+            return -1;
+        }
+        // Well-formed UTF-8 needles only match at a character boundary.
+        $units = 0;
+        $bytePosition = 0;
+        foreach ($characters as $character) {
+            if ($bytePosition >= $found) {
+                break;
+            }
+            $byteLength = strlen($character);
+            $units += $byteLength === 4 ? 2 : 1;
+            $bytePosition += $byteLength;
+        }
+        return $units;
+    }
+
+    /**
      * Implements JS Date.UTC(year, month, day, hours, minutes, seconds, ms).
      *
      * Returns milliseconds since the Unix epoch (1970-01-01 00:00:00 UTC).
@@ -159,15 +258,15 @@ final class Js
      * Returns the first element for which the callback is truthy, or null
      * (standing in for JS `undefined`) when none matches.
      *
-     * @param iterable<mixed> $items
-     * @param callable(mixed): mixed $callback
+     * @param list<mixed> $items
+     * @param callable(mixed, int, list<mixed>): mixed $callback
      * @psalm-api used by dynamically-required test262 scripts in tests/Test262/scripts/
      */
-    public static function arrayFind(iterable $items, callable $callback): mixed
+    public static function arrayFind(array $items, callable $callback): mixed
     {
         /** @var mixed $item */
-        foreach ($items as $item) {
-            if ((bool) $callback($item)) {
+        foreach ($items as $index => $item) {
+            if (self::truthy($callback($item, $index, $items))) {
                 return $item;
             }
         }
@@ -190,6 +289,21 @@ final class Js
             }
         }
         return false;
+    }
+
+    /** JavaScript ToBoolean, including truthy empty arrays and the string "0". */
+    public static function truthy(mixed $value): bool
+    {
+        if ($value === null || $value instanceof JsUndefined || $value === false || $value === '') {
+            return false;
+        }
+        if (is_int($value)) {
+            return $value !== 0;
+        }
+        if (is_float($value)) {
+            return $value !== 0.0 && !is_nan($value);
+        }
+        return true;
     }
 
     /**
