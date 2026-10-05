@@ -118,6 +118,15 @@ final class RunnerTest extends TestCase
      */
     private static function originatesInSpecLayer(\Throwable $e): bool
     {
+        // Visibility errors point at the generated call site, even though the
+        // declared Spec method must be accessible for that fixture to succeed.
+        if (
+            str_starts_with($e->getMessage(), 'Call to protected method Calendrics\\Spec\\')
+            || str_starts_with($e->getMessage(), 'Call to private method Calendrics\\Spec\\')
+        ) {
+            return true;
+        }
+
         if (!str_contains($e->getFile(), '/src/Spec/')) {
             return false;
         }
