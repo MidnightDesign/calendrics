@@ -118,17 +118,11 @@ final class AnchorMath
         int $second,
         string $tzId,
     ): int {
-        // Compute wall seconds (seconds since epoch if interpreted as UTC).
-        // gmmktime() normalizes out-of-range fields instead of rejecting them, so for
-        // valid components it never returns false on a 64-bit platform. Callers must
-        // pass already-validated date/time fields: invalid fields would silently roll
-        // over (e.g. month 13 -> next January), not throw. The false branch is thus
-        // unreachable here and the assert exists only to narrow gmmktime()'s int|false
-        // return for static analysis. On 32-bit builds gmmktime() can return false for
-        // years outside 1901-2038, where the assert would surface as an error rather
-        // than a clean result -- see the platform note in README.md.
-        $wallSec = gmmktime($hour, $minute, $second, $month, $day, $year);
-        assert($wallSec !== false);
+        // Interpret validated numeric fields literally, including years 0 through 100.
+        $wallSec = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+            ->setDate($year, $month, $day)
+            ->setTime($hour, $minute, $second)
+            ->getTimestamp();
         return TimeZoneHelper::wallSecToEpochSec($wallSec, $tzId);
     }
 
@@ -148,15 +142,9 @@ final class AnchorMath
     ): int {
         $todayEpoch = self::localToEpochSec($year, $month, $day, $hour, $minute, $second, $tzId);
         // Add 1 calendar day to the local date.
-        $dt = new \DateTimeImmutable(sprintf(
-            '%04d-%02d-%02dT%02d:%02d:%02d',
-            $year,
-            $month,
-            $day,
-            $hour,
-            $minute,
-            $second,
-        ));
+        $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+            ->setDate($year, $month, $day)
+            ->setTime(0, 0, 0);
         $next = $dt->modify('+1 day');
         $tomorrowEpoch = self::localToEpochSec(
             (int) $next->format('Y'),
@@ -199,7 +187,9 @@ final class AnchorMath
         $curDay = $day;
 
         while (true) {
-            $dt = new \DateTimeImmutable(sprintf('%04d-%02d-%02d', $curYear, $curMonth, $curDay));
+            $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+                ->setDate($curYear, $curMonth, $curDay)
+                ->setTime(0, 0, 0);
             $next = $dt->modify($sign > 0 ? '+1 day' : '-1 day');
             $nextYear = (int) $next->format('Y');
             $nextMonth = (int) $next->format('n');
@@ -244,7 +234,9 @@ final class AnchorMath
             return 0.0;
         }
         $startEpoch = $knownStartEpoch ?? self::localToEpochSec($year, $month, $day, $hour, $minute, $second, $tzId);
-        $dt = new \DateTimeImmutable(sprintf('%04d-%02d-%02d', $year, $month, $day));
+        $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+            ->setDate($year, $month, $day)
+            ->setTime(0, 0, 0);
         $end = $dt->modify(sprintf('%+d days', $days));
         $endEpoch = self::localToEpochSec(
             (int) $end->format('Y'),
@@ -281,7 +273,9 @@ final class AnchorMath
         ?int $knownStartEpoch = null,
     ): array {
         // Start from the date after adding absDays calendar days in the given direction.
-        $dt = new \DateTimeImmutable(sprintf('%04d-%02d-%02d', $year, $month, $day));
+        $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+            ->setDate($year, $month, $day)
+            ->setTime(0, 0, 0);
         if ($absDays > 0) {
             $dtAfterDays = $dt->modify(sprintf('%+d days', $direction * $absDays));
         } else {
@@ -303,7 +297,10 @@ final class AnchorMath
                 ? $knownStartEpoch
                 : self::localToEpochSec($curYear, $curMonth, $curDay, $hour, $minute, $second, $tzId);
             $useKnownEpoch = false;
-            $nextDt = new \DateTimeImmutable(sprintf('%04d-%02d-%02d', $curYear, $curMonth, $curDay))->modify($step);
+            $nextDt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+                ->setDate($curYear, $curMonth, $curDay)
+                ->setTime(0, 0, 0)
+                ->modify($step);
             $nextYear = (int) $nextDt->format('Y');
             $nextMonth = (int) $nextDt->format('n');
             $nextDay = (int) $nextDt->format('j');
