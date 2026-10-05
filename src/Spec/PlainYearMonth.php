@@ -331,8 +331,10 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             !array_key_exists('year', $fields)
             && !array_key_exists('month', $fields)
             && !array_key_exists('monthCode', $fields)
-            && !array_key_exists('era', $fields)
-            && !array_key_exists('eraYear', $fields)
+            && (
+                !CalendarMath::readsEraFields($this->calendarId)
+                || !array_key_exists('era', $fields) && !array_key_exists('eraYear', $fields)
+            )
         ) {
             throw new TypeError(
                 'PlainYearMonth::with() requires at least one of: year, month, monthCode, era, eraYear.',
