@@ -16,5 +16,5 @@ $dtf = new \Calendrics\Tests\Test262\IntlDateTimeFormat($locale, (object) JsUnde
 $timeZoneDisplayName = \Calendrics\Tests\Test262\Js::arrayFind($dtf->formatToParts(\Calendrics\Tests\Test262\Js::dateUTC(2026, 0, 1)), function ($__dp0) { $type = \Calendrics\Tests\Test262\Js::destructure($__dp0, 'type'); return $type === 'timeZoneName'; })->value;
 $result = $dtf->format($ym);
 Assert::sameValue(is_string($result), true, "can format a PlainYearMonth with timeZoneName = {$timeZoneNameStyle}");
-Assert::incomplete('untranslatable: Array.prototype.indexOf()');
+Assert::sameValue(\Calendrics\Tests\Test262\Js::indexOf($result, $timeZoneDisplayName), -1, "\"{$result}\" should not include {$timeZoneDisplayName}");
 }

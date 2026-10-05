@@ -458,6 +458,9 @@ final class Options
                 if (is_nan($value) || is_infinite($value)) {
                     throw new RangeError("fractionalSecondDigits must be 'auto' or a finite integer 0–9.");
                 }
+                if ($value < 0 || $value >= 10) {
+                    throw new RangeError("fractionalSecondDigits {$value} is out of range (must be 0–9).");
+                }
                 $value = (int) floor($value);
             }
             if ($value < 0 || $value > 9) {

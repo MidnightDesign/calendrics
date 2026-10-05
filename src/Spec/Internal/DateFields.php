@@ -110,7 +110,7 @@ final class DateFields
         if ($hasMonth) {
             /** @var mixed $monthRaw */
             $monthRaw = $bag['month'] ?? null;
-            $newMonth = CalendarMath::toFiniteInt($monthRaw, 'PlainDate month');
+            $newMonth = DateFieldNumber::month($monthRaw, 'PlainDate month');
             if ($hasMonthCode && $newMonth !== $month) {
                 throw new RangeError('Conflicting month and monthCode fields.');
             }
@@ -121,7 +121,7 @@ final class DateFields
 
         /** @var mixed $dayRaw */
         $dayRaw = $bag['day'];
-        $day = CalendarMath::toFiniteInt($dayRaw, 'PlainDate day');
+        $day = DateFieldNumber::day($dayRaw, 'PlainDate day');
 
         // month < 1 and day < 1 are always invalid (cannot constrain below minimum of 1).
         if ($month < 1) {

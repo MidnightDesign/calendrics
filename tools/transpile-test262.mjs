@@ -149,6 +149,8 @@ const SIMPLE_METHOD_CALLS = {
   toPrecision: { minArgs: 1, build: (recv, args) => `${HARNESS_NS}Js::toPrecision(${recv}, ${args[0]})` },
   // obj.includes(needle) → Js::includes($obj, $needle) (strings and arrays)
   includes: (recv, args) => `${HARNESS_NS}Js::includes(${recv}, ${args[0] ?? "''"})`,
+  // Positions are UTF-16 code units for strings; arrays use JS strict equality.
+  indexOf: (recv, args) => `${HARNESS_NS}Js::indexOf(${recv}, ${args[0] ?? 'JsUndefined::singleton()'}${args[1] !== undefined ? `, ${args[1]}` : ''})`,
   // str.startsWith(needle) → Js::startsWith($str, $needle)
   startsWith: (recv, args) => `${HARNESS_NS}Js::startsWith(${recv}, ${args[0] ?? "''"})`,
   // str.endsWith(needle) → Js::endsWith($str, $needle)
@@ -158,15 +160,6 @@ const SIMPLE_METHOD_CALLS = {
   // IANA identifiers, so PHP's byte-wise case fold matches JS's Unicode mapping exactly.
   toLowerCase: (recv) => `strtolower(${recv})`,
   toUpperCase: (recv) => `strtoupper(${recv})`,
-};
-
-/**
- * Instance method names that have no translatable PHP form in the corpus; the
- * generic handler emits the given incomplete reason and bails. Kept separate from
- * SIMPLE_METHOD_CALLS so the "give up" cases read as data rather than templates.
- */
-const UNTRANSLATABLE_METHOD_CALLS = {
-  indexOf: 'untranslatable: Array.prototype.indexOf()',
 };
 
 /**
@@ -2847,13 +2840,17 @@ class Emitter {
     }
 
     // Pure-template string/array instance methods (repeat, padStart, slice, substr,
-    // split, toPrecision, includes, startsWith, endsWith) and the untranslatable
-    // indexOf are driven by data tables. (map is handled earlier and never reaches
+    // split, toPrecision, includes, indexOf, startsWith, endsWith) are driven by
+    // data tables. (map is handled earlier and never reaches
     // here.) Transpile receiver + args once, null-check once, then apply the
     // matched template.
     if (callee.type === 'MemberExpression' && !callee.computed
         && callee.property.type === 'Identifier') {
       const methodName = callee.property.name;
+      if (methodName === 'indexOf' && (this.indexOfUnsupportedValues || node.arguments.length > 2)) {
+        this.emitIncomplete('indexOf cannot preserve BigInt, sparse-array, lone-surrogate or extra-argument semantics');
+        return null;
+      }
       // Use Object.hasOwn so method names that collide with Object.prototype
       // members (toString, valueOf, constructor, …) are not falsely matched.
       if (Object.hasOwn(SIMPLE_METHOD_CALLS, methodName)) {
@@ -2866,7 +2863,9 @@ class Emitter {
           if (recv === null) return null;
           const args = [];
           for (const argNode of node.arguments) {
-            const a = this.transpileExpr(argNode);
+            const a = methodName === 'indexOf' && argNode.type === 'Identifier' && argNode.name === 'undefined'
+              ? 'JsUndefined::singleton()'
+              : this.transpileExpr(argNode);
             if (a === null) return null;
             args.push(a);
           }
@@ -2878,10 +2877,6 @@ class Emitter {
           }
           return entry.build(recv, args);
         }
-      }
-      if (Object.hasOwn(UNTRANSLATABLE_METHOD_CALLS, methodName)) {
-        this.emitIncomplete(UNTRANSLATABLE_METHOD_CALLS[methodName]);
-        return null;
       }
     }
 
@@ -5386,6 +5381,17 @@ function processFile(jsPath, dataDir, scriptsDir) {
     emitter.observersInUse = observersInUse;
     emitter.calendarConsistencyFixture = relPath === 'intl402/DateTimeFormat/prototype/formatToParts/compare-to-temporal.js';
     emitter.observerTrackers = new Set(observerTrackers);
+    // PHP lowering loses these distinctions before the runtime helper can inspect
+    // them. Keep indexOf incomplete rather than manufacture a false comparison.
+    emitter.indexOfUnsupportedValues = ast && (
+      hasBigIntLiteral(ast) || referencesBigIntCall(ast)
+      || someDescendant(ast, n => n.type === 'Identifier'
+        && (n.name === 'BigInt' || n.name === 'epochNanoseconds'))
+      || someDescendant(ast, n => n.type === 'Literal' && n.value === 'epochNanoseconds')
+      || someDescendant(ast, n => n.type === 'ArrayExpression' && n.elements.some(e => e === null))
+      || someDescendant(ast, n => n.type === 'Literal' && typeof n.value === 'string'
+        && /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(n.value))
+    );
     if (unsupportedIncludes.length > 0) {
       emitter.emitIncomplete(`needs TemporalHelpers (includes: ${includes.join(', ')})`);
     } else if (parseError !== null) {

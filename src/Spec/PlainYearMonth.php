@@ -8,6 +8,7 @@ use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DateFieldNumber;
 use Calendrics\Spec\Internal\DateParse;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
@@ -197,7 +198,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         // TC39 ToIntegerWithTruncation: null/omitted → 0, bool → 0/1, string/float → truncated int.
         // referenceISODay defaults to 1 when omitted (null).
         $this->isoYear = CalendarMath::toConstructorInt($year, 'PlainYearMonth year');
-        $monthInt = CalendarMath::toConstructorInt($month, 'PlainYearMonth month');
+        $monthInt = DateFieldNumber::month($month ?? 0, 'PlainYearMonth month');
         if ($monthInt < 1 || $monthInt > 12) {
             throw new RangeError("Invalid PlainYearMonth: month {$monthInt} is out of range 1–12.");
         }
@@ -205,7 +206,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         // referenceISODay defaults to 1 when omitted/null (not 0 like other constructor fields).
         $refDay = $referenceISODay === null
             ? 1
-            : CalendarMath::toConstructorInt($referenceISODay, 'PlainYearMonth referenceISODay');
+            : DateFieldNumber::day($referenceISODay, 'PlainYearMonth referenceISODay');
 
         // Validate referenceISODay is within the valid range for this year-month.
         $daysInMonth = CalendarMath::calcDaysInMonth($this->isoYear, $this->isoMonth);
@@ -330,8 +331,10 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             !array_key_exists('year', $fields)
             && !array_key_exists('month', $fields)
             && !array_key_exists('monthCode', $fields)
-            && !array_key_exists('era', $fields)
-            && !array_key_exists('eraYear', $fields)
+            && (
+                !CalendarMath::readsEraFields($this->calendarId)
+                || !array_key_exists('era', $fields) && !array_key_exists('eraYear', $fields)
+            )
         ) {
             throw new TypeError(
                 'PlainYearMonth::with() requires at least one of: year, month, monthCode, era, eraYear.',
@@ -486,7 +489,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             throw new TypeError('PlainYearMonth::toPlainDate() argument must have a day property.');
         }
 
-        $day = CalendarMath::toFiniteInt($bag['day'], 'toPlainDate() day');
+        $day = DateFieldNumber::day($bag['day'], 'toPlainDate() day');
 
         if ($day < 1) {
             throw new RangeError("Invalid day {$day}: must be at least 1.");
@@ -542,7 +545,10 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         // Z is never valid for PlainYearMonth
         // Bracket annotations are allowed
         // Groups: 1=year, 2=month[-day], 3=HH, 4=MM, 5=SS, 6=frac, 7=annotations
-        $pattern = '/^([+-]\d{6}|\d{4})(-\d{2}(?:-\d{2})?|\d{2}(?:\d{2})?)(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)?)?((?:\[[^\]]*\])*)$/';
+        $pattern = sprintf(
+            '/^([+-]\d{6}|\d{4})(-\d{2}(?:-\d{2})?|\d{2}(?:\d{2})?)(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:%s)?)?((?:\[[^\]]*\])*)$/',
+            DateParse::NUMERIC_OFFSET_PATTERN,
+        );
 
         /** @var list<string> $m */
         $m = [];
@@ -694,7 +700,7 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             if ($monthRaw === null) {
                 throw new TypeError('PlainYearMonth property bag month field must not be undefined.');
             }
-            $newMonth = CalendarMath::toFiniteInt($monthRaw, 'PlainYearMonth month');
+            $newMonth = DateFieldNumber::month($monthRaw, 'PlainYearMonth month');
             if ($hasMonthCode && $newMonth !== $month) {
                 throw new RangeError('Conflicting month and monthCode fields.');
             }
@@ -1083,14 +1089,14 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
         // TC39 spec: §9.5.7 AddDurationToOrSubtractDurationFromPlainYearMonth step 4.
         // Any non-zero week, day, or sub-day field causes a RangeError.
         if (
-            (int) $dur->weeks !== 0
-            || (int) $dur->days !== 0
-            || (int) $dur->hours !== 0
-            || (int) $dur->minutes !== 0
-            || (int) $dur->seconds !== 0
-            || (int) $dur->milliseconds !== 0
-            || (int) $dur->microseconds !== 0
-            || (int) $dur->nanoseconds !== 0
+            (float) $dur->weeks !== 0.0
+            || (float) $dur->days !== 0.0
+            || (float) $dur->hours !== 0.0
+            || (float) $dur->minutes !== 0.0
+            || (float) $dur->seconds !== 0.0
+            || (float) $dur->milliseconds !== 0.0
+            || (float) $dur->microseconds !== 0.0
+            || (float) $dur->nanoseconds !== 0.0
         ) {
             throw new RangeError(
                 'PlainYearMonth::add()/subtract() does not support sub-month units (weeks, days, hours, etc.).',
