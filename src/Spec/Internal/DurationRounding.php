@@ -73,13 +73,7 @@ final class DurationRounding
         /** @var mixed $incRaw */
         $incRaw = $roundTo['roundingIncrement'] ?? 1;
 
-        // Validate roundingIncrement. The universal coerce + finite + ≥1 core lives in
-        // Options::roundingIncrement(); only Duration's operation-specific upper bound
-        // stays here.
         $increment = Options::roundingIncrement($incRaw);
-        if ($increment > 1_000_000_000) {
-            throw new RangeError('roundingIncrement must not exceed 10^9.');
-        }
 
         $roundingMode = Options::roundingMode(Options::coerceEnumOption($rmRaw, 'roundingMode'));
 

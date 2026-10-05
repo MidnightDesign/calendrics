@@ -208,41 +208,36 @@ final class Options
     }
 
     /**
-     * Converts a Duration roundingIncrement with GetRoundingIncrementOption semantics:
-     * strings use StringNumericLiteral, numbers truncate toward zero, and the result
-     * must be between 1 and 1e9. Validate floats before narrowing them to a PHP integer.
+     * Converts an already-read roundingIncrement using ToTemporalRoundingIncrement:
+     * Stringable values stringify, strings use StringNumericLiteral, and finite
+     * numbers truncate toward zero to an integer in 1–1e9. Check the numeric bounds
+     * before narrowing to a PHP integer. Unit-specific limits and divisibility
+     * checks belong to the caller.
      *
-     * Native integers and booleans retain their PHP input behavior. Unsupported values
-     * are rejected by the positivity check. Per-unit maximum and divisibility checks
-     * remain at the call sites.
-     *
-     * @throws RangeError if the value is non-finite or its truncated value is outside 1–1e9.
+     * @return positive-int
+     * @throws RangeError if the value is nonnumeric, non-finite, or truncates outside 1–1e9.
+     * @throws TypeError if a Symbol-like value throws when converted to a string.
      */
     public static function roundingIncrement(mixed $value): int
     {
+        if ($value instanceof Stringable) {
+            $value = (string) $value;
+        }
         if (is_string($value)) {
-            $value = StringNumericLiteral::fromString($value);
-        }
-        if (is_float($value)) {
-            if (is_nan($value) || is_infinite($value)) {
-                throw new RangeError('roundingIncrement must be a finite positive integer.');
-            }
-            if ($value < 1 || $value >= 1_000_000_001) {
-                throw new RangeError('roundingIncrement must truncate to an integer between 1 and 1e9.');
-            }
-            $increment = (int) $value;
-        } elseif (is_int($value) || is_bool($value)) {
-            $increment = (int) $value;
+            $number = StringNumericLiteral::fromString($value);
+        } elseif (is_int($value) || is_float($value) || is_bool($value)) {
+            $number = (float) $value;
         } else {
-            $increment = 0;
+            throw new RangeError('roundingIncrement must be numeric.');
         }
-        if ($increment < 1) {
-            throw new RangeError('roundingIncrement must be at least 1.');
+        if (!is_finite($number)) {
+            throw new RangeError('roundingIncrement must be a finite number.');
         }
-        if ($increment > 1_000_000_000) {
-            throw new RangeError('roundingIncrement must be at most 1e9.');
+        if ($number < 1 || $number >= 1_000_000_001) {
+            throw new RangeError('roundingIncrement must truncate to an integer between 1 and 1e9.');
         }
-        return $increment;
+        /** @var positive-int */
+        return (int) $number;
     }
 
     /**

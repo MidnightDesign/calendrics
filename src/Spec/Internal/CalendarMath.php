@@ -400,45 +400,6 @@ final class CalendarMath
     }
 
     /**
-     * Validates and returns the integer value of a `roundingIncrement` option.
-     *
-     * Accepts int, float, string, or bool. Returns the truncated integer value
-     * in the range 1–1,000,000,000 (the maximum for any sub-second unit).
-     *
-     * Two-tier design: this version applies the universal 1e9 upper bound and is
-     * used by the Plain* and ZonedDateTime classes, where the spec-level maximum
-     * for any rounding-increment unit is 1e9 nanoseconds. {@see Options::roundingIncrement()}
-     * is the lighter core (coerce + finite + ≥ 1 only, no upper bound) used by
-     * Duration, which performs its own operation-specific range check at the call
-     * site after the increment is validated.
-     *
-     * @return int<1, max>
-     * @throws RangeError if the value is non-numeric, NaN, infinite, or outside 1–1000000000.
-     * @throws TypeError if the value is a Symbol (its `__toString` throws).
-     */
-    public static function validateRoundingIncrement(mixed $value): int
-    {
-        if (!is_int($value) && !is_float($value) && !is_string($value) && !is_bool($value)) {
-            // Stringable: cast to string so the JsSymbol sentinel's __toString
-            // raises Calendrics\Exception\TypeError; everything else => RangeError.
-            if ($value instanceof \Stringable) {
-                $value = (string) $value;
-            } else {
-                throw new RangeError('roundingIncrement must be numeric.');
-            }
-        }
-        $riFloat = (float) $value;
-        if (is_nan($riFloat) || !is_finite($riFloat)) {
-            throw new RangeError('roundingIncrement must be a finite number.');
-        }
-        $riInt = (int) $riFloat; // truncate toward zero per spec
-        if ($riInt < 1 || $riInt > 1_000_000_000) {
-            throw new RangeError("roundingIncrement {$riInt} is out of range; must be 1–1000000000.");
-        }
-        return $riInt;
-    }
-
-    /**
      * Validates an ISO month code and returns the month number 1–12.
      *
      * @return int<1, 12>
