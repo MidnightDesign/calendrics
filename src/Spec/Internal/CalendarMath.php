@@ -45,16 +45,12 @@ final class CalendarMath
 
     /**
      * Returns true if a property bag's era/eraYear values are read at all for this
-     * calendar. ISO exposes no eras, so its CalendarExtraFields list omits both and their
-     * values are never even coerced.
-     *
-     * Deliberately wider than {@see supportsEras()}, which also excludes the eraless
-     * chinese/dangi: those two do read and coerce era fields today, then discard the
-     * resolved year.
+     * calendar. CalendarExtraFields omits both fields for calendars without eras,
+     * so their values must not be read or coerced.
      */
     public static function readsEraFields(?string $calendarId): bool
     {
-        return $calendarId !== null && $calendarId !== 'iso8601';
+        return self::supportsEras($calendarId);
     }
 
     /**

@@ -39,9 +39,6 @@ final readonly class PartialDateFields
         $readsEraFields = CalendarMath::readsEraFields($calendarId);
         $hasEra = $readsEraFields && array_key_exists('era', $fields);
         $hasEraYear = $readsEraFields && array_key_exists('eraYear', $fields);
-        if (($hasEra || $hasEraYear) && !CalendarMath::supportsEras($calendarId)) {
-            throw new TypeError('eraYear and era are invalid for this calendar.');
-        }
         if ($hasEra !== $hasEraYear && !$hasYear) {
             throw new TypeError('era and eraYear must be provided together.');
         }

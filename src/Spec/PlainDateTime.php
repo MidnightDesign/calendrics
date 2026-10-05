@@ -489,6 +489,9 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         ];
         $hasRecognized = false;
         foreach ($recognized as $key) {
+            if (($key === 'era' || $key === 'eraYear') && !CalendarMath::readsEraFields($this->calendarId)) {
+                continue;
+            }
             if (!array_key_exists($key, $fields)) {
                 continue;
             }
