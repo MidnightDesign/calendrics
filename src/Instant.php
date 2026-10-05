@@ -89,7 +89,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      */
     public function toDateTime(?\DateTimeZone $tz = null): \DateTimeImmutable
     {
-        return PhpDateTimeInterop::toDateTime($this->spec->epochNanoseconds, $tz ?? new \DateTimeZone('UTC'));
+        return PhpDateTimeInterop::toDateTime($this->spec, $tz ?? new \DateTimeZone('UTC'));
     }
 
     /**
@@ -345,7 +345,12 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      */
     public static function fromSpec(Spec\Instant $spec): self
     {
-        return new self($spec->epochNanoseconds);
+        // Preserve the full Spec value without routing it through the int-only public constructor.
+        $reflection = new \ReflectionClass(self::class);
+        $value = $reflection->newInstanceWithoutConstructor();
+        $reflection->getProperty('spec')->setValue($value, $spec);
+
+        return $value;
     }
 
     /**

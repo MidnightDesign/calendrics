@@ -12,12 +12,10 @@ use Calendrics\Spec\PlainDate;
 /**
  * The `add()` / `subtract()` engine for `PlainDate`.
  *
- * A date has no wall clock, so a duration's sub-day time units can only matter in
- * bulk: they are balanced into whole days — walking unit by unit (hours → minutes →
- * … → nanoseconds), extracting full days at each step so that huge individual fields
- * (each up to ~2⁵³) never need the full nanosecond total in one int64 — and any
- * fractional remainder is simply discarded. Years and months then go to the calendar
- * protocol for calendrical arithmetic; weeks and days are pure day counts.
+ * A date has no wall clock, so its duration time fields contribute only whole days.
+ * Exact seconds and a subsecond remainder are split before extracting those days;
+ * the remaining fraction is discarded toward zero. Years and months then go to the
+ * calendar protocol, while weeks and days contribute pure day counts.
  *
  * `overflow` governs only the calendar step (clamping a day that the landing month
  * doesn't have); a result outside the representable PlainDate range always throws,
@@ -46,44 +44,10 @@ final class DateArithmetic
         $months = $sign * (int) $dur->months;
         $days = $sign * (((int) $dur->weeks * 7) + (int) $dur->days);
 
-        // Balance sub-day time units (hours → days, etc.) using cascade arithmetic.
-        // Each step: extract full days, carry remainder to the next smaller unit.
-        $hours = $sign * (int) $dur->hours;
-        $minutes = $sign * (int) $dur->minutes;
-        $seconds = $sign * (int) $dur->seconds;
-        $ms = $sign * (int) $dur->milliseconds;
-        $us = $sign * (int) $dur->microseconds;
-        $ns = $sign * (int) $dur->nanoseconds;
-
-        // hours → full days + remainder hours
-        $hDays = intdiv(num1: $hours, num2: 24);
-        $hRem = $hours % 24;
-
-        // carry + minutes → full days + remainder minutes
-        $totalMin = ($hRem * 60) + $minutes;
-        $mDays = intdiv(num1: $totalMin, num2: 1_440);
-        $mRem = $totalMin % 1_440;
-
-        // carry + seconds → full days + remainder seconds
-        $totalSec = ($mRem * 60) + $seconds;
-        $sDays = intdiv(num1: $totalSec, num2: 86_400);
-        $sRem = $totalSec % 86_400;
-
-        // carry + milliseconds → full days + remainder ms
-        $totalMs = ($sRem * 1_000) + $ms;
-        $msDays = intdiv(num1: $totalMs, num2: 86_400_000);
-        $msRem = $totalMs % 86_400_000;
-
-        // carry + microseconds → full days + remainder μs
-        $totalUs = ($msRem * 1_000) + $us;
-        $usDays = intdiv(num1: $totalUs, num2: 86_400_000_000);
-        $usRem = $totalUs % 86_400_000_000;
-
-        // carry + nanoseconds → full days
-        $totalNs = ($usRem * 1_000) + $ns;
-        $nsDays = intdiv(num1: $totalNs, num2: 86_400_000_000_000);
-
-        $days += $hDays + $mDays + $sDays + $msDays + $usDays + $nsDays;
+        // Split exact time fields before extracting whole days. Sub-day time is
+        // discarded toward zero, including for negative durations.
+        [$timeSeconds] = DurationTime::parts($dur);
+        $days += $sign * intdiv($timeSeconds, num2: 86_400);
 
         // Delegate to the calendar protocol for date arithmetic.
         $cal = CalendarFactory::get($date->calendarId);
