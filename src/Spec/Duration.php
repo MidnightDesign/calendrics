@@ -168,49 +168,6 @@ final class Duration implements Stringable
             throw new RangeError('Duration years, months, and weeks must each be less than 2^32 in absolute value.');
         }
 
-        // TC39 §7.5.11 IsValidDuration: the combined total of days + time fields must not
-        // exceed MaxTimeDuration = 2^53 × 10^9 - 1 nanoseconds. The bound is checked on
-        // $seconds itself rather than on an int cast of it: a float beyond int64 range
-        // casts to 0, which would pass the check and then balance as zero seconds.
-        if (abs($seconds) > 9_007_199_254_740_991) {
-            throw new RangeError('Duration time fields exceed the maximum representable range.');
-        }
-        $secI = (int) $seconds;
-
-        if (
-            is_int($nanoseconds)
-            && is_int($microseconds)
-            && is_int($milliseconds)
-            && is_int($days)
-            && is_int($hours)
-            && is_int($minutes)
-        ) {
-            // All-integer path: propagate carry ns → µs → ms → s → check full total.
-            $carryNs = intdiv(num1: $nanoseconds, num2: 1_000);
-            $usEff = $microseconds + $carryNs;
-            $carryUs = intdiv(num1: $usEff, num2: 1_000);
-            $msEff = $milliseconds + $carryUs;
-            $carryMs = intdiv(num1: $msEff, num2: 1_000);
-            $sEff = $secI + $carryMs;
-            $intSecFull = ($days * 86_400) + ($hours * 3_600) + ($minutes * 60) + $sEff;
-            if ($intSecFull > 9_007_199_254_740_991 || $intSecFull < -9_007_199_254_740_991) {
-                throw new RangeError('Duration time fields exceed the maximum representable range.');
-            }
-        } else {
-            // Float path: any field is a float (large µs/ns may exceed PHP int64).
-            $MAX_SAFE_F = 9_007_199_254_740_992.0; // 2^53 exactly as float64
-            $subNs = ((float) $milliseconds * 1_000_000.0) + ((float) $microseconds * 1_000.0) + (float) $nanoseconds;
-            $totalSec =
-                ((float) $days * 86_400.0)
-                + ((float) $hours * 3_600.0)
-                + ((float) $minutes * 60.0)
-                + (float) $seconds
-                + ($subNs / 1_000_000_000.0);
-            if (abs($totalSec) > $MAX_SAFE_F) {
-                throw new RangeError('Duration time fields exceed the maximum representable range.');
-            }
-        }
-
         // Sign check: all non-zero fields must share the same sign.
         // Inlined to avoid fields() array allocation per construction.
         $positive = null;
@@ -238,6 +195,30 @@ final class Duration implements Stringable
             if ($positive !== $isPositive) {
                 throw new RangeError('All non-zero Duration fields must have the same sign.');
             }
+        }
+
+        // Bound individual fields before exact decomposition so no intermediate
+        // seconds total or decimal quotient can overflow int64. All fields have
+        // one sign, so a field outside the duration limit cannot be cancelled.
+        if (
+            abs($days) >= 104_249_991_375
+            || abs($hours) >= 2_501_999_792_984
+            || abs($minutes) >= 150_119_987_579_017
+            || abs($seconds) >= 9_007_199_254_740_992
+            || abs($milliseconds) >= 9_007_199_254_740_992_000
+            || abs($microseconds) >= 9_007_199_254_740_992_000_000.0
+            || abs($nanoseconds) >= 9_007_199_254_740_992_000_000_000.0
+        ) {
+            throw new RangeError('Duration time fields exceed the maximum representable range.');
+        }
+
+        // IsValidDuration requires an exact sum below 2^53 seconds. Decimal
+        // splitting preserves large float fields without rounding a valid
+        // subsecond remainder up to the boundary, or an invalid sum down to it.
+        [$wholeSeconds] = DurationTime::parts($this);
+        $wholeSeconds += (int) $days * 86_400;
+        if (abs($wholeSeconds) >= 9_007_199_254_740_992) {
+            throw new RangeError('Duration time fields exceed the maximum representable range.');
         }
     }
 
