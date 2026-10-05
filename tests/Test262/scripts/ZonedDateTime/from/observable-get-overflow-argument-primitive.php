@@ -14,7 +14,7 @@ $actual = new \Calendrics\Tests\Test262\ObserverTrace();
 $options = TemporalHelpers::propertyBagObserver($actual, ['disambiguation' => 'compatible', 'offset' => 'ignore', 'overflow' => 'reject'], 'options');
 $result = \Calendrics\Spec\ZonedDateTime::from('2001-09-09T01:46:40+00:00[UTC]', $options);
 Assert::compareObserverTrace($actual, $expected, 'Successful call');
-Assert::sameValue($result->epochNanoseconds, 1_000_000_000_000_000_000, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_000_000_000_000, '');
 $actual->clear();
 Assert::throws(\TypeError::class, function () use (&$options) { return \Calendrics\Spec\ZonedDateTime::from(7, $options); }, '');
 Assert::compareObserverTrace($actual, [], 'Failing call before options is processed');

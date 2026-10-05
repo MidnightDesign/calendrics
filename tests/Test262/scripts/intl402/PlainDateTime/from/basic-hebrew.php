@@ -17,7 +17,7 @@ for ($month = 1; $month < 13; $month++) {
 $monthCode = "M" . (str_pad(\Calendrics\Tests\Test262\Js::toString($month), 2, '0', STR_PAD_LEFT)) . "";
 $startOfMonth = \Calendrics\Spec\PlainDateTime::from(JsUndefined::strip(['year' => $commonYear, 'month' => $month, 'day' => 1, 'hour' => 12, 'minute' => 34, 'calendar' => $calendar]), $options);
 TemporalHelpers::assertPlainDateTime($startOfMonth, $commonYear, $month, $monthCode, 1, 12, 34, 0, 0, 0, 0, "Start of month {$monthCode} in common year", 'am', $commonYear);
-$day = $monthLengths5783[$month];
+$day = \Calendrics\Tests\Test262\Js::computedProperty($monthLengths5783, $month);
 $endOfMonth = \Calendrics\Spec\PlainDateTime::from(JsUndefined::strip(['year' => $commonYear, 'month' => $month, 'day' => $day, 'hour' => 12, 'minute' => 34, 'calendar' => $calendar]), $options);
 TemporalHelpers::assertPlainDateTime($endOfMonth, $commonYear, $month, $monthCode, $day, 12, 34, 0, 0, 0, 0, "End of month {$monthCode} in common year", 'am', $commonYear);
 }

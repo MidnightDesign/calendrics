@@ -10,4 +10,4 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\ZonedDateTime(10_000 * 86_400_000_000_000 + 7_272_123_456_789, 'UTC');
 $result = $instance->startOfDay();
-Assert::sameValue($result->epochNanoseconds, 10_000 * 86_400_000_000_000, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 10_000 * 86_400_000_000_000, '');

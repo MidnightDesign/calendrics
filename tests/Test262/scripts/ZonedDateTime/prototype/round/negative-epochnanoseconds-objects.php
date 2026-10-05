@@ -10,4 +10,4 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $datetime = new \Calendrics\Spec\ZonedDateTime(-13_849_764_999_999_999, 'UTC');
 $result = $datetime->round((object) ['smallestUnit' => 'millisecond']);
-Assert::sameValue($result->epochNanoseconds, -13_849_765_000_000_000, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), -13_849_765_000_000_000, '');

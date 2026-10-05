@@ -12,5 +12,5 @@ $tests = [['1970-01-01T00:00Z', 'uppercase T'], ['1970-01-01t00:00Z', 'lowercase
 foreach ($tests as $__entry__) {
 [$arg, $description] = array_pad($__entry__, 2, null);
 $result = \Calendrics\Spec\Instant::from($arg);
-Assert::sameValue($result->epochNanoseconds, 0, "variant time separators ({$description})");
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 0, "variant time separators ({$description})");
 }

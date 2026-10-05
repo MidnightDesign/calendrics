@@ -11,5 +11,5 @@ use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\PlainDateTime(2019, 2, 16, 23, 45);
 foreach (['earlier', 'later', 'compatible', 'reject'] as $disambiguation) {
 $result = $instance->toZonedDateTime('+03:30', JsUndefined::strip(['disambiguation' => $disambiguation]));
-Assert::sameValue($result->epochNanoseconds, 1_550_348_100_000_000_000, 'Result is 2019-02-16T20:15Z regardless of disambiguation');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_550_348_100_000_000_000, 'Result is 2019-02-16T20:15Z regardless of disambiguation');
 }

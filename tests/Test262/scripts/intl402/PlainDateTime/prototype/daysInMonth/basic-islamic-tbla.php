@@ -20,6 +20,6 @@ $daysInMonth[$commonYear] = $commonYearDaysInMonth;
 foreach ([$leapYear, $commonYear] as $year) {
 for ($month = 1; $month < 13; $month++) {
 $date = \Calendrics\Spec\PlainDateTime::from(JsUndefined::strip(['year' => $year, 'month' => $month, 'day' => 1, 'calendar' => $calendar, 'hour' => 12, 'minute' => 34]));
-Assert::sameValue($date->daysInMonth, $daysInMonth[$year][$month - 1], "{$date}");
+Assert::sameValue($date->daysInMonth, \Calendrics\Tests\Test262\Js::computedProperty(\Calendrics\Tests\Test262\Js::computedProperty($daysInMonth, $year), $month - 1), "{$date}");
 }
 }

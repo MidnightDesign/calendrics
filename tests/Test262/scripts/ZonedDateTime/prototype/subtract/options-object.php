@@ -10,6 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\ZonedDateTime(0, 'UTC');
 $result1 = $instance->subtract(['years' => 1], []);
-Assert::sameValue($result1->epochNanoseconds, -31_536_000_000_000_000, 'UTC');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result1), -31_536_000_000_000_000, 'UTC');
 $result2 = $instance->subtract(['years' => 1], function () {  });
-Assert::sameValue($result2->epochNanoseconds, -31_536_000_000_000_000, 'UTC');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result2), -31_536_000_000_000_000, 'UTC');

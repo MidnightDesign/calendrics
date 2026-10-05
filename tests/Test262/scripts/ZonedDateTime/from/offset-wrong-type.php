@@ -10,6 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
 $datetime = new \Calendrics\Spec\ZonedDateTime(1_000_000_000_987_654_321, 'UTC');
-TemporalHelpers::checkStringOptionWrongType('offset', 'reject', function ($offset) use (&$datetime) { return \Calendrics\Spec\ZonedDateTime::from($datetime, JsUndefined::strip(['offset' => $offset])); }, fn($result, $descr) => Assert::sameValue($result->epochNanoseconds, 1_000_000_000_987_654_321, $descr));
+TemporalHelpers::checkStringOptionWrongType('offset', 'reject', function ($offset) use (&$datetime) { return \Calendrics\Spec\ZonedDateTime::from($datetime, JsUndefined::strip(['offset' => $offset])); }, fn($result, $descr) => Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_000_987_654_321, $descr));
 $propertyBag = ['timeZone' => 'UTC', 'offset' => '+00:00', 'year' => 2001, 'month' => 9, 'day' => 9, 'hour' => 1, 'minute' => 46, 'second' => 40, 'millisecond' => 987, 'microsecond' => 654, 'nanosecond' => 321];
-TemporalHelpers::checkStringOptionWrongType('offset', 'reject', function ($offset) use (&$propertyBag) { return \Calendrics\Spec\ZonedDateTime::from($propertyBag, JsUndefined::strip(['offset' => $offset])); }, fn($result, $descr) => Assert::sameValue($result->epochNanoseconds, 1_000_000_000_987_654_321, $descr));
+TemporalHelpers::checkStringOptionWrongType('offset', 'reject', function ($offset) use (&$propertyBag) { return \Calendrics\Spec\ZonedDateTime::from($propertyBag, JsUndefined::strip(['offset' => $offset])); }, fn($result, $descr) => Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_000_987_654_321, $descr));

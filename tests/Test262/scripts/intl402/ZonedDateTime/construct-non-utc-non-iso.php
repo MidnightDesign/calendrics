@@ -27,7 +27,7 @@ Assert::sameValue($instance->millisecond, 123, 'millisecond');
 Assert::sameValue($instance->microsecond, 456, 'microsecond');
 Assert::sameValue($instance->nanosecond, 789, 'nanosecond');
 Assert::sameValue($instance->epochMilliseconds, 217_178_610_123, 'epochMilliseconds');
-Assert::sameValue($instance->epochNanoseconds, 217_178_610_123_456_789, 'epochNanoseconds');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($instance), 217_178_610_123_456_789, 'epochNanoseconds');
 Assert::sameValue($instance->dayOfWeek, 4, 'dayOfWeek');
 Assert::sameValue($instance->dayOfYear, 323, 'dayOfYear');
 Assert::sameValue($instance->weekOfYear, null, 'weekOfYear');

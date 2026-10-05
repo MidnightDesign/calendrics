@@ -13,7 +13,7 @@ $callCount = 0;
 $objects = [new \Calendrics\Spec\PlainDate(1970, 1, 1), new \Calendrics\Spec\PlainDateTime(1970, 1, 1), new \Calendrics\Spec\PlainTime(), new \Calendrics\Spec\PlainYearMonth(1970, 1), new \Calendrics\Spec\PlainMonthDay(1, 1), new \Calendrics\Spec\ZonedDateTime(0, 'UTC'), new \Calendrics\Spec\Instant(0)];
 $dtf = new \Calendrics\Tests\Test262\IntlDateTimeFormat();
 for ($i = 0; $i < (is_string($objects) ? strlen($objects) : count($objects)); ++$i) {
-$object = $objects[$i];
+$object = \Calendrics\Tests\Test262\Js::computedProperty($objects, $i);
 // JS-only (references JS-only ToPrimitive tracker variable): assert.sameValue(callCount, i * 2);
 // JS-only (references JS-only ToPrimitive tracker variable): assert.throws(TypeError, function() { dtf.formatRangeToParts(invalidDateValue, object); });
 // JS-only (references JS-only ToPrimitive tracker variable): assert.sameValue(callCount, i * 2 + 1);

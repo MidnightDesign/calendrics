@@ -10,4 +10,4 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instance = \Calendrics\Spec\Instant::fromEpochMilliseconds(10_000);
 $result = $instance->add('PT3H');
-Assert::sameValue($result->epochNanoseconds, 10_810_000_000_000, 'epochNanoseconds result');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 10_810_000_000_000, 'epochNanoseconds result');

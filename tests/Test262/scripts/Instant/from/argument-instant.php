@@ -10,5 +10,5 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $orig = new \Calendrics\Spec\Instant(217_175_010_123_456_789);
 $result = \Calendrics\Spec\Instant::from($orig);
-Assert::sameValue($result->epochNanoseconds, 217_175_010_123_456_789, 'Instant is copied');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 217_175_010_123_456_789, 'Instant is copied');
 Assert::notSameValue($result, $orig, 'When an Instant is given, the returned value is not the original Instant');

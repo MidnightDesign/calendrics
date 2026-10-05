@@ -11,4 +11,4 @@ use Calendrics\Tests\Test262\JsUndefined;
 $instant = new \Calendrics\Spec\Instant(1);
 $blank = new \Calendrics\Spec\Duration();
 $result = $instant->add($blank);
-Assert::sameValue($result->epochNanoseconds, 1, 'result is unchanged');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1, 'result is unchanged');

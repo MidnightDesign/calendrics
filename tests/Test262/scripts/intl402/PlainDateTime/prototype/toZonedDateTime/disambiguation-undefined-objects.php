@@ -14,7 +14,7 @@ $fallBackDatetime = new \Calendrics\Spec\PlainDateTime(2000, 10, 29, 1, 30);
 foreach ([[$springForwardDatetime, 954_671_400_000_000_000], [$fallBackDatetime, 972_808_200_000_000_000]] as $__entry__) {
 [$datetime, $expected] = array_pad($__entry__, 2, null);
 $explicit = $datetime->toZonedDateTime($timeZone, (object) []);
-Assert::sameValue($explicit->epochNanoseconds, $expected, 'default disambiguation is compatible');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($explicit), $expected, 'default disambiguation is compatible');
 $implicit = $datetime->toZonedDateTime($timeZone, (object) []);
-Assert::sameValue($implicit->epochNanoseconds, $expected, 'default disambiguation is compatible');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($implicit), $expected, 'default disambiguation is compatible');
 }

@@ -12,7 +12,7 @@ $utcDateTime = new \Calendrics\Spec\ZonedDateTime(0, 'UTC');
 Assert::sameValue($utcDateTime->timeZoneId, 'UTC', 'Time zone name \'UTC\' is preserved');
 $utcIdentifiers = ['Etc/GMT', 'Etc/UTC', 'GMT'];
 for ($ix = 0; $ix < (is_string($utcIdentifiers) ? strlen($utcIdentifiers) : count($utcIdentifiers)); $ix++) {
-$timeZone = $utcIdentifiers[$ix];
+$timeZone = \Calendrics\Tests\Test262\Js::computedProperty($utcIdentifiers, $ix);
 $dateTime = new \Calendrics\Spec\ZonedDateTime(0, $timeZone);
 Assert::sameValue($dateTime->timeZoneId, $timeZone, $timeZone . ' should be preserved and not canonicalized to UTC');
 Assert::assertTrue($dateTime->equals($utcDateTime), 'Time zone ' . $timeZone . ' should be equal to primary identifier UTC');

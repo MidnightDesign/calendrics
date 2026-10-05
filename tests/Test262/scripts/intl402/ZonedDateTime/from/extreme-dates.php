@@ -14,7 +14,7 @@ foreach ($testData as $__entry__) {
 [$calendar, $minYear, $minMonth, $minMonthCode, $minDay, $minEra, $minEraYear, $maxYear, $maxMonth, $maxMonthCode, $maxDay, $maxEra, $maxEraYear] = array_pad($__entry__, 13, null);
 $min = \Calendrics\Spec\ZonedDateTime::from(JsUndefined::strip(['calendar' => $calendar, 'year' => $minYear, 'era' => $minEra, 'eraYear' => $minEraYear, 'month' => $minMonth, 'monthCode' => $minMonthCode, 'day' => $minDay, 'timeZone' => 'UTC']));
 $max = \Calendrics\Spec\ZonedDateTime::from(JsUndefined::strip(['calendar' => $calendar, 'year' => $maxYear, 'era' => $maxEra, 'eraYear' => $maxEraYear, 'month' => $maxMonth, 'monthCode' => $maxMonthCode, 'day' => $maxDay, 'timeZone' => 'UTC']));
-// SKIP (int64 overflow): Assert::sameValue($max->epochNanoseconds, 8640000000000000000000, ...);
+// SKIP (int64 overflow): Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($max), 8640000000000000000000, ...);
 \PHPUnit\Framework\Assert::assertTrue(true); // skip counted as assertion
 /* skipped */;
 }

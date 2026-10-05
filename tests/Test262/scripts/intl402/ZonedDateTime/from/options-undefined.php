@@ -21,11 +21,11 @@ $disambiguationLaterFields = JsUndefined::strip(['timeZone' => $timeZone, 'year'
 foreach ([[$disambiguationEarlierFields, 972_808_496_987_654_321], [$disambiguationLaterFields, 954_671_696_987_654_321]] as $__entry__) {
 [$fields, $expected] = array_pad($__entry__, 2, null);
 $explicit = \Calendrics\Spec\ZonedDateTime::from($fields);
-Assert::sameValue($explicit->epochNanoseconds, $expected, 'default disambiguation is compatible');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($explicit), $expected, 'default disambiguation is compatible');
 $propertyImplicit = \Calendrics\Spec\ZonedDateTime::from($fields, []);
-Assert::sameValue($propertyImplicit->epochNanoseconds, $expected, 'default disambiguation is compatible');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($propertyImplicit), $expected, 'default disambiguation is compatible');
 $implicit = \Calendrics\Spec\ZonedDateTime::from($fields);
-Assert::sameValue($implicit->epochNanoseconds, $expected, 'default disambiguation is compatible');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($implicit), $expected, 'default disambiguation is compatible');
 }
 $offsetFields = ['year' => 2000, 'month' => 5, 'day' => 2, 'offset' => '+23:59', 'timeZone' => 'UTC'];
 Assert::throws(\RangeException::class, function () use (&$offsetFields) { return \Calendrics\Spec\ZonedDateTime::from($offsetFields); }, 'default offset is reject');

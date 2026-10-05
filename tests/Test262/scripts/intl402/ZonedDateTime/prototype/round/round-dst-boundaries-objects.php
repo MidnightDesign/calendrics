@@ -21,4 +21,4 @@ Assert::sameValue("" . ($roundMeUp->round($roundTo)) . "", '2000-04-03T00:00:00-
 $almostSkipped = \Calendrics\Spec\PlainDateTime::from('2000-04-02T01:59:59.999999999')->toZonedDateTime('America/Vancouver');
 $rounded = $almostSkipped->round((object) ['smallestUnit' => 'microsecond', 'roundingMode' => 'halfExpand']);
 Assert::sameValue("{$rounded}", '2000-04-02T03:00:00-07:00[America/Vancouver]', '');
-Assert::sameValue($rounded->epochNanoseconds - $almostSkipped->epochNanoseconds, 1, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($rounded) - \Calendrics\Tests\Test262\JsEpoch::read($almostSkipped), 1, '');
