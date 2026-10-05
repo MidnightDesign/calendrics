@@ -204,7 +204,7 @@ final class ZonedDifference
             /** @var mixed $ri */
             $ri = $opts['roundingIncrement'];
             if ($ri !== null) {
-                $roundingIncrement = CalendarMath::validateRoundingIncrement($ri);
+                $roundingIncrement = Options::roundingIncrement($ri);
             }
         }
 
