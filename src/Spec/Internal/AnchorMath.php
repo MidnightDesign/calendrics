@@ -118,17 +118,11 @@ final class AnchorMath
         int $second,
         string $tzId,
     ): int {
-        // Compute wall seconds (seconds since epoch if interpreted as UTC).
-        // gmmktime() normalizes out-of-range fields instead of rejecting them, so for
-        // valid components it never returns false on a 64-bit platform. Callers must
-        // pass already-validated date/time fields: invalid fields would silently roll
-        // over (e.g. month 13 -> next January), not throw. The false branch is thus
-        // unreachable here and the assert exists only to narrow gmmktime()'s int|false
-        // return for static analysis. On 32-bit builds gmmktime() can return false for
-        // years outside 1901-2038, where the assert would surface as an error rather
-        // than a clean result -- see the platform note in README.md.
-        $wallSec = gmmktime($hour, $minute, $second, $month, $day, $year);
-        assert($wallSec !== false);
+        // Interpret validated numeric fields literally, including years 0 through 100.
+        $wallSec = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+            ->setDate($year, $month, $day)
+            ->setTime($hour, $minute, $second)
+            ->getTimestamp();
         return TimeZoneHelper::wallSecToEpochSec($wallSec, $tzId);
     }
 
