@@ -916,6 +916,7 @@ final class ZonedDateTime implements Stringable
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
     {
+        $locale = IntlFormatter::resolveLocale($locales);
         if ($options === null) {
             $opts = [];
         } else {
@@ -930,7 +931,6 @@ final class ZonedDateTime implements Stringable
 
         $opts = IntlFormatter::normalizeOptions($opts);
 
-        $locale = IntlFormatter::resolveLocale($locales);
         IntlFormatter::validateCalendar(
             $this->calendarId,
             $locale,

@@ -45,6 +45,7 @@ trait HasPlainLocaleString
      */
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
     {
+        $locale = IntlFormatter::resolveLocale($locales);
         if ($options === null) {
             $rawOpts = [];
         } else {
@@ -64,7 +65,6 @@ trait HasPlainLocaleString
             throw new TypeError('toLocaleString(): dateStyle option is not allowed for this type.');
         }
 
-        $locale = IntlFormatter::resolveLocale($locales);
         $timeZone = 'UTC';
 
         IntlFormatter::validateCalendar($format->calendarId, $locale, $opts, $format->components);
