@@ -141,7 +141,7 @@ final class ZoneOffsets
             $tz = new \DateTimeZone($resolvedTzId);
             $tzCache[$resolvedTzId] = $tz;
         }
-        return $tz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epochSec)));
+        return $tz->getOffset(\DateTimeImmutable::createFromTimestamp($epochSec));
     }
 
     private static function canonicalizeUncached(string $id): string

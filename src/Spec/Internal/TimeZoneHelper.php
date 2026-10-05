@@ -154,10 +154,15 @@ final class TimeZoneHelper
             return self::wallSecToEpochSec($wallSec, $tzId);
         }
         $tz = new \DateTimeZone($tzId);
-        $approxOffset = $tz->getOffset(new \DateTimeImmutable(sprintf('@%d', $wallSec)));
+        $approxOffset = $tz->getOffset(\DateTimeImmutable::createFromTimestamp($wallSec));
         $epoch1 = $wallSec - $approxOffset;
         $transitions = self::safeGetTransitions($tz, $epoch1 - 86_400, $epoch1 + 86_400);
         $nTransitions = count($transitions);
+        if ($nTransitions === 1) {
+            // The regular resolver uses this same epoch and transition window.
+            // With no transition to inspect, reuse its final offset lookup here.
+            return $wallSec - $tz->getOffset(\DateTimeImmutable::createFromTimestamp($epoch1));
+        }
         if ($nTransitions >= 2) {
             for ($i = 1; $i < $nTransitions; $i++) {
                 $tEpoch = $transitions[$i]['ts'];
@@ -200,9 +205,9 @@ final class TimeZoneHelper
         $tz = new \DateTimeZone($tzId);
 
         // Get the standard resolution.
-        $approxOffset = $tz->getOffset(new \DateTimeImmutable(sprintf('@%d', $wallSec)));
+        $approxOffset = $tz->getOffset(\DateTimeImmutable::createFromTimestamp($wallSec));
         $epoch1 = $wallSec - $approxOffset;
-        $offset1 = $tz->getOffset(new \DateTimeImmutable(sprintf('@%d', $epoch1)));
+        $offset1 = $tz->getOffset(\DateTimeImmutable::createFromTimestamp($epoch1));
 
         // Check for gap/overlap by looking at timezone transitions near this epoch.
         $transitions = self::safeGetTransitions($tz, $epoch1 - 86_400, $epoch1 + 86_400);
