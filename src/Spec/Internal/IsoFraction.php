@@ -20,10 +20,9 @@ final class IsoFraction
     /**
      * Converts a raw fractional-second lexeme (leading `.` or `,` included) to nanoseconds.
      *
-     * The grammar admits an arbitrarily long digit run; the spec keeps the first nine and
-     * discards the rest, so this truncates rather than rounds. Runs shorter than nine
-     * digits are right-padded, which is what makes `.5` half a second and not five
-     * nanoseconds.
+     * Callers validate the grammar's one-to-nine fractional digits before conversion.
+     * Shorter runs are right-padded, which makes `.5` half a second rather than five
+     * nanoseconds. The nine-digit cap below is defensive; longer fractions are invalid.
      *
      * @return int<0, 999999999>
      */

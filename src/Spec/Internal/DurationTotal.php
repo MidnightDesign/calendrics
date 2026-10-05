@@ -19,9 +19,9 @@ use Calendrics\Spec\ZonedDateTime;
  *     answer is one division. No `relativeTo` needed.
  *   - **Zoned time units.** With an IANA anchor a "day" is whatever the zone says
  *     it is, so days are walked one real transition at a time via {@see AnchorMath}.
- *   - **Calendar units.** Years, months and weeks are counted by stepping the anchor
- *     forward a unit at a time and measuring the leftover against the length of the
- *     unit that would come next — TC39 RoundDuration's fractional-unit rule.
+ *   - **Calendar units.** Years, months and weeks use calendar boundaries and measure
+ *     the leftover against the length of the unit that would come next — TC39
+ *     RoundDuration's fractional-unit rule.
  *
  * The float expressions deliberately preserve TC39's evaluation order: float
  * addition is not associative, and reordering these terms changes the last ULP
@@ -46,7 +46,7 @@ final class DurationTotal
             if ($anchor === null) {
                 throw new RangeError('Calendar duration totals require a relativeTo option.');
             }
-            return self::calendar($d, $unit, RelativeTo::toPlainDateBag($anchor), $zdtInfo);
+            return self::calendar($d, $unit, RelativeTo::toPlainDateBag($anchor), $zdtInfo, $anchor->calendarId);
         }
         if ($anchor !== null && !$d->blank) {
             $range = RelativeTo::resolveAnchor($anchor);
@@ -140,8 +140,13 @@ final class DurationTotal
      * @param array{year: int, month: int, day: int} $relativeTo
      * @param null|array{epochSec: int, subNs: int, tzId: string, year: int, month: int, day: int, hour: int, minute: int, second: int} $zdtInfo Optional ZDT info for DST-aware day lengths.
      */
-    private static function calendar(Duration $d, string $unit, array $relativeTo, ?array $zdtInfo = null): int|float
-    {
+    private static function calendar(
+        Duration $d,
+        string $unit,
+        array $relativeTo,
+        ?array $zdtInfo,
+        string $calendarId,
+    ): int|float {
         ['year' => $year, 'month' => $month, 'day' => $day] = $relativeTo;
 
         $tz = new \DateTimeZone('UTC');
@@ -151,18 +156,7 @@ final class DurationTotal
 
         // Compute calendar days: apply years/months/weeks to get endDate, count days.
         // Use TC39-compliant clamped arithmetic to avoid PHP month-overflow (e.g. Jan 31 + 1M = Mar 2 in PHP).
-        $calendarDateEnd = $start;
-        $calSign = $d->sign;
-        if ((int) $d->years !== 0) {
-            $calendarDateEnd = AnchorMath::addYearsClamped($calendarDateEnd, $calSign * abs((int) $d->years));
-        }
-        if ((int) $d->months !== 0) {
-            $calendarDateEnd = AnchorMath::addMonthsClamped($calendarDateEnd, $calSign * abs((int) $d->months));
-        }
-        if ((int) $d->weeks !== 0) {
-            $aw = $calSign * abs((int) $d->weeks) * 7;
-            $calendarDateEnd = $calendarDateEnd->modify(sprintf('%+d days', $aw));
-        }
+        $calendarDateEnd = AnchorMath::applyYearsMonthsWeeks($d, $start, $calendarId);
         $calendarDays = (int) $start->diff($calendarDateEnd)->format('%r%a');
 
         // Total days = calendar days from calendar fields + the 'days' field.
@@ -170,39 +164,36 @@ final class DurationTotal
         $daysField = (int) $d->days;
         $totalWholeDays = $calendarDays + $daysField;
 
-        // Sub-day nanoseconds (hours..nanoseconds fields only).
-        $fracNs =
-            ((int) $d->hours * 3_600_000_000_000)
-            + ((int) $d->minutes * 60_000_000_000)
-            + ((int) $d->seconds * 1_000_000_000)
-            + ((int) $d->milliseconds * 1_000_000)
-            + ((int) $d->microseconds * 1_000)
-            + (int) $d->nanoseconds;
+        // Calendar counting needs exact whole days and a bounded time remainder.
+        // The complete time duration can exceed int64 nanoseconds while remaining valid.
+        [$timeSeconds, $timeSubNs] = DurationTime::parts($d);
+        $timeWholeDays = intdiv($timeSeconds, num2: 86_400);
+        $timeRemainderNs = (($timeSeconds % 86_400) * 1_000_000_000) + $timeSubNs;
+        $fracNs = ($timeSeconds * 1_000_000_000) + $timeSubNs;
+        $calendarWholeDays = $totalWholeDays + $timeWholeDays;
+        if ($zdtInfo !== null && ($unit === 'months' || $unit === 'years')) {
+            [$calendarWholeDays, $timeRemainderNs] = self::zonedCalendarPosition(
+                $zdtInfo,
+                $totalWholeDays,
+                $timeSeconds,
+                $timeSubNs,
+                $d->sign < 0 ? -1 : 1,
+            );
+        }
 
         // Validate that the effective end (startDate + totalWholeDays + time) is within range.
         $startEpochDay = AnchorMath::isoDateToEpochDays($year, $month, $day);
-        $endEpochDay = $startEpochDay + $totalWholeDays;
+        $endEpochDay = $startEpochDay + $calendarWholeDays;
 
         if (
             abs($endEpochDay) > 100_000_000
-            || $endEpochDay === 100_000_000 && $fracNs > 0
-            || $endEpochDay === -100_000_000 && $fracNs < 0
+            || $endEpochDay === 100_000_000 && $timeRemainderNs > 0
+            || $endEpochDay === -100_000_000 && $timeRemainderNs < 0
         ) {
             throw new RangeError('Duration with relativeTo exceeds the maximum representable date range.');
         }
 
         $fracDay = (float) $fracNs / (float) $nsPerDay;
-
-        // For every unit (including years/months): validate that the total fractional days don't
-        // exceed the maximum representable range (±100 000 000 days). This catches cases where
-        // large time fields (e.g. seconds = 2^53 - 1) push the total far beyond the limit. TC39
-        // AdjustDateDurationRecord (total §13.d) raises RangeError here; without this guard the
-        // years/months paths reach totalCalendar{Years,Months}() with an overflowed float $fracNs
-        // and throw a TypeError instead.
-        $totalDaysF = (float) $totalWholeDays + $fracDay;
-        if (abs($totalDaysF) > 100_000_000.0) {
-            throw new RangeError('Duration with relativeTo exceeds the maximum representable date range.');
-        }
 
         // For ZDT with IANA timezone: use DST-aware day lengths for days/hours/etc.
         if ($zdtInfo !== null && $unit !== 'months' && $unit !== 'years' && $unit !== 'weeks') {
@@ -239,12 +230,17 @@ final class DurationTotal
         }
 
         return match ($unit) {
-            'months' => self::calendarMonths($d, $start, $totalWholeDays, $fracNs, $nsPerDay, $zdtInfo),
-            'years' => self::calendarYears($d, $start, $totalWholeDays, $fracNs, $zdtInfo),
-            // For weeks: use floor(days/7) + ((days%7 + fracDay)/7) to match TC39 test precision.
-            // Non-associative float: (totalDays+fracDay)/7 ≠ floor(totalDays/7)+((rem+fracDay)/7).
+            'months' => self::calendarMonths($d, $start, $calendarWholeDays, $timeRemainderNs, $zdtInfo, $calendarId),
+            'years' => self::calendarYears($d, $start, $calendarWholeDays, $timeRemainderNs, $zdtInfo, $calendarId),
             'weeks' => self::toIntIfWhole(
-                (float) intdiv(num1: $totalWholeDays, num2: 7) + (((float) ($totalWholeDays % 7) + $fracDay) / 7.0),
+                (float) $d->sign
+                * self::divideExact(
+                    (abs($totalWholeDays + $timeWholeDays) * 86_400)
+                    + intdiv(abs($timeRemainderNs), num2: 1_000_000_000),
+                    abs($timeRemainderNs) % 1_000_000_000,
+                    604_800,
+                    0,
+                ),
             ),
             'days' => self::toIntIfWhole((float) $totalWholeDays + $fracDay),
             'hours' => self::toIntIfWhole(((float) $totalWholeDays * 24.0) + ((float) $fracNs / 3_600_000_000_000.0)),
@@ -259,6 +255,73 @@ final class DurationTotal
     }
 
     /**
+     * Express the actual zoned endpoint as local calendar days and an elapsed remainder.
+     * A time-only 24 hours can cross a 23- or 25-hour day, so fixed-day division cannot do this.
+     *
+     * @param array{epochSec:int,subNs:int,tzId:string,year:int,month:int,day:int,hour:int,minute:int,second:int} $anchor
+     * @return array{int, int}
+     */
+    private static function zonedCalendarPosition(
+        array $anchor,
+        int $dateDays,
+        int $timeSeconds,
+        int $timeSubNs,
+        int $sign,
+    ): array {
+        $dateSeconds = (int) AnchorMath::zdtDaysToSec(
+            $anchor['year'],
+            $anchor['month'],
+            $anchor['day'],
+            $anchor['hour'],
+            $anchor['minute'],
+            $anchor['second'],
+            $anchor['tzId'],
+            $dateDays,
+            $anchor['epochSec'],
+        );
+        $deltaSeconds = $dateSeconds + $timeSeconds;
+        $subNs = $anchor['subNs'] + $timeSubNs;
+        $carry = CalendarMath::floorDiv($subNs, EpochLimits::NS_PER_SECOND);
+        $targetSeconds = $anchor['epochSec'] + $deltaSeconds + $carry;
+        $subNs -= $carry * EpochLimits::NS_PER_SECOND;
+        if (
+            $targetSeconds < -EpochLimits::MAX_EPOCH_SECONDS
+            || $targetSeconds > EpochLimits::MAX_EPOCH_SECONDS
+            || $targetSeconds === EpochLimits::MAX_EPOCH_SECONDS && $subNs > 0
+        ) {
+            throw new RangeError('Duration with relativeTo exceeds the maximum representable date range.');
+        }
+        $local = new \DateTimeImmutable(sprintf(
+            '@%d',
+            $targetSeconds,
+        ))->setTimezone(new \DateTimeZone(TimeZoneHelper::normalizeTimezoneId($anchor['tzId'])));
+        $wholeDays =
+            AnchorMath::isoDateToEpochDays(
+                (int) $local->format('Y'),
+                (int) $local->format('m'),
+                (int) $local->format('d'),
+            ) - AnchorMath::isoDateToEpochDays($anchor['year'], $anchor['month'], $anchor['day']);
+        while (true) {
+            $boundarySeconds = (int) AnchorMath::zdtDaysToSec(
+                $anchor['year'],
+                $anchor['month'],
+                $anchor['day'],
+                $anchor['hour'],
+                $anchor['minute'],
+                $anchor['second'],
+                $anchor['tzId'],
+                $wholeDays,
+                $anchor['epochSec'],
+            );
+            $remainder = (($deltaSeconds - $boundarySeconds) * EpochLimits::NS_PER_SECOND) + $timeSubNs;
+            if (($sign * $remainder) >= 0) {
+                return [$wholeDays, $remainder];
+            }
+            $wholeDays -= $sign;
+        }
+    }
+
+    /**
      * Counts fractional months from $start spanning $wholeDays days + $fracNs nanoseconds.
      * Implements TC39 RoundDuration for unit = "months".
      *
@@ -269,24 +332,29 @@ final class DurationTotal
         \DateTimeImmutable $start,
         int $wholeDays,
         int $fracNs,
-        int $nsPerDay,
-        ?array $zdtInfo = null,
+        ?array $zdtInfo,
+        string $calendarId,
     ): int|float {
-        // Balance time (fracNs) into wholeDays so the month-counting loop crosses calendar boundaries
-        // contained in the time portion (e.g. an until() result of N hours that spans a full month).
-        $extraDays = intdiv(num1: $fracNs, num2: $nsPerDay);
-        $wholeDays += $extraDays;
-        $fracNs -= $extraDays * $nsPerDay;
-
         $absWholeDays = abs($wholeDays);
-        $dir = $wholeDays >= 0 ? '+' : '-';
-        $sign = $wholeDays >= 0 ? 1 : -1;
+        $dir = $d->sign < 0 ? '-' : '+';
+        $sign = $d->sign < 0 ? -1 : 1;
         $end = $start->modify("{$dir}{$absWholeDays} days");
 
         $months = 0;
+        if ($calendarId === 'iso8601') {
+            // Start one month below the ISO coordinate difference. The existing
+            // anchor checks finish the count without skipping a constrained boundary.
+            $monthDifference =
+                (((int) $end->format('Y') - (int) $start->format('Y')) * 12) + (int) $end->format('n')
+                - (int) $start->format('n');
+            $months = max(0, abs($monthDifference) - 1);
+        }
         $current = $start;
+        if ($months > 0) {
+            $current = AnchorMath::addMonthsClamped($start, $sign * $months, $calendarId);
+        }
         while (true) {
-            $next = AnchorMath::addMonthsClamped($current, $sign);
+            $next = AnchorMath::addMonthsClamped($start, $sign * ($months + 1), $calendarId);
             if ($sign > 0 ? $next > $end : $next < $end) {
                 break;
             }
@@ -299,7 +367,7 @@ final class DurationTotal
         $remainingDays = intval($current->diff($end)->days);
         // Use start-anchored r2 to match TC39 spec (daysUntil(r1, r2) where
         // r2 = start + (months+1) months, not current + 1 month).
-        $r2 = AnchorMath::addMonthsClamped($start, $sign * ($months + 1));
+        $r2 = AnchorMath::addMonthsClamped($start, $sign * ($months + 1), $calendarId);
         // The r2 boundary may fall beyond the representable ISO date-time range
         // when the anchor sits near the limit; per TC39 RoundDuration this is a
         // RangeError.
@@ -307,39 +375,13 @@ final class DurationTotal
         $daysInNextMonth = intval($current->diff($r2)->days);
 
         if ($zdtInfo !== null) {
-            // DST-aware: compute the actual epoch seconds spanning from $current to $r2
-            // to get the real time length of the fractional month period.
-            $currentY = (int) $current->format('Y');
-            $currentM = (int) $current->format('n');
-            $currentD = (int) $current->format('j');
-            $actualSpanSec = AnchorMath::zdtDaysToSec(
-                $currentY,
-                $currentM,
-                $currentD,
-                $zdtInfo['hour'],
-                $zdtInfo['minute'],
-                $zdtInfo['second'],
-                $zdtInfo['tzId'],
-                $sign * $daysInNextMonth,
+            $currentDays = (int) $start->diff($current)->format('%r%a');
+            $nextDays = (int) $start->diff($r2)->format('%r%a');
+            return self::toIntIfWhole(
+                (float) $sign
+                * self::zonedCalendarTotal($zdtInfo, $months, $currentDays, $nextDays, $wholeDays, $fracNs),
             );
-            $actualRemainingSec = AnchorMath::zdtDaysToSec(
-                $currentY,
-                $currentM,
-                $currentD,
-                $zdtInfo['hour'],
-                $zdtInfo['minute'],
-                $zdtInfo['second'],
-                $zdtInfo['tzId'],
-                $sign * $remainingDays,
-            );
-            // Work in seconds to avoid float precision loss from nanosecond conversion.
-            $fracSec = (float) $fracNs / 1_000_000_000.0;
-            $absSpan = abs($actualSpanSec);
-            $progress = (abs($actualRemainingSec) + abs($fracSec)) / $absSpan;
-            $result = (float) ($months * $sign) + ($sign > 0 ? $progress : -$progress);
-            return self::toIntIfWhole($result);
         }
-
         // months + (remainingDays + |fracNs| / nsPerDay) / daysInNextMonth, as one exact
         // quotient. Summing the three terms as floats rounds three times, which lands a
         // full ulp out on values like 1 + 11/31.
@@ -369,26 +411,25 @@ final class DurationTotal
         \DateTimeImmutable $start,
         int $wholeDays,
         int $fracNs,
-        ?array $zdtInfo = null,
+        ?array $zdtInfo,
+        string $calendarId,
     ): int|float {
-        unset($zdtInfo); // Not currently used; reserved for future ZDT-aware year total.
-        // Balance time (fracNs) into wholeDays so the year-counting loop crosses calendar boundaries
-        // contained in the time portion (e.g. an until() result of 13152 hours = 548 days that spans
-        // a full year). Without this, time-only durations always report 0 whole years.
-        $nsPerDay = 86_400_000_000_000;
-        $extraDays = intdiv(num1: $fracNs, num2: $nsPerDay);
-        $wholeDays += $extraDays;
-        $fracNs -= $extraDays * $nsPerDay;
-
         $absWholeDays = abs($wholeDays);
-        $dir = $wholeDays >= 0 ? '+' : '-';
-        $sign = $wholeDays >= 0 ? 1 : -1;
+        $dir = $d->sign < 0 ? '-' : '+';
+        $sign = $d->sign < 0 ? -1 : 1;
         $end = $start->modify("{$dir}{$absWholeDays} days");
 
         $years = 0;
+        if ($calendarId === 'iso8601') {
+            // As for months, keep one whole unit for the original-anchor checks.
+            $years = max(0, abs((int) $end->format('Y') - (int) $start->format('Y')) - 1);
+        }
         $current = $start;
+        if ($years > 0) {
+            $current = AnchorMath::addYearsClamped($start, $sign * $years, $calendarId);
+        }
         while (true) {
-            $next = AnchorMath::addYearsClamped($current, $sign);
+            $next = AnchorMath::addYearsClamped($start, $sign * ($years + 1), $calendarId);
             if ($sign > 0 ? $next > $end : $next < $end) {
                 break;
             }
@@ -401,17 +442,26 @@ final class DurationTotal
         $remainingDays = intval($current->diff($end)->days);
         // Use start-anchored r2 to match TC39 spec (daysUntil(r1, r2) where
         // r2 = start + (years+1) years, not current + 1 year).
-        $r2 = AnchorMath::addYearsClamped($start, $sign * ($years + 1));
+        $r2 = AnchorMath::addYearsClamped($start, $sign * ($years + 1), $calendarId);
         // The r2 boundary may fall beyond the representable ISO date-time range
         // when the anchor sits near the limit; per TC39 RoundDuration this is a
         // RangeError.
         AnchorMath::assertCalendarBoundaryInRange($r2);
         $daysInNextYear = intval($current->diff($r2)->days);
+        if ($zdtInfo !== null) {
+            $currentDays = (int) $start->diff($current)->format('%r%a');
+            $nextDays = (int) $start->diff($r2)->format('%r%a');
+            return self::toIntIfWhole(
+                (float) $sign
+                * self::zonedCalendarTotal($zdtInfo, $years, $currentDays, $nextDays, $wholeDays, $fracNs),
+            );
+        }
+
         // Convert fracNs → ms → fracDays via two exact divisions.
         // Direct division fracNs / (nsPerDay * 365) loses precision (86400e9 * 365 > 2^53).
         // Dividing fracNs by 1e6 first (ns → ms) gives the same float64 as the JS test's
         // ms-level computation (fracMs / dayMs), avoiding the 1-ULP rounding difference.
-        $fracDays = ((float) ($sign * $fracNs) / 1_000_000.0) / 86_400_000.0;
+        $fracDays = ((float) $fracNs / 1_000_000.0) / 86_400_000.0;
         // Compute fractional part first (matching TC39 test evaluation order):
         // test: $fractionalYear = $partialYearDays / 365 + ($fractionalDay / 365)
         // then: $fullYears + $fractionalYear
@@ -421,6 +471,41 @@ final class DurationTotal
         $result = (float) ($years * $sign) + $fracPart;
 
         return self::toIntIfWhole($result);
+    }
+
+    /**
+     * @param array{epochSec:int,subNs:int,tzId:string,year:int,month:int,day:int,hour:int,minute:int,second:int} $anchor
+     */
+    private static function zonedCalendarTotal(
+        array $anchor,
+        int $wholeUnits,
+        int $lowerDays,
+        int $upperDays,
+        int $targetDays,
+        int $remainderNs,
+    ): float {
+        $positions = [];
+        foreach ([$lowerDays, $upperDays, $targetDays] as $days) {
+            $positions[] = (int) AnchorMath::zdtDaysToSec(
+                $anchor['year'],
+                $anchor['month'],
+                $anchor['day'],
+                $anchor['hour'],
+                $anchor['minute'],
+                $anchor['second'],
+                $anchor['tzId'],
+                $days,
+                $anchor['epochSec'],
+            );
+        }
+        [$lower, $upper, $target] = $positions;
+        $denominator = abs($upper - $lower);
+        return self::divideExact(
+            ($wholeUnits * $denominator) + abs($target - $lower) + intdiv(abs($remainderNs), num2: 1_000_000_000),
+            abs($remainderNs) % 1_000_000_000,
+            $denominator,
+            0,
+        );
     }
 
     private static function toIntIfWhole(float $result): int|float
