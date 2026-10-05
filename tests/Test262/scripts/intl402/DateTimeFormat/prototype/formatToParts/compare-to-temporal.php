@@ -8,4 +8,35 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-Assert::incomplete('untranslatable: Number.isInteger');
+$toFields = function ($dtf, $date) use (&$__dp0) {
+$__destruct__ = $date->withCalendar('iso8601')->toZonedDateTime('UTC');
+$epochMilliseconds = $__destruct__->epochMilliseconds;
+$parts = $dtf->formatToParts($epochMilliseconds);
+$yearPart = \Calendrics\Tests\Test262\Js::arrayFind($parts, function ($__dp0) { $type = \Calendrics\Tests\Test262\Js::destructure($__dp0, 'type'); return $type === 'year'; });
+$monthPart = \Calendrics\Tests\Test262\Js::arrayFind($parts, function ($__dp0) { $type = \Calendrics\Tests\Test262\Js::destructure($__dp0, 'type'); return $type === 'month'; });
+$dayPart = \Calendrics\Tests\Test262\Js::arrayFind($parts, function ($__dp0) { $type = \Calendrics\Tests\Test262\Js::destructure($__dp0, 'type'); return $type === 'day'; });
+$year = \Calendrics\Tests\Test262\JsNumber::fromString($yearPart->value);
+$month = \Calendrics\Tests\Test262\JsNumber::fromString($monthPart->value);
+$day = \Calendrics\Tests\Test262\JsNumber::fromString($dayPart->value);
+Assert::assertTrue(\Calendrics\Tests\Test262\JsNumber::isInteger($year), "Formatter should return numeric year for {$date}: " . ($yearPart->value) . "");
+Assert::assertTrue(\Calendrics\Tests\Test262\JsNumber::isInteger($month), "Formatter should return numeric month for {$date}: " . ($monthPart->value) . "");
+Assert::assertTrue(\Calendrics\Tests\Test262\JsNumber::isInteger($day), "Formatter should return numeric day for {$date}: " . ($dayPart->value) . "");
+return JsUndefined::strip(['year' => $year, 'month' => $month, 'day' => $day]);
+};
+$maximumDaysPerMonth = 31;
+$nonLunisolarCalendars = ['buddhist', 'coptic', 'ethioaa', 'ethiopic', 'gregory', 'indian', 'islamic-civil', 'islamic-tbla', 'islamic-umalqura', 'japanese', 'persian', 'roc'];
+foreach ($nonLunisolarCalendars as $calendar) {
+$dtf = new \Calendrics\Tests\Test262\IntlDateTimeFormat('en', JsUndefined::strip(['calendar' => $calendar, 'timeZone' => 'UTC', 'year' => 'numeric', 'month' => 'numeric', 'day' => 'numeric']));
+for ($isoYear = 2050; $isoYear >= 1950; --$isoYear) {
+$__destruct__ = new \Calendrics\Spec\PlainDate($isoYear, 1, 1, $calendar);
+$year = $__destruct__->year;
+for ($month = 1; $month <= 12; ++$month) {
+$date = \Calendrics\Spec\PlainDate::from(JsUndefined::strip(['calendar' => $calendar, 'year' => $year, 'month' => $month, 'day' => $maximumDaysPerMonth]));
+$fields = $toFields($dtf, $date);
+$expectedYear = $date->eraYear ?? $date->year;
+Assert::sameValue($fields['year'], $expectedYear, "date = {$date}, year");
+Assert::sameValue($fields['month'], $date->month, "date = {$date}, month");
+Assert::sameValue($fields['day'], $date->day, "date = {$date}, day");
+}
+}
+}

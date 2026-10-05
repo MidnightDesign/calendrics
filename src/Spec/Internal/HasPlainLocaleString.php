@@ -46,12 +46,12 @@ trait HasPlainLocaleString
     public function toLocaleString(string|array|null $locales = null, array|object|null $options = null): string
     {
         if ($options === null) {
-            $opts = [];
+            $rawOpts = [];
         } else {
-            $opts = Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES);
+            $rawOpts = Options::bagSnapshot($options, IntlFormatter::OPTION_NAMES);
         }
-        /** @psalm-var array<string, mixed> $opts */
-        IntlFormatter::validateOptionValues($opts);
+        /** @psalm-var array<string, mixed> $rawOpts */
+        $opts = IntlFormatter::normalizeOptions($rawOpts);
 
         $hasTimeStyle = array_key_exists('timeStyle', $opts) && $opts['timeStyle'] !== null;
         $hasDateStyle = array_key_exists('dateStyle', $opts) && $opts['dateStyle'] !== null;
