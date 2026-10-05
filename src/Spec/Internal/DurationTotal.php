@@ -6,6 +6,7 @@ namespace Calendrics\Spec\Internal;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Spec\Duration;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\PlainDate;
 use Calendrics\Spec\ZonedDateTime;
 
@@ -340,15 +341,7 @@ final class DurationTotal
         $sign = $d->sign < 0 ? -1 : 1;
         $end = $start->modify("{$dir}{$absWholeDays} days");
 
-        $months = 0;
-        if ($calendarId === 'iso8601') {
-            // Start one month below the ISO coordinate difference. The existing
-            // anchor checks finish the count without skipping a constrained boundary.
-            $monthDifference =
-                (((int) $end->format('Y') - (int) $start->format('Y')) * 12) + (int) $end->format('n')
-                - (int) $start->format('n');
-            $months = max(0, abs($monthDifference) - 1);
-        }
+        $months = self::calendarUnitEstimate($start, $end, $calendarId, 'month');
         $current = $start;
         if ($months > 0) {
             $current = AnchorMath::addMonthsClamped($start, $sign * $months, $calendarId);
@@ -367,7 +360,7 @@ final class DurationTotal
         $remainingDays = intval($current->diff($end)->days);
         // Use start-anchored r2 to match TC39 spec (daysUntil(r1, r2) where
         // r2 = start + (months+1) months, not current + 1 month).
-        $r2 = AnchorMath::addMonthsClamped($start, $sign * ($months + 1), $calendarId);
+        $r2 = $next;
         // The r2 boundary may fall beyond the representable ISO date-time range
         // when the anchor sits near the limit; per TC39 RoundDuration this is a
         // RangeError.
@@ -419,11 +412,7 @@ final class DurationTotal
         $sign = $d->sign < 0 ? -1 : 1;
         $end = $start->modify("{$dir}{$absWholeDays} days");
 
-        $years = 0;
-        if ($calendarId === 'iso8601') {
-            // As for months, keep one whole unit for the original-anchor checks.
-            $years = max(0, abs((int) $end->format('Y') - (int) $start->format('Y')) - 1);
-        }
+        $years = self::calendarUnitEstimate($start, $end, $calendarId, 'year');
         $current = $start;
         if ($years > 0) {
             $current = AnchorMath::addYearsClamped($start, $sign * $years, $calendarId);
@@ -442,7 +431,7 @@ final class DurationTotal
         $remainingDays = intval($current->diff($end)->days);
         // Use start-anchored r2 to match TC39 spec (daysUntil(r1, r2) where
         // r2 = start + (years+1) years, not current + 1 year).
-        $r2 = AnchorMath::addYearsClamped($start, $sign * ($years + 1), $calendarId);
+        $r2 = $next;
         // The r2 boundary may fall beyond the representable ISO date-time range
         // when the anchor sits near the limit; per TC39 RoundDuration this is a
         // RangeError.
@@ -471,6 +460,36 @@ final class DurationTotal
         $result = (float) ($years * $sign) + $fracPart;
 
         return self::toIntIfWhole($result);
+    }
+
+    /**
+     * Start near the endpoint using the calendar's own year/month difference.
+     * In leap-month calendars this limits traversal of intervening years to a
+     * bounded number of additions instead of repeating it for every elapsed month.
+     *
+     * dateUntil compares unconstrained fields in some boundary cases, whereas
+     * total counts constrained additions. Backing off one unit makes the estimate
+     * conservative in either direction; the caller's original-anchor additions
+     * then resolve only the neighboring boundaries, independently of span length.
+     *
+     * @param 'month'|'year' $unit
+     */
+    private static function calendarUnitEstimate(
+        \DateTimeImmutable $start,
+        \DateTimeImmutable $end,
+        string $calendarId,
+        string $unit,
+    ): int {
+        [$years, $months] = CalendarFactory::get($calendarId)->dateUntil(
+            (int) $start->format('Y'),
+            (int) $start->format('n'),
+            (int) $start->format('j'),
+            (int) $end->format('Y'),
+            (int) $end->format('n'),
+            (int) $end->format('j'),
+            $unit,
+        );
+        return max(0, abs($unit === 'year' ? $years : $months) - 1);
     }
 
     /**
