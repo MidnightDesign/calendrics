@@ -97,6 +97,22 @@ final class ZonedArithmetic
             $overflow,
         );
 
+        // AddZonedDateTime checks the intermediate local date-time before resolving
+        // its zone. Keep the full one-day offset allowance at both instant limits.
+        $epochDays = CalendarMath::toJulianDay($newYear, $newMonth, $newDay) - 2_440_588;
+        $wallSec = ($epochDays * 86_400) + ($lc['hour'] * 3600) + ($lc['minute'] * 60) + $lc['second'];
+        $wallLimit = EpochLimits::MAX_EPOCH_SECONDS + 86_400;
+        if (
+            $wallSec < -$wallLimit
+            || $wallSec === -$wallLimit
+            && $lc['millisecond'] === 0
+            && $lc['microsecond'] === 0
+            && $lc['nanosecond'] === 0
+            || $wallSec >= $wallLimit
+        ) {
+            throw new RangeError('ZonedDateTime intermediate local date-time is outside the representable range.');
+        }
+
         if ($timeNs === 0) {
             return ZonedFields::fromLocal(
                 $newYear,
@@ -116,8 +132,6 @@ final class ZonedArithmetic
 
         // Resolve the new local date, keeping the original clock time, to an intermediate
         // instant — this is the step that makes a day mean a day and not 24 hours.
-        $epochDays = CalendarMath::toJulianDay($newYear, $newMonth, $newDay) - 2_440_588;
-        $wallSec = ($epochDays * 86_400) + ($lc['hour'] * 3600) + ($lc['minute'] * 60) + $lc['second'];
         $intermediateEpochSec = TimeZoneHelper::wallSecToEpochSec(
             $wallSec,
             ZoneOffsets::canonicalize($zdt->timeZoneId),
