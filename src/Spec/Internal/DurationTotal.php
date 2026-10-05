@@ -56,20 +56,18 @@ final class DurationTotal
         }
 
         if ($zdtInfo !== null) {
-            // Time-only fields in seconds (sub-second precision preserved).
-            $subNs =
-                ((float) $d->milliseconds * 1_000_000.0)
-                + ((float) $d->microseconds * 1_000.0)
-                + (float) $d->nanoseconds;
-            $timeOnlySec =
-                ((float) $d->hours * 3_600.0)
-                + ((float) $d->minutes * 60.0)
-                + (float) $d->seconds
-                + ($subNs / 1_000_000_000.0);
-
             $daysField = (int) $d->days;
 
             if ($unit === 'days') {
+                $subNs =
+                    ((float) $d->milliseconds * 1_000_000.0)
+                    + ((float) $d->microseconds * 1_000.0)
+                    + (float) $d->nanoseconds;
+                $timeOnlySec =
+                    ((float) $d->hours * 3_600.0)
+                    + ((float) $d->minutes * 60.0)
+                    + (float) $d->seconds
+                    + ($subNs / 1_000_000_000.0);
                 // Convert days to actual epoch seconds, then add time seconds.
                 $daysSec = AnchorMath::zdtDaysToSec(
                     $zdtInfo['year'],
@@ -110,9 +108,11 @@ final class DurationTotal
                 $daysField,
                 $zdtInfo['epochSec'],
             );
-            $totalSec = $daysSec + $timeOnlySec;
-
-            return self::totalTimeSeconds($totalSec, $unit);
+            // Zoned day lengths are whole seconds within the validated epoch range.
+            // Keep the time remainder exact until the selected unit's final conversion.
+            [$seconds, $nanoseconds] = DurationTime::parts($d);
+            $seconds += (int) $daysSec;
+            return self::toIntIfWhole((float) $d->sign * self::exactTotal(abs($seconds), abs($nanoseconds), $unit));
         }
 
         [$seconds, $nanoseconds] = DurationTime::parts($d);
