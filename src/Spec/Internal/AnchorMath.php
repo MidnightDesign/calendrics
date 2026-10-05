@@ -46,45 +46,42 @@ final class AnchorMath
      * @param \DateTimeImmutable $date Base date (UTC midnight).
      * @param int $months Signed number of months to add (may be negative).
      */
-    public static function addMonthsClamped(\DateTimeImmutable $date, int $months): \DateTimeImmutable
-    {
-        if ($months === 0) {
-            return $date;
-        }
-        $y = (int) $date->format('Y');
-        $m = (int) $date->format('n');
-        $d = (int) $date->format('j');
-
-        [$y, $m, $clampedDay] = CalendarFactory::get('iso8601')->dateAdd($y, $m, $d, 0, $months, 0, 0, 'constrain');
-        return new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
-            ->setDate($y, $m, $clampedDay)
-            ->setTime(0, 0, 0);
+    public static function addMonthsClamped(
+        \DateTimeImmutable $date,
+        int $months,
+        string $calendarId = 'iso8601',
+    ): \DateTimeImmutable {
+        return self::addCalendarFields($date, 0, $months, 0, 0, $calendarId);
     }
 
-    /**
-     * Adds $years years to $date using TC39 year arithmetic (clamp Feb 29 to Feb 28 in non-leap years).
-     *
-     * @param \DateTimeImmutable $date Base date (UTC midnight).
-     * @param int $years Signed number of years to add.
-     */
-    public static function addYearsClamped(\DateTimeImmutable $date, int $years): \DateTimeImmutable
-    {
-        if ($years === 0) {
-            return $date;
-        }
-        [$y, $m, $clampedDay] = CalendarFactory::get('iso8601')->dateAdd(
+    public static function addYearsClamped(
+        \DateTimeImmutable $date,
+        int $years,
+        string $calendarId = 'iso8601',
+    ): \DateTimeImmutable {
+        return self::addCalendarFields($date, $years, 0, 0, 0, $calendarId);
+    }
+
+    /** Adds the calendar fields together so constrain is applied only once. */
+    public static function addCalendarFields(
+        \DateTimeImmutable $date,
+        int $years,
+        int $months,
+        int $weeks,
+        int $days,
+        string $calendarId,
+    ): \DateTimeImmutable {
+        [$year, $month, $day] = CalendarFactory::get($calendarId)->dateAdd(
             (int) $date->format('Y'),
             (int) $date->format('n'),
             (int) $date->format('j'),
             $years,
-            0,
-            0,
-            0,
+            $months,
+            $weeks,
+            $days,
             'constrain',
         );
-        return new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
-            ->setDate($y, $m, $clampedDay)
-            ->setTime(0, 0, 0);
+        return $date->setDate($year, $month, $day);
     }
 
     /**
@@ -328,9 +325,12 @@ final class AnchorMath
      * @return array{\DateTimeImmutable, int}
      * @throws RangeError if the resulting date falls outside the representable range.
      */
-    public static function applyCalendarToDate(Duration $d, \DateTimeImmutable $startDate): array
-    {
-        $endDate = self::applyYearsMonthsWeeks($d, $startDate);
+    public static function applyCalendarToDate(
+        Duration $d,
+        \DateTimeImmutable $startDate,
+        string $calendarId = 'iso8601',
+    ): array {
+        $endDate = self::applyYearsMonthsWeeks($d, $startDate, $calendarId);
         // Apply days.
         $calDays = (int) $d->days;
         if ($calDays !== 0) {
@@ -345,20 +345,11 @@ final class AnchorMath
         return [$endDate, $calendarDays];
     }
 
-    public static function applyYearsMonthsWeeks(Duration $d, \DateTimeImmutable $startDate): \DateTimeImmutable
-    {
-        $endDate = $startDate;
-        $applySign = $d->sign;
-        if ((int) $d->years !== 0) {
-            $endDate = self::addYearsClamped($endDate, $applySign * abs((int) $d->years));
-        }
-        if ((int) $d->months !== 0) {
-            $endDate = self::addMonthsClamped($endDate, $applySign * abs((int) $d->months));
-        }
-        if ((int) $d->weeks !== 0) {
-            $awDays = $applySign * abs((int) $d->weeks) * 7;
-            $endDate = $endDate->modify(sprintf('%+d days', $awDays));
-        }
-        return $endDate;
+    public static function applyYearsMonthsWeeks(
+        Duration $d,
+        \DateTimeImmutable $startDate,
+        string $calendarId = 'iso8601',
+    ): \DateTimeImmutable {
+        return self::addCalendarFields($startDate, (int) $d->years, (int) $d->months, (int) $d->weeks, 0, $calendarId);
     }
 }

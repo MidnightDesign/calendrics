@@ -582,7 +582,7 @@ final class ZonedDateTime implements
         $tzId = $this->spec->timeZoneId;
         \assert($tzId !== '', description: 'spec layer guarantees a non-empty time zone id');
 
-        return PhpDateTimeInterop::toDateTime($this->spec->epochNanoseconds, new \DateTimeZone($tzId));
+        return PhpDateTimeInterop::toDateTime($this->spec, new \DateTimeZone($tzId));
     }
 
     /**
@@ -687,7 +687,12 @@ final class ZonedDateTime implements
      */
     public static function fromSpec(Spec\ZonedDateTime $spec): self
     {
-        return new self($spec->epochNanoseconds, $spec->timeZoneId, Calendar::from($spec->calendarId));
+        // Preserve the full Spec value without routing it through the int-only public constructor.
+        $reflection = new \ReflectionClass(self::class);
+        $value = $reflection->newInstanceWithoutConstructor();
+        $reflection->getProperty('spec')->setValue($value, $spec);
+
+        return $value;
     }
 
     // -------------------------------------------------------------------------

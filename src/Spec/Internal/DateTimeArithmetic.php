@@ -18,9 +18,8 @@ use Calendrics\Spec\PlainDateTime;
  * clock (carrying any overflow day), then hand years/months/days to the calendar
  * protocol for date arithmetic.
  *
- * The balancing walks unit by unit (hours → minutes → … → nanoseconds), extracting
- * whole days at each step, so that a duration with huge individual fields (each up to
- * ~2⁵³) never needs the full nanosecond total in one int64.
+ * Exact whole seconds and subsecond nanoseconds are split before extracting days,
+ * so large duration fields never need the full nanosecond total in one int64.
  *
  * @internal
  */
@@ -45,48 +44,11 @@ final class DateTimeArithmetic
         $months = $sign * (int) $dur->months;
         $days = $sign * (((int) $dur->weeks * 7) + (int) $dur->days);
 
-        // Balance time units to nanoseconds, then extract whole days.
-        $hours = $sign * (int) $dur->hours;
-        $minutes = $sign * (int) $dur->minutes;
-        $seconds = $sign * (int) $dur->seconds;
-        $ms = $sign * (int) $dur->milliseconds;
-        $us = $sign * (int) $dur->microseconds;
-        $ns = $sign * (int) $dur->nanoseconds;
-
-        // Balance time units using the same step-by-step carry approach as PlainDate,
-        // to avoid int64 overflow with large Duration field values.
-        // Each step extracts whole days and passes the remainder to the next smaller unit.
-
-        // hours → full days + remainder hours
-        $hDays = intdiv(num1: $hours, num2: 24);
-        $hRem = $hours % 24;
-
-        // carry + minutes → full days + remainder minutes
-        $totalMin = ($hRem * 60) + $minutes;
-        $mDays = intdiv(num1: $totalMin, num2: 1_440);
-        $mRem = $totalMin % 1_440;
-
-        // carry + seconds → full days + remainder seconds
-        $totalSec = ($mRem * 60) + $seconds;
-        $sDays = intdiv(num1: $totalSec, num2: 86_400);
-        $sRem = $totalSec % 86_400;
-
-        // carry + milliseconds → full days + remainder ms
-        $totalMs = ($sRem * 1_000) + $ms;
-        $msDays = intdiv(num1: $totalMs, num2: 86_400_000);
-        $msRem = $totalMs % 86_400_000;
-
-        // carry + microseconds → full days + remainder μs
-        $totalUs = ($msRem * 1_000) + $us;
-        $usDays = intdiv(num1: $totalUs, num2: 86_400_000_000);
-        $usRem = $totalUs % 86_400_000_000;
-
-        // carry + nanoseconds → full days + remainder ns
-        $totalNs = ($usRem * 1_000) + $ns;
-        $nsDays = intdiv(num1: $totalNs, num2: 86_400_000_000_000);
-        $nsRem = $totalNs % 86_400_000_000_000;
-
-        $days += $hDays + $mDays + $sDays + $msDays + $usDays + $nsDays;
+        // Split before applying the operation sign so large Number fields and
+        // PHP_INT_MIN never pass through a narrowing cast or overflowing negation.
+        [$timeSeconds, $subNs] = DurationTime::parts($dur);
+        $days += $sign * intdiv($timeSeconds, num2: 86_400);
+        $nsRem = $sign * ((($timeSeconds % 86_400) * EpochLimits::NS_PER_SECOND) + $subNs);
 
         // Reconstruct time-of-day from the accumulated remainders.
         // $nsRem is the total sub-day nanoseconds; it may be negative when the

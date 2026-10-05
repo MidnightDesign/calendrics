@@ -15,5 +15,9 @@ $date2 = new \Calendrics\Spec\PlainDate(2026, 1, 6);
 foreach ($timeZoneNameStyles as $timeZoneNameStyle) {
 $dtf = new \Calendrics\Tests\Test262\IntlDateTimeFormat($locale, (object) JsUndefined::strip(['timeZoneName' => $timeZoneNameStyle]));
 $result = $dtf->formatRangeToParts($date1, $date2);
-Assert::incomplete('untranslatable: Array.isArray');
+Assert::assertTrue(is_array($result), "can format a PlainDate with timeZoneName = {$timeZoneNameStyle}");
+foreach ($result as $__obj__) {
+$type = $__obj__['type'] ?? null;
+Assert::notSameValue($type, 'timeZoneName', "formatting a PlainDate with timeZoneName = {$timeZoneNameStyle} should not print a time zone");
+}
 }

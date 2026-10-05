@@ -1,6 +1,8 @@
 {
     "$schema": "vendor/infection/infection/resources/schema.json",
     "source": {
+        // Full-source target. CI and composer check currently select the ten
+        // porcelain files through composer infection:porcelain (see README).
         "directories": ["src"]
     },
     "mutators": {
