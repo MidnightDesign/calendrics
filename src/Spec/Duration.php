@@ -792,23 +792,28 @@ final class Duration implements Stringable
             $rank = 1;
         }
 
-        // Sum each field. PHP promotes int+int to float on overflow; tdivmod handles both.
-        /** @psalm-suppress InvalidOperand */
-        $d = $this->days + $other->days;
-        /** @psalm-suppress InvalidOperand */
-        $h = $this->hours + $other->hours;
-        /** @psalm-suppress InvalidOperand */
-        $min = $this->minutes + $other->minutes;
-        /** @psalm-suppress InvalidOperand */
-        $s = $this->seconds + $other->seconds;
-        /** @psalm-suppress InvalidOperand */
-        $ms = $this->milliseconds + $other->milliseconds;
-        /** @psalm-suppress InvalidOperand */
-        $us = $this->microseconds + $other->microseconds;
-        /** @psalm-suppress InvalidOperand */
-        $ns = $this->nanoseconds + $other->nanoseconds;
+        // Add exact seconds and subsecond remainders before converting the result
+        // back to fields. A float nanosecond total loses small cross-field borrows.
+        [$seconds, $nanoseconds] = DurationTime::parts($this);
+        [$otherSeconds, $otherNanoseconds] = DurationTime::parts($other);
+        $seconds += $otherSeconds + (((int) $this->days + (int) $other->days) * 86_400);
+        $nanoseconds += $otherNanoseconds;
+        $seconds += intdiv($nanoseconds, num2: 1_000_000_000);
+        $nanoseconds %= 1_000_000_000;
+        if ($seconds > 0 && $nanoseconds < 0) {
+            $seconds--;
+            $nanoseconds += 1_000_000_000;
+        } elseif ($seconds < 0 && $nanoseconds > 0) {
+            $seconds++;
+            $nanoseconds -= 1_000_000_000;
+        }
 
-        return self::balanceTimeFields($d, $h, $min, $s, $ms, $us, $ns, $rank);
+        // Nanosecond rounding is exact and reuses the shared conversion that keeps
+        // the largest input unit, including Number storage for very large fields.
+        return DurationRounding::round(new self(seconds: $seconds, nanoseconds: $nanoseconds), [
+            'largestUnit' => ['nanosecond', 'microsecond', 'millisecond', 'second', 'minute', 'hour', 'day'][$rank],
+            'smallestUnit' => 'nanosecond',
+        ]);
     }
 
     /**
@@ -941,200 +946,6 @@ final class Duration implements Stringable
         }
 
         return new self(...$values);
-    }
-
-    /**
-     * Truncating integer division with remainder (modulo), handling both int and float.
-     *
-     * For int inputs uses PHP's intdiv/%. For float inputs (which arise when PHP
-     * auto-promotes int+int overflow to float) uses (int) cast for truncation.
-     * When the quotient exceeds PHP_INT_MAX (e.g. ns ≈ 1e25 / 1000 ≈ 1e22), returns
-     * a float quotient — the range check in balanceTimeFields() will catch it.
-     *
-     * When |n| > PHP_INT_MAX but the quotient fits in int64, float64 division may
-     * round the quotient incorrectly. In that case we use exact decimal long-division
-     * via sprintf('%.0f'), which gives the exact integer string for large floats.
-     *
-     * @return array{0: int|float, 1: int} [quotient, remainder]
-     */
-    private static function tdivmod(int|float $n, int $divisor): array
-    {
-        if (is_int($n)) {
-            return [intdiv($n, $divisor), $n % $divisor];
-        }
-        // Float path.
-        $fq = $n / (float) $divisor;
-        $floatMax = (float) PHP_INT_MAX;
-        // Guard against int overflow when the quotient exceeds int64 range.
-        if (abs($fq) >= $floatMax) {
-            // Return float quotient; the remainder can still be extracted via fmod.
-            return [$fq, (int) fmod($n, (float) $divisor)];
-        }
-        // When |n| itself exceeds int64 range, (int)($n/$divisor) can round the
-        // quotient incorrectly (float64 loses ~19 decimal digits of precision).
-        // Use exact string-based long-division: sprintf('%.0f') gives the exact
-        // decimal representation of integer-valued floats.
-        if (abs($n) >= $floatMax) {
-            $sign = $n < 0.0 ? -1 : 1;
-            $absStr = sprintf('%.0f', abs($n));
-            $q = 0;
-            $rem = 0;
-            $len = strlen($absStr);
-            for ($i = 0; $i < $len; $i++) {
-                $rem = ($rem * 10) + (int) $absStr[$i];
-                $q = ($q * 10) + intdiv($rem, $divisor);
-                $rem %= $divisor;
-            }
-            return [$sign * $q, $sign * $rem];
-        }
-        $integer = (int) $n;
-        return [intdiv($integer, $divisor), $integer % $divisor];
-    }
-
-    /**
-     * Balances a set of time field sums.
-     *
-     * Uses bottom-up integer carry (ns → µs → ms → s → min → h → days, stopping at `$rank`).
-     * When the result has mixed signs (a cross-field borrow that integer carry cannot resolve),
-     * falls back to float totalNs + top-down truncating distribution (TC39 BalanceTimeDuration).
-     * Applies float64 rounding ((int)(float)) to each result field to match JS Number storage.
-     *
-     * @param int|float $d   Sum of days fields.
-     * @param int|float $h   Sum of hours fields.
-     * @param int|float $min Sum of minutes fields.
-     * @param int|float $s   Sum of seconds fields.
-     * @param int|float $ms  Sum of milliseconds fields.
-     * @param int|float $us  Sum of microseconds fields.
-     * @param int|float $ns  Sum of nanoseconds fields.
-     * @param int       $rank  Largest unit rank (6=days, 5=hours, 4=minutes, 3=seconds, 2=ms, 1=µs, 0=ns).
-     */
-    private static function balanceTimeFields(
-        int|float $d,
-        int|float $h,
-        int|float $min,
-        int|float $s,
-        int|float $ms,
-        int|float $us,
-        int|float $ns,
-        int $rank,
-    ): self {
-        // Save originals for float fallback (used when integer carry leaves mixed signs).
-        [$d0, $h0, $min0, $s0, $ms0, $us0, $ns0] = [$d, $h, $min, $s, $ms, $us, $ns];
-
-        // Bottom-up integer carry.
-        [$carryUs, $ns] = self::tdivmod($ns, 1_000);
-        /** @psalm-suppress InvalidOperand */
-        $us += $carryUs;
-        if ($rank >= 2) {
-            [$carryMs, $us] = self::tdivmod($us, 1_000);
-            /** @psalm-suppress InvalidOperand */
-            $ms += $carryMs;
-        }
-        if ($rank >= 3) {
-            [$carryS, $ms] = self::tdivmod($ms, 1_000);
-            /** @psalm-suppress InvalidOperand */
-            $s += $carryS;
-        }
-        if ($rank >= 4) {
-            [$carryMin, $s] = self::tdivmod($s, 60);
-            /** @psalm-suppress InvalidOperand */
-            $min += $carryMin;
-        }
-        if ($rank >= 5) {
-            [$carryH, $min] = self::tdivmod($min, 60);
-            /** @psalm-suppress InvalidOperand */
-            $h += $carryH;
-        }
-        if ($rank >= 6) {
-            [$carryD, $h] = self::tdivmod($h, 24);
-            /** @psalm-suppress InvalidOperand */
-            $d += $carryD;
-        }
-
-        // Detect mixed signs after integer carry.  Cross-field borrows (e.g. h=-1, min=+1)
-        // are not resolved by bottom-up carry; the float path handles them correctly.
-        $hasPos = false;
-        $hasNeg = false;
-        foreach ([$d, $h, $min, $s, $ms, $us, $ns] as $fv) {
-            if ($fv > 0) {
-                $hasPos = true;
-            } elseif ($fv < 0) {
-                $hasNeg = true;
-            }
-            if ($hasPos && $hasNeg) {
-                break;
-            }
-        }
-
-        $MAX_SAFE_F = 9_007_199_254_740_992.0;
-
-        if ($hasPos && $hasNeg) {
-            // Float totalNs + top-down truncating distribution (TC39 BalanceTimeDuration).
-            if ($rank >= 6) {
-                // Include days in the total.
-                $totalNs =
-                    ((float) $d0 * 86_400_000_000_000.0)
-                    + ((float) $h0 * 3_600_000_000_000.0)
-                    + ((float) $min0 * 60_000_000_000.0)
-                    + ((float) $s0 * 1_000_000_000.0)
-                    + ((float) $ms0 * 1_000_000.0)
-                    + ((float) $us0 * 1_000.0)
-                    + (float) $ns0;
-                $d = (int) ($totalNs / 86_400_000_000_000.0);
-                $totalNs -= (float) $d * 86_400_000_000_000.0;
-            } else {
-                $d = $d0; // Days unchanged when rank < 6.
-                $totalNs =
-                    ((float) $h0 * 3_600_000_000_000.0)
-                    + ((float) $min0 * 60_000_000_000.0)
-                    + ((float) $s0 * 1_000_000_000.0)
-                    + ((float) $ms0 * 1_000_000.0)
-                    + ((float) $us0 * 1_000.0)
-                    + (float) $ns0;
-            }
-
-            $h = (int) ($totalNs / 3_600_000_000_000.0);
-            $totalNs -= (float) $h * 3_600_000_000_000.0;
-            $min = (int) ($totalNs / 60_000_000_000.0);
-            $totalNs -= (float) $min * 60_000_000_000.0;
-            $s = (int) ($totalNs / 1_000_000_000.0);
-            $totalNs -= (float) $s * 1_000_000_000.0;
-            $ms = (int) ($totalNs / 1_000_000.0);
-            $totalNs -= (float) $ms * 1_000_000.0;
-            $us = (int) ($totalNs / 1_000.0);
-            $totalNs -= (float) $us * 1_000.0;
-            $ns = (int) $totalNs;
-        } else {
-            // Same-sign path: apply float64 rounding to match JS Number field storage.
-            // JS stores all numbers as float64; integer operations > 2^53 lose precision.
-            // We must simulate this by converting int→float64→int even for PHP ints,
-            // so that e.g. (9007199254740991 + 9007199254740990) = 18014398509481980 (float64)
-            // rather than 18014398509481981 (exact PHP int).
-            // Guard against overflow: values that don't fit in int64 remain as float.
-            $floatMax = (float) PHP_INT_MAX;
-            $roundF64 = static function (int|float $v) use ($floatMax): int|float {
-                $fv = (float) $v;
-                return abs($fv) < $floatMax ? (int) $fv : $fv;
-            };
-            $d = $roundF64($d);
-            $h = $roundF64($h);
-            $min = $roundF64($min);
-            $s = $roundF64($s);
-            $ms = $roundF64($ms);
-            $us = $roundF64($us);
-            $ns = $roundF64($ns);
-        }
-
-        // TC39 range check: total seconds must not exceed MAX_SAFE_INT.
-        $totalSec = ((float) $d * 86_400.0) + ((float) $h * 3_600.0) + ((float) $min * 60.0) + (float) $s;
-        if ($rank < 3) {
-            $totalSec += ((float) $ms / 1_000.0) + ((float) $us / 1_000_000.0) + ((float) $ns / 1_000_000_000.0);
-        }
-        if (abs($totalSec) >= $MAX_SAFE_F) {
-            throw new RangeError('Duration time fields exceed the maximum representable range.');
-        }
-
-        return new self(0, 0, 0, (int) $d, (int) $h, (int) $min, (int) $s, (int) $ms, (int) $us, (int) $ns);
     }
 
     /** @return array{int, int} Formatted fractional digits and carry into whole seconds. */
