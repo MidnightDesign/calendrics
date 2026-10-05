@@ -712,7 +712,8 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
 
         $calendar = CalendarFactory::get($calendarId ?? 'iso8601');
         $isNonIso = $calendarId !== null && $calendarId !== 'iso8601';
-        $hasYearLike = $hasYear || $isNonIso && $hasEraAndEraYear;
+        $readsEraFields = CalendarMath::readsEraFields($calendarId);
+        $hasYearLike = $hasYear || $readsEraFields && $hasEraAndEraYear;
 
         // For non-ISO calendars, year is required when using month (without monthCode).
         if ($isNonIso) {
@@ -761,7 +762,7 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
         }
 
         // Resolve era + eraYear if present (overrides year for era-based calendars).
-        if ($isNonIso && $hasEraAndEraYear) {
+        if ($readsEraFields && $hasEraAndEraYear) {
             $resolved = CalendarMath::resolveYearFromEra(
                 $calendar,
                 $bag['era'],

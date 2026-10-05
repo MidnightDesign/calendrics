@@ -367,14 +367,14 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
 
         // PrepareCalendarFields step 10 (partial): at least one recognized date field must
         // be present. An empty-property object (e.g. JS undefined / sentinel) has no fields.
-        // For non-ISO calendars, era and eraYear are also valid date fields.
+        // Era fields are recognized only for calendars that support eras.
         $hasAnyField =
             array_key_exists('year', $fields)
             || array_key_exists('month', $fields)
             || array_key_exists('monthCode', $fields)
             || array_key_exists('day', $fields)
-            || array_key_exists('era', $fields)
-            || array_key_exists('eraYear', $fields);
+            || CalendarMath::readsEraFields($this->calendarId)
+            && (array_key_exists('era', $fields) || array_key_exists('eraYear', $fields));
         if (!$hasAnyField) {
             throw new TypeError(
                 'PlainDate::with() requires at least one of: year, month, monthCode, day, era, eraYear.',
