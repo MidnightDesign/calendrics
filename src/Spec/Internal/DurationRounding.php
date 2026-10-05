@@ -7,6 +7,7 @@ namespace Calendrics\Spec\Internal;
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Duration;
+use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\PlainDate;
 use Calendrics\Spec\ZonedDateTime;
 
@@ -197,8 +198,8 @@ final class DurationRounding
         $absNs = $absSubNs % 1_000;
         $absD = abs((int) $d->days);
 
-        // Balance hours into days: DST-aware when ZDT IANA relativeTo is present.
-        if ($zdtInfoRound !== null) {
+        // A time largestUnit rounds the exact elapsed time directly. Only date units need zoned day balancing.
+        if ($zdtInfoRound !== null && $luIdx >= 6) {
             $timeOnlyNs =
                 ($absH * 3_600_000_000_000)
                 + ($absM * 60_000_000_000)
@@ -230,19 +231,23 @@ final class DurationRounding
             $timeOnlyNs -= $absMs * 1_000_000;
             $absUs = intdiv($timeOnlyNs, num2: 1_000);
             $absNs = $timeOnlyNs - ($absUs * 1_000);
-        } else {
+        } elseif ($zdtInfoRound === null) {
             $absD += intdiv(num1: $absH, num2: 24);
             $absH %= 24;
         }
 
-        // Compute totalNs, guarding against int64 overflow for large day counts.
-        $subDayNs =
-            ($absH * 3_600_000_000_000)
-            + ($absM * 60_000_000_000)
-            + ($absS * 1_000_000_000)
-            + ($absMs * 1_000_000)
-            + ($absUs * 1_000)
-            + $absNs;
+        // Date-unit rounding needs only the bounded time remainder. A time largestUnit
+        // retains its exact seconds/subseconds pair until the final rounding below.
+        $subDayNs = 0;
+        if ($luIdx >= 6) {
+            $subDayNs =
+                ($absH * 3_600_000_000_000)
+                + ($absM * 60_000_000_000)
+                + ($absS * 1_000_000_000)
+                + ($absMs * 1_000_000)
+                + ($absUs * 1_000)
+                + $absNs;
+        }
 
         // Nanoseconds per unit (time units only; days and above handled separately).
         /** @var array<string,int> */
@@ -705,7 +710,8 @@ final class DurationRounding
             if ($progress < 0.5) {
                 return $r1;
             }
-            return ($r1 % 2) === 0 ? $r1 : $r2;
+            $lowerMultiple = intdiv($r1, $r2 - $r1);
+            return ($lowerMultiple % 2) === 0 ? $r1 : $r2;
         }
         return match ($mode) {
             'trunc' => $r1,
@@ -733,6 +739,7 @@ final class DurationRounding
         int $totalDays,
         int $luIdx,
         int $suIdx,
+        string $calendarId,
     ): array {
         if ($totalDays === 0) {
             return [0, 0, 0, 0];
@@ -745,13 +752,24 @@ final class DurationRounding
         $years = 0;
         $months = 0;
         $weeks = 0;
-
         $current = $startDate;
-
-        // Accumulate full years when largestUnit >= 'years'.
-        if ($luIdx >= 9) {
+        if ($luIdx >= 8 && $suIdx < 8) {
+            [$signedYears, $signedMonths] = CalendarFactory::get($calendarId)->dateUntil(
+                (int) $startDate->format('Y'),
+                (int) $startDate->format('n'),
+                (int) $startDate->format('j'),
+                (int) $endDate->format('Y'),
+                (int) $endDate->format('n'),
+                (int) $endDate->format('j'),
+                $luIdx >= 9 ? 'year' : 'month',
+            );
+            $years = abs($signedYears);
+            $months = abs($signedMonths);
+            $current = AnchorMath::addCalendarFields($startDate, $signedYears, $signedMonths, 0, 0, $calendarId);
+        }
+        if ($luIdx >= 9 && $suIdx >= 8) {
             while (true) {
-                $next = AnchorMath::addYearsClamped($current, $sign);
+                $next = AnchorMath::addYearsClamped($startDate, $sign * ($years + 1), $calendarId);
                 if ($sign > 0 ? $next > $endDate : $next < $endDate) {
                     break;
                 }
@@ -759,11 +777,16 @@ final class DurationRounding
                 $current = $next;
             }
         }
-
-        // Accumulate full months when largestUnit >= 'months' and smallestUnit != 'years'.
-        if ($luIdx >= 8 && $suIdx < 9) {
+        if ($luIdx >= 8 && $suIdx === 8) {
             while (true) {
-                $next = AnchorMath::addMonthsClamped($current, $sign);
+                $next = AnchorMath::addCalendarFields(
+                    $startDate,
+                    $sign * $years,
+                    $sign * ($months + 1),
+                    0,
+                    0,
+                    $calendarId,
+                );
                 if ($sign > 0 ? $next > $endDate : $next < $endDate) {
                     break;
                 }
@@ -771,8 +794,6 @@ final class DurationRounding
                 $current = $next;
             }
         }
-
-        // remainingDays is signed (negative when direction is negative).
         $remainingDays = (int) $current->diff($endDate)->format('%r%a');
 
         // Distribute remaining days into weeks when:
@@ -811,6 +832,7 @@ final class DurationRounding
         string $roundingMode,
         array $UNIT_IDX,
     ): Duration {
+        $calendarId = $relativeTo->calendarId;
         $bag = RelativeTo::toPlainDateBag($relativeTo);
         $zdtInfoRWR = RelativeTo::resolveZdt($relativeTo);
         // When relativeTo resolves to a ZonedDateTime, use the ZDT's local date
@@ -853,7 +875,7 @@ final class DurationRounding
 
         // Apply the full duration to the start date to get end date + calendar day count.
         // applyCalendarToDate throws RangeError if totalDays > ±100M.
-        [, $calendarDays] = AnchorMath::applyCalendarToDate($d, $startDate);
+        [, $calendarDays] = AnchorMath::applyCalendarToDate($d, $startDate, $calendarId);
 
         $timeNs =
             ((int) $d->hours * 3_600_000_000_000)
@@ -894,6 +916,7 @@ final class DurationRounding
                 $roundingMode,
                 $isPositive,
                 $zdtInfoRWR,
+                $calendarId,
             );
         }
 
@@ -908,6 +931,7 @@ final class DurationRounding
                 $increment,
                 $roundingMode,
                 $isPositive,
+                $calendarId,
             );
         }
 
@@ -943,7 +967,7 @@ final class DurationRounding
                 // For ZDT: use DST-aware day lengths to compute fractional days.
                 // Balance the time portion into days using actual day lengths first,
                 // then compute the fractional remainder for rounding.
-                $calDateEnd = AnchorMath::applyYearsMonthsWeeks($d, $startDate);
+                $calDateEnd = AnchorMath::applyYearsMonthsWeeks($d, $startDate, $calendarId);
                 $absRawDays = abs((int) $d->days);
                 $absTimeOnlyNs = abs($timeNs);
                 $calEndY = (int) $calDateEnd->format('Y');
@@ -994,7 +1018,7 @@ final class DurationRounding
             // round only the sub-day remainder, then check for day overflow.
             if ($zdtInfoRWR !== null) {
                 // Compute the date after adding calendar fields (years/months/weeks) only.
-                $calDateEnd = AnchorMath::applyYearsMonthsWeeks($d, $startDate);
+                $calDateEnd = AnchorMath::applyYearsMonthsWeeks($d, $startDate, $calendarId);
                 $absRawDays = abs((int) $d->days);
                 $absTimeOnlyNs = abs($timeNs);
                 $calEndY = (int) $calDateEnd->format('Y');
@@ -1055,7 +1079,19 @@ final class DurationRounding
                     $roundedAbsDays += $moreDays;
                 }
                 // For the luIdx < 6 path (largestUnit < days), compute total rounded ns.
-                $roundedAbsNs = (($roundedAbsDays + abs($calendarDays) - $absRawDays) * $nsPerDay) + $absSubDayNs;
+                $roundedCalendarDays = $sign * ($roundedAbsDays + abs($calendarDays) - $absRawDays);
+                $roundedCalendarSeconds = AnchorMath::zdtDaysToSec(
+                    $zdtInfoRWR['year'],
+                    $zdtInfoRWR['month'],
+                    $zdtInfoRWR['day'],
+                    $zdtInfoRWR['hour'],
+                    $zdtInfoRWR['minute'],
+                    $zdtInfoRWR['second'],
+                    $zdtInfoRWR['tzId'],
+                    $roundedCalendarDays,
+                    $zdtInfoRWR['epochSec'],
+                );
+                $roundedAbsNs = (abs((int) $roundedCalendarSeconds) * 1_000_000_000) + $absSubDayNs;
                 // Re-add the calendar days to get the total day count for balanceDateDuration.
                 $roundedDays = $sign * ($roundedAbsDays + abs($calendarDays) - $absRawDays);
                 $subDayNs = $sign * $absSubDayNs;
@@ -1070,7 +1106,7 @@ final class DurationRounding
         // Balance calendar fields (years/months/weeks/days) from roundedDays.
         if ($luIdx >= 7) {
             // largestUnit is weeks, months, or years: split days into calendar units.
-            [$ry, $rm, $rw, $rd] = self::balanceDateDuration($startDate, $roundedDays, $luIdx, $suIdx);
+            [$ry, $rm, $rw, $rd] = self::balanceDateDuration($startDate, $roundedDays, $luIdx, $suIdx, $calendarId);
             // Distribute sub-day ns into time fields.
             [$rH, $rM, $rS, $rMs, $rUs, $rNs] = self::distributeSubDayNs($subDayNs);
         } elseif ($luIdx === 6) {
@@ -1150,6 +1186,7 @@ final class DurationRounding
         int $increment,
         string $roundingMode,
         bool $isPositive,
+        string $calendarId,
     ): Duration {
         $sign = $totalNs >= 0 ? 1 : -1;
         // Work with absolute nanoseconds throughout so that applyCalendarRounding
@@ -1157,18 +1194,17 @@ final class DurationRounding
         $absNs = abs($totalNs);
 
         if ($luIdx >= 8) {
-            // When largestUnit >= months: first count full calendar months from startDate
-            // in the sign direction, then round the remaining fractional weeks.
-            // The month count is not stored; only $current (the last whole-month boundary) matters.
-            $current = $startDate;
-            while (true) {
-                $next = AnchorMath::addMonthsClamped($current, $sign);
-                $absNextNs = abs((int) $startDate->diff($next)->format('%r%a')) * $nsPerDay;
-                if ($absNextNs > $absNs) {
-                    break;
-                }
-                $current = $next;
-            }
+            $endDate = $startDate->modify(sprintf('%+d days', $sign * intdiv($absNs, $nsPerDay)));
+            [$years, $months] = CalendarFactory::get($calendarId)->dateUntil(
+                (int) $startDate->format('Y'),
+                (int) $startDate->format('n'),
+                (int) $startDate->format('j'),
+                (int) $endDate->format('Y'),
+                (int) $endDate->format('n'),
+                (int) $endDate->format('j'),
+                $luIdx >= 9 ? 'year' : 'month',
+            );
+            $current = AnchorMath::addCalendarFields($startDate, $years, $months, 0, 0, $calendarId);
             // monthsSignedDays is signed (negative when going backward).
             $monthsSignedDays = (int) $startDate->diff($current)->format('%r%a');
             $absMonthsNs = abs($monthsSignedDays) * $nsPerDay;
@@ -1189,10 +1225,8 @@ final class DurationRounding
                 $roundingMode,
                 $isPositive,
             );
-            $roundedDays = $monthsSignedDays + ($sign * $roundedWeeks * 7);
 
-            [$ry, $rm, $rw, $rd] = self::balanceDateDuration($startDate, $roundedDays, $luIdx, 7);
-            return new Duration($ry, $rm, $rw, $rd, 0, 0, 0, 0, 0, 0);
+            return new Duration(years: $years, months: $months, weeks: $sign * $roundedWeeks);
         }
 
         // largestUnit = weeks: pure week rounding from absolute total days.
@@ -1206,7 +1240,7 @@ final class DurationRounding
         $roundedWeeks = self::applyCalendarRounding($nLow, $nLow + $increment, $progress, $roundingMode, $isPositive);
         $roundedDays = $sign * $roundedWeeks * 7;
 
-        [$ry, $rm, $rw, $rd] = self::balanceDateDuration($startDate, $roundedDays, $luIdx, 7);
+        [$ry, $rm, $rw, $rd] = self::balanceDateDuration($startDate, $roundedDays, $luIdx, 7, $calendarId);
         return new Duration($ry, $rm, $rw, $rd, 0, 0, 0, 0, 0, 0);
     }
 
@@ -1234,7 +1268,8 @@ final class DurationRounding
         int $increment,
         string $roundingMode,
         bool $isPositive,
-        ?array $zdtInfo = null,
+        ?array $zdtInfo,
+        string $calendarId,
     ): Duration {
         // $totalNs is int|float to accommodate calendar progressions across
         // multi-millennium spans where days × NS_PER_DAY exceeds int64. The function
@@ -1277,11 +1312,10 @@ final class DurationRounding
         $isYears = $suIdx >= 9;
 
         $totalUnits = 0;
-        $current = $startDate;
         while (true) {
             $next = $isYears
-                ? AnchorMath::addYearsClamped($current, $sign)
-                : AnchorMath::addMonthsClamped($current, $sign);
+                ? AnchorMath::addYearsClamped($startDate, $sign * ($totalUnits + 1), $calendarId)
+                : AnchorMath::addMonthsClamped($startDate, $sign * ($totalUnits + 1), $calendarId);
             // Check if the next boundary in ns is still <= totalNs (in absolute terms).
             $nextDays = (int) $startDate->diff($next)->format('%r%a');
             if ($zdtInfo !== null) {
@@ -1305,7 +1339,6 @@ final class DurationRounding
                 break;
             }
             $totalUnits++;
-            $current = $next;
         }
 
         // Snap to lower increment boundary.
@@ -1315,11 +1348,11 @@ final class DurationRounding
 
         // Compute r1 and r2 dates relative to startDate using TC39-compliant clamped arithmetic.
         $r1Date = $isYears
-            ? AnchorMath::addYearsClamped($startDate, $sign * $r1)
-            : AnchorMath::addMonthsClamped($startDate, $sign * $r1);
+            ? AnchorMath::addYearsClamped($startDate, $sign * $r1, $calendarId)
+            : AnchorMath::addMonthsClamped($startDate, $sign * $r1, $calendarId);
         $r2Date = $isYears
-            ? AnchorMath::addYearsClamped($startDate, $sign * $r2)
-            : AnchorMath::addMonthsClamped($startDate, $sign * $r2);
+            ? AnchorMath::addYearsClamped($startDate, $sign * $r2, $calendarId)
+            : AnchorMath::addMonthsClamped($startDate, $sign * $r2, $calendarId);
         // The upper boundary may fall beyond the representable ISO date-time range
         // when the anchor sits near the limit; per TC39 RoundDuration this is a
         // RangeError. Keeps round() consistent
@@ -1373,11 +1406,19 @@ final class DurationRounding
 
         // Rounding to months: balance months into years+months if luIdx >= 9.
         if ($luIdx >= 9) {
-            // Convert months → years + remaining months.
-            $absMonths = abs($roundedUnits);
-            $years = intdiv(num1: $absMonths, num2: 12);
-            $remainMonths = $absMonths % 12;
-            return new Duration($sign * $years, $sign * $remainMonths, 0, 0, 0, 0, 0, 0, 0, 0);
+            $roundedDate = AnchorMath::addMonthsClamped($startDate, $sign * $roundedUnits, $calendarId);
+            $roundedDays = (int) $startDate->diff($roundedDate)->format('%r%a');
+            [$years, $months, , $days] = self::balanceDateDuration(
+                $startDate,
+                $roundedDays,
+                $luIdx,
+                $suIdx,
+                $calendarId,
+            );
+            if ($days !== 0) {
+                $months += $sign;
+            }
+            return new Duration(years: $years, months: $months);
         }
 
         return new Duration(0, $sign * $roundedUnits, 0, 0, 0, 0, 0, 0, 0, 0);
