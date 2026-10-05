@@ -25,6 +25,9 @@ use Calendrics\Spec\PlainDate;
  */
 final class DateParse
 {
+    /** Numeric UTC offset grammar; offset seconds exclude wall-clock leap second 60. */
+    public const string NUMERIC_OFFSET_PATTERN = '[+-](?:[01]\d|2[0-3])(?::[0-5]\d(?::[0-5]\d(?:[.,]\d+)?)?|[0-5]\d(?:[0-5]\d(?:[.,]\d+)?)?)?';
+
     /**
      * Parses an ISO 8601 date string into a PlainDate.
      *
@@ -58,7 +61,10 @@ final class DateParse
         // Optional bracket annotations
         // Z (UTC designator) is NEVER valid for PlainDate.
         // date: year + rest, optional T+HH:MM:SS.frac, optional offset, bracket annotations
-        $pattern = '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)?)?((?:\[[^\]]*\])*)$/';
+        $pattern = sprintf(
+            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:%s)?)?((?:\[[^\]]*\])*)$/',
+            self::NUMERIC_OFFSET_PATTERN,
+        );
 
         /** @var list<string> $m */
         $m = [];
