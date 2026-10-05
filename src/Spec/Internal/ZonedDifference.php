@@ -27,7 +27,7 @@ use Calendrics\Spec\ZonedDateTime;
  * Rounding is layered on top and is itself two-sided: a calendar `smallestUnit` rounds by
  * *fractional progress through the current unit*, which needs the true length of that
  * unit — the interval between two real calendar anchors, not a nominal 30 days (see
- * {@see calcYearProgress()} / {@see calcMonthProgress()}). A time `smallestUnit` rounds
+ * {@see roundCalendarYearsMonths()}). A time `smallestUnit` rounds
  * the nanosecond remainder, with the day it may overflow into taken from the actual
  * length of that local day.
  *
@@ -349,6 +349,19 @@ final class ZonedDifference
         string $effectiveMode,
         int $roundingIncrement,
     ): Duration {
+        if ($normSmallest === 'year' || $normSmallest === 'month') {
+            return self::roundCalendarYearsMonths(
+                $temporalDate,
+                $other,
+                $normLargest,
+                $normSmallest,
+                $roundingIncrement,
+                $effectiveMode,
+                $sign,
+                $outputSign,
+            );
+        }
+
         $tdLocal = $temporalDate->localComponents();
         $otherLocal = $other->localComponents();
 
@@ -431,17 +444,13 @@ final class ZonedDifference
             ? self::intermediateDayLengthNs($earlierZ, $span)
             : self::NS_PER_DAY_F;
 
-        if (in_array($normSmallest, ['year', 'month', 'week', 'day'], strict: true)) {
+        if ($normSmallest === 'week' || $normSmallest === 'day') {
             return self::roundToCalendarUnit(
-                $tdLocal,
-                $earlierLocal,
-                $laterLocal,
                 $normLargest,
                 $normSmallest,
                 $effectiveMode,
                 $roundingIncrement,
                 $outputSign,
-                $receiverIsLater,
                 $span,
                 $timeDiffNs,
                 $nsPerDayF,
@@ -566,71 +575,18 @@ final class ZonedDifference
     /**
      * Rounds to a calendar `smallestUnit`, which zeroes the time portion entirely.
      *
-     * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $tdLocal
-     * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $earlierLocal
-     * @param array{year:int, month:int<1,12>, day:int<1,31>, hour:int<0,23>, minute:int<0,59>, second:int<0,59>, millisecond:int<0,999>, microsecond:int<0,999>, nanosecond:int<0,999>, offsetSec:int, offset:string} $laterLocal
      * @param int<1, max> $roundingIncrement
      */
     private static function roundToCalendarUnit(
-        array $tdLocal,
-        array $earlierLocal,
-        array $laterLocal,
         string $normLargest,
         string $normSmallest,
         string $effectiveMode,
         int $roundingIncrement,
         int $outputSign,
-        bool $receiverIsLater,
         DateSpan $span,
         int $timeDiffNs,
         float $nsPerDayF,
     ): Duration {
-        if ($normSmallest === 'year') {
-            $floorCount = intdiv(num1: $span->years, num2: $roundingIncrement) * $roundingIncrement;
-            $progress = self::calcYearProgress(
-                $tdLocal,
-                $earlierLocal,
-                $laterLocal,
-                $floorCount,
-                $roundingIncrement,
-                $timeDiffNs,
-                $receiverIsLater,
-            );
-            $roundUp = CalendarMath::applyCalendarRoundingProgress(
-                $span->years,
-                $progress,
-                $roundingIncrement,
-                $effectiveMode,
-            );
-            return new Duration(years: $outputSign * ($roundUp ? $floorCount + $roundingIncrement : $floorCount));
-        }
-
-        if ($normSmallest === 'month') {
-            $totalMonths = ($span->years * 12) + $span->months;
-            $floorCount = intdiv(num1: $totalMonths, num2: $roundingIncrement) * $roundingIncrement;
-            $progress = self::calcMonthProgress(
-                $tdLocal,
-                $earlierLocal,
-                $laterLocal,
-                $floorCount,
-                $roundingIncrement,
-                $timeDiffNs,
-                $receiverIsLater,
-            );
-            $roundUp = CalendarMath::applyCalendarRoundingProgress(
-                $totalMonths,
-                $progress,
-                $roundingIncrement,
-                $effectiveMode,
-            );
-            $roundedMonths = $roundUp ? $floorCount + $roundingIncrement : $floorCount;
-            if ($normLargest === 'year') {
-                $ry = intdiv(num1: $roundedMonths, num2: 12);
-                return new Duration(years: $outputSign * $ry, months: $outputSign * ($roundedMonths - ($ry * 12)));
-            }
-            return new Duration(months: $outputSign * $roundedMonths);
-        }
-
         $progress = $timeDiffNs > 0 ? (float) $timeDiffNs / $nsPerDayF : 0.0;
 
         if ($normSmallest === 'week') {
@@ -794,133 +750,163 @@ final class ZonedDifference
     }
 
     /**
-     * Fractional progress through the current year-increment, for year-level rounding.
+     * NudgeToCalendarUnit for years and months, measured between zoned anchors.
      *
-     * A year is 365 or 366 days, so the fraction is measured against the real interval
-     * between the floor anchor and the next one — both obtained by adding whole years to
-     * the receiver — rather than against a nominal length.
-     *
-     * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $recLocal
-     * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $earlierLocal
-     * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $laterLocal
-     * @param int<1, max> $increment
+     * The month window keeps any larger year component intact. Adding both fields
+     * together preserves the calendar's constrain behavior around leap months.
      */
-    private static function calcYearProgress(
-        array $recLocal,
-        array $earlierLocal,
-        array $laterLocal,
-        int $floorCount,
+    private static function roundCalendarYearsMonths(
+        ZonedDateTime $receiver,
+        ZonedDateTime $other,
+        string $largestUnit,
+        string $smallestUnit,
         int $increment,
-        int $timeDiffNs,
-        bool $receiverIsLater,
-    ): float {
-        return self::calcProgress(
-            $recLocal,
-            $earlierLocal,
-            $laterLocal,
-            $floorCount,
-            $increment,
-            $timeDiffNs,
-            $receiverIsLater,
-            byYears: true,
+        string $mode,
+        int $direction,
+        int $outputSign,
+    ): Duration {
+        if ($direction === 0) {
+            return new Duration();
+        }
+        $receiverLocal = $receiver->localComponents();
+        $otherLocal = $other->localComponents();
+        $receiverJdn = CalendarMath::toJulianDay(
+            $receiverLocal['year'],
+            $receiverLocal['month'],
+            $receiverLocal['day'],
         );
+        $otherJdn = CalendarMath::toJulianDay($otherLocal['year'], $otherLocal['month'], $otherLocal['day']);
+        $dateDirection = $otherJdn <=> $receiverJdn;
+        $timeDifference = self::timeOfDayNs($otherLocal) - self::timeOfDayNs($receiverLocal);
+        if (($dateDirection * $timeDifference) < 0) {
+            $otherJdn -= $dateDirection;
+        }
+        $span = self::absoluteCalendarSpan(
+            $receiverLocal,
+            $otherJdn,
+            $receiver->calendarId,
+            $largestUnit === 'year' ? 'year' : 'month',
+        );
+        // A gap or overlap can move the anniversary past the actual endpoint,
+        // even when the local clock fields suggested a complete month or year.
+        $wholeAnchor = $receiver->add(new Duration(
+            years: $direction * $span->years,
+            months: $direction * $span->months,
+        ));
+        if (($direction * self::compareEpoch($wholeAnchor, $other)) > 0) {
+            $span = self::absoluteCalendarSpan(
+                $receiverLocal,
+                $otherJdn - $direction,
+                $receiver->calendarId,
+                $largestUnit === 'year' ? 'year' : 'month',
+            );
+        }
+        $byYears = $smallestUnit === 'year';
+        $years = $byYears ? 0 : $span->years;
+        $wholeUnits = $byYears ? $span->years : $span->months;
+        $floorCount = intdiv($wholeUnits, $increment) * $increment;
+        $lower = self::calendarAnchor($receiver, $years, $floorCount, $byYears, $direction);
+        $upper = self::calendarAnchor($receiver, $years, $floorCount + $increment, $byYears, $direction);
+
+        // Calendar addition can constrain a date across a boundary. Temporal
+        // shifts the window once when the first upper anchor precedes the target.
+        $shifted = ($direction * self::compareEpoch($other, $upper)) > 0;
+        if ($shifted) {
+            $floorCount += $increment;
+            $lower = $upper;
+            $upper = self::calendarAnchor($receiver, $years, $floorCount + $increment, $byYears, $direction);
+        }
+        $roundUp = self::shouldExpandCalendarWindow(
+            $lower,
+            $upper,
+            $other,
+            $direction,
+            $mode,
+            intdiv($floorCount, $increment),
+        );
+        $rounded = $roundUp ? $floorCount + $increment : $floorCount;
+        if ($byYears) {
+            return new Duration(years: $outputSign * $rounded);
+        }
+        if ($largestUnit === 'year' && ($roundUp || $shifted)) {
+            // BubbleRelativeDuration promotes an expanded month result to the
+            // next year only when its zoned anchor reaches that year boundary.
+            $nextYear = $receiver->add(new Duration(years: $direction * ($years + 1)));
+            $roundedAnchor = $roundUp ? $upper : $lower;
+            if (($direction * self::compareEpoch($roundedAnchor, $nextYear)) >= 0) {
+                return new Duration(years: $outputSign * ($years + 1));
+            }
+        }
+        return new Duration(years: $outputSign * $years, months: $outputSign * $rounded);
     }
 
-    /**
-     * Fractional progress through the current month-increment, for month-level rounding.
-     *
-     * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $recLocal
-     * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $earlierLocal
-     * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $laterLocal
-     * @param int<1, max> $increment
-     */
-    private static function calcMonthProgress(
-        array $recLocal,
-        array $earlierLocal,
-        array $laterLocal,
-        int $floorCount,
-        int $increment,
-        int $timeDiffNs,
-        bool $receiverIsLater,
-    ): float {
-        return self::calcProgress(
-            $recLocal,
-            $earlierLocal,
-            $laterLocal,
-            $floorCount,
-            $increment,
-            $timeDiffNs,
-            $receiverIsLater,
-            byYears: false,
-        );
-    }
-
-    /**
-     * Shared body of {@see calcYearProgress()} and {@see calcMonthProgress()}.
-     *
-     * Both walk the receiver by $floorCount units to get the floor anchor and by
-     * $floorCount + $increment to get the next one; the interval between those two anchors
-     * is the denominator, and the span from the floor anchor to the far endpoint (plus the
-     * sub-day remainder) is the numerator. The receiver walks backward when it is the
-     * later of the two values, so the anchors stay on the same side of the interval.
-     *
-     * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $recLocal
-     * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $earlierLocal
-     * @param array{year:int,month:int,day:int,hour:int,minute:int,second:int,millisecond:int,microsecond:int,nanosecond:int,offsetSec:int,offset:string} $laterLocal
-     * @param int<1, max> $increment
-     */
-    private static function calcProgress(
-        array $recLocal,
-        array $earlierLocal,
-        array $laterLocal,
-        int $floorCount,
-        int $increment,
-        int $timeDiffNs,
-        bool $receiverIsLater,
+    private static function calendarAnchor(
+        ZonedDateTime $receiver,
+        int $years,
+        int $units,
         bool $byYears,
-    ): float {
-        $step = $receiverIsLater ? -1 : 1;
-        $floorSteps = $step * $floorCount;
-        $nextSteps = $step * ($floorCount + $increment);
-
-        $floorDate = self::addYearsMonthsToDate(
-            $recLocal['year'],
-            $recLocal['month'],
-            $recLocal['day'],
-            $byYears ? $floorSteps : 0,
-            $byYears ? 0 : $floorSteps,
-        );
-        $nextDate = self::addYearsMonthsToDate(
-            $recLocal['year'],
-            $recLocal['month'],
-            $recLocal['day'],
-            $byYears ? $nextSteps : 0,
-            $byYears ? 0 : $nextSteps,
-        );
-
-        $floorJdn = CalendarMath::toJulianDay($floorDate[0], $floorDate[1], $floorDate[2]);
-        $farJdn = $receiverIsLater
-            ? CalendarMath::toJulianDay($earlierLocal['year'], $earlierLocal['month'], $earlierLocal['day'])
-            : CalendarMath::toJulianDay($laterLocal['year'], $laterLocal['month'], $laterLocal['day']);
-        $remDays = $receiverIsLater ? $floorJdn - $farJdn : $farJdn - $floorJdn;
-
-        $nextJdn = CalendarMath::toJulianDay($nextDate[0], $nextDate[1], $nextDate[2]);
-        // Non-zero by construction: the two anchors are $increment ISO months or years
-        // apart, and the shortest ISO month is 28 days.
-        $intervalDays = abs($nextJdn - $floorJdn);
-
-        $totalRemNs = (float) (($remDays * self::NS_PER_DAY) + $timeDiffNs);
-        return $totalRemNs / ((float) $intervalDays * self::NS_PER_DAY_F);
+        int $direction,
+    ): ZonedDateTime {
+        return $receiver->add(new Duration(
+            years: $direction * ($byYears ? $units : $years),
+            months: $byYears ? 0 : $direction * $units,
+        ));
     }
 
     /**
-     * Adds years and months to a date, clamping the day to the resulting month's length.
-     *
-     * @return array{int, int, int} [year, month, day]
+     * Compare progress with the midpoint without an int64 nanosecond product or
+     * floating-point division. Seconds and subsecond nanoseconds stay exact even
+     * when the anchors span centuries or the target is one nanosecond from a tie.
      */
-    private static function addYearsMonthsToDate(int $year, int $month, int $day, int $addYears, int $addMonths): array
+    private static function shouldExpandCalendarWindow(
+        ZonedDateTime $lower,
+        ZonedDateTime $upper,
+        ZonedDateTime $target,
+        int $direction,
+        string $mode,
+        int $floorMultiple,
+    ): bool {
+        if (($direction * self::compareEpoch($target, $upper)) >= 0) {
+            return true;
+        }
+        [$seconds, $nanoseconds] = self::epochDistance($lower, $target, $direction);
+        [$intervalSeconds, $intervalNanoseconds] = self::epochDistance($lower, $upper, $direction);
+        $twiceSeconds = $seconds * 2;
+        $twiceNanoseconds = $nanoseconds * 2;
+        if ($twiceNanoseconds >= EpochLimits::NS_PER_SECOND) {
+            $twiceSeconds++;
+            $twiceNanoseconds -= EpochLimits::NS_PER_SECOND;
+        }
+        $comparison = $twiceSeconds <=> $intervalSeconds;
+        if ($comparison === 0) {
+            $comparison = $twiceNanoseconds <=> $intervalNanoseconds;
+        }
+        $progress = match (true) {
+            $seconds === 0 && $nanoseconds === 0 => 0.0,
+            $comparison < 0 => 0.25,
+            $comparison === 0 => 0.5,
+            default => 0.75,
+        };
+        return CalendarMath::applyRoundingProgress($progress, $mode, 1, $floorMultiple);
+    }
+
+    /** @return array{int, int} */
+    private static function epochDistance(ZonedDateTime $from, ZonedDateTime $to, int $direction): array
     {
-        return CalendarFactory::get('iso8601')->dateAdd($year, $month, $day, $addYears, $addMonths, 0, 0, 'constrain');
+        [$fromSeconds, $fromNanoseconds] = $from->epochParts();
+        [$toSeconds, $toNanoseconds] = $to->epochParts();
+        $seconds = $direction * ($toSeconds - $fromSeconds);
+        $nanoseconds = $direction * ($toNanoseconds - $fromNanoseconds);
+        if ($nanoseconds < 0) {
+            $seconds--;
+            $nanoseconds += EpochLimits::NS_PER_SECOND;
+        }
+        return [$seconds, $nanoseconds];
+    }
+
+    private static function compareEpoch(ZonedDateTime $one, ZonedDateTime $two): int
+    {
+        return $one->epochParts() <=> $two->epochParts();
     }
 
     /**
