@@ -7,6 +7,7 @@ namespace Calendrics\Spec;
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\CalendarMath;
+use Calendrics\Spec\Internal\DurationTime;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
@@ -892,23 +893,13 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
      * wrapping around the day boundary.
      *
      * Calendar fields (years, months, weeks, days) are ignored per spec.
-     * Each time component is reduced modulo its day-count before multiplication to
-     * avoid int64 overflow with very large Duration field values.
+     * Whole seconds and subsecond nanoseconds are split exactly, then reduced to
+     * a day remainder before scaling so large Duration fields never narrow to int64.
      */
     private function addTimeFields(int $sign, Duration $d): self
     {
-        // Reduce each field modulo its day-cycle count before multiplying, to prevent int64 overflow.
-        // NS_PER_DAY / NS_PER_HOUR = 24; / NS_PER_MINUTE = 1440; / NS_PER_SECOND = 86400; etc.
-        $hNs = ((int) $d->hours % 24) * self::NS_PER_HOUR;
-        $minNs = ((int) $d->minutes % 1_440) * self::NS_PER_MINUTE;
-        $secNs = ((int) $d->seconds % 86_400) * EpochLimits::NS_PER_SECOND;
-        $msNs = ((int) $d->milliseconds % 86_400_000) * self::NS_PER_MS;
-        $usNs = ((int) $d->microseconds % 86_400_000_000) * self::NS_PER_US;
-        $nsNs = (int) $d->nanoseconds % self::NS_PER_DAY;
-
-        // Sum each reduced component (each is in (-NS_PER_DAY, NS_PER_DAY)).
-        // Use modular addition step-by-step to stay within int64 range.
-        $deltaNs = $hNs + $minNs + $secNs + $msNs + $usNs + $nsNs;
+        [$seconds, $subNs] = DurationTime::parts($d);
+        $deltaNs = (($seconds % 86_400) * EpochLimits::NS_PER_SECOND) + $subNs;
 
         $resultNs = $this->ns + ($sign * $deltaNs);
 
