@@ -7,7 +7,6 @@ namespace Calendrics\Spec;
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
 use Calendrics\Spec\Internal\CalendarMath;
-use Calendrics\Spec\Internal\DateParse;
 use Calendrics\Spec\Internal\DurationTime;
 use Calendrics\Spec\Internal\EpochLimits;
 use Calendrics\Spec\Internal\EpochRounding;
@@ -15,6 +14,7 @@ use Calendrics\Spec\Internal\EpochValue;
 use Calendrics\Spec\Internal\HasEpochParts;
 use Calendrics\Spec\Internal\IntlFormatter;
 use Calendrics\Spec\Internal\IsoFraction;
+use Calendrics\Spec\Internal\IsoLexical;
 use Calendrics\Spec\Internal\IsoOffset;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\TimeZoneHelper;
@@ -240,34 +240,18 @@ final class Instant implements Stringable
         if (preg_match('/[.,]\d{10,}/', $text) === 1) {
             throw new RangeError("Invalid Instant string \"{$text}\": fractional seconds may have at most 9 digits.");
         }
-        /*
-         * Regex groups:
-         *   1 — year (±YYYYYY or YYYY)
-         *   2 — date rest (-MM-DD or MMDD)
-         *   3 — hour (HH)
-         *   4 — minute (MM, optional — bare hour form '1976-11-18T15Z' is valid)
-         *   5 — second (SS, optional)
-         *   6 — time fraction ([.,]\d+, optional)
-         *   7 — offset (full form including sub-minute)
-         *
-         * Offset alternatives (no mixed separators):
-         *   Z
-         *   ±HH
-         *   ±HH:MM | ±HH:MM:SS | ±HH:MM:SS[.,]frac  (colon-separated)
-         *   ±HHMM  | ±HHMMSS  | ±HHMMSS[.,]frac     (no separators)
-         */
-        $pattern = sprintf(
-            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})[T ]%s(Z|[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)((?:\[[^\]]*\])*)$/i',
-            DateParse::TIME_PATTERN,
-        );
-
-        /** @var list<string> $m */
-        $m = [];
-        if (preg_match($pattern, $text, $m) !== 1) {
-            throw new RangeError("Invalid Instant string \"{$text}\": expected ISO 8601 with a UTC offset.");
+        $parsed = IsoLexical::date($text);
+        if ($parsed === null || $parsed->hour === '' || $parsed->offset === '') {
+            throw new RangeError('Invalid ISO 8601 string.');
         }
-
-        [, $yearRaw, $dateRest, $hour, $min, $sec, $fractionRaw, $offsetRaw, $annotationSection] = $m;
+        $yearRaw = $parsed->year;
+        $dateRest = $parsed->dateRest;
+        $hour = $parsed->hour;
+        $min = $parsed->minute;
+        $sec = $parsed->second;
+        $fractionRaw = $parsed->fraction;
+        $offsetRaw = $parsed->offset;
+        $annotationSection = $parsed->annotations;
 
         // Normalise compact date (MMDD) → extended form (-MM-DD) so that both
         // PHP's DateTimeImmutable and our component extraction work uniformly.

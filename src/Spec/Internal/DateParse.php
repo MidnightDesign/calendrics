@@ -14,8 +14,7 @@ use Calendrics\Spec\PlainDate;
  * UTC offset, and bracket annotations — all of which are parsed, validated, and then
  * discarded: only the date portion survives into the value. The one thing the trailing
  * matter may never contain is a UTC designator `Z`, which would name an instant rather
- * than a calendar date; the grammar simply has no branch for it, so a `Z` fails the
- * match outright.
+ * than a calendar date; this conversion rejects the UTC designator after lexing.
  *
  * The date itself admits extended (`YYYY-MM-DD`) and basic (`YYYYMMDD`) spellings,
  * each also with a six-digit signed extended year — except `-000000`, which TC39
@@ -25,16 +24,6 @@ use Calendrics\Spec\PlainDate;
  */
 final class DateParse
 {
-    /**
-     * TimeSpec captures hour, minute, second, and fraction in that order.
-     * The branch-reset group (?|...) keeps those four captures identical for
-     * extended and compact forms; fractions require an explicit seconds field.
-     */
-    public const string TIME_PATTERN = '(\d{2})(?|:(\d{2})(?::(\d{2})([.,]\d+)?)?|(\d{2})(?:(\d{2})([.,]\d+)?)?)?';
-
-    /** Numeric UTC offset grammar; offset seconds exclude wall-clock leap second 60. */
-    public const string NUMERIC_OFFSET_PATTERN = '[+-](?:[01]\d|2[0-3])(?::[0-5]\d(?::[0-5]\d(?:[.,]\d+)?)?|[0-5]\d(?:[0-5]\d(?:[.,]\d+)?)?)?';
-
     /**
      * Parses an ISO 8601 date string into a PlainDate.
      *
@@ -61,26 +50,12 @@ final class DateParse
             );
         }
 
-        // Full anchored regex for a PlainDate string.
-        // Date part: YYYY-MM-DD | ±YYYYYY-MM-DD | YYYYMMDD | ±YYYYYYMMDD
-        // Optional time: T + HH[:MM[:SS[frac]]]  (fraction only after SS)
-        // Optional non-Z offset (only when time is present): ±HH[:MM[:SS[frac]]]
-        // Optional bracket annotations
-        // Z (UTC designator) is NEVER valid for PlainDate.
-        // date: year + rest, optional T+HH:MM:SS.frac, optional offset, bracket annotations
-        $pattern = sprintf(
-            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ]%s(?:%s)?)?((?:\[[^\]]*\])*)$/',
-            self::TIME_PATTERN,
-            self::NUMERIC_OFFSET_PATTERN,
-        );
-
-        /** @var list<string> $m */
-        $m = [];
-        if (preg_match($pattern, $s, $m) !== 1) {
-            throw new RangeError("PlainDate::from() cannot parse \"{$s}\": invalid ISO 8601 date string.");
+        $parsed = IsoLexical::date($s);
+        if ($parsed === null || $parsed->hasUtcDesignator()) {
+            throw new RangeError('Invalid ISO 8601 date string.');
         }
-
-        [, $yearRaw, $dateRest] = $m;
+        $yearRaw = $parsed->year;
+        $dateRest = $parsed->dateRest;
 
         // Reject minus-zero extended year (-000000).
         if (preg_match('/^-0{6}$/', $yearRaw) === 1) {
@@ -97,10 +72,10 @@ final class DateParse
         }
         $year = (int) $yearRaw;
 
-        self::validateOptionalTime($m[3], $m[4], $m[5], $s, 'PlainDate');
+        self::validateOptionalTime($parsed->hour, $parsed->minute, $parsed->second, $s, 'PlainDate');
 
         // Validate bracket annotations and extract calendar ID.
-        $annotationSection = $m[7];
+        $annotationSection = $parsed->annotations;
         $calendarId = CalendarMath::validateAnnotations($annotationSection, $s);
 
         return new PlainDate($year, $month, $day, $calendarId ?? 'iso8601');

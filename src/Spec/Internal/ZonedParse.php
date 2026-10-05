@@ -32,20 +32,6 @@ use Calendrics\Spec\ZonedDateTime;
  */
 final class ZonedParse
 {
-    // Group layout shared by all four datetime patterns:
-    //   1 year (±YYYYYY or YYYY)  2 date rest (-MM-DD or MMDD)  3 hour  4 minute
-    //   5 second  6 fraction  7 inline offset  8 bracket annotations (required)
-    //
-    // Mixed extended/compact spellings (202501-01, HH:MMSS) are rejected by matching each
-    // consistent combination as its own alternative rather than by one permissive pattern.
-    private const string PATTERN_EXT_DATE_EXT_TIME = '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2})[T ](\d{2})(?::(\d{2})(?::(\d{2}))?)?([.,]\d+)?(Z|[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)?((?:\[[^\]]*\])+)$/i';
-    private const string PATTERN_EXT_DATE_CPT_TIME = '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2})[T ](\d{2})(\d{2})(\d{2})?([.,]\d+)?(Z|[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)?((?:\[[^\]]*\])+)$/i';
-    private const string PATTERN_CPT_DATE_EXT_TIME = '/^([+-]\d{6}|\d{4})(\d{4})[T ](\d{2})(?::(\d{2})(?::(\d{2}))?)?([.,]\d+)?(Z|[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)?((?:\[[^\]]*\])+)$/i';
-    private const string PATTERN_CPT_DATE_CPT_TIME = '/^([+-]\d{6}|\d{4})(\d{4})[T ](\d{2})(\d{2})(\d{2})?([.,]\d+)?(Z|[+-]\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?|\d{2}(?:\d{2}(?:[.,]\d+)?)?)?)?((?:\[[^\]]*\])+)$/i';
-
-    /** Date with annotations but no time part; resolves to start-of-day, not to midnight. */
-    private const string PATTERN_DATE_ONLY = '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})((?:\[[^\]]*\])+)$/i';
-
     /**
      * Parses a ZonedDateTime ISO string, which must carry a bracket time-zone annotation.
      *
@@ -62,9 +48,19 @@ final class ZonedParse
             );
         }
 
-        [$m, $isDateOnly] = self::match($text);
-
-        [, $yearRaw, $dateRest, $hourStr, $minStr, $secStr, $fractionRaw, $offsetRaw, $annotationSection] = $m;
+        $parsed = IsoLexical::date($text);
+        if ($parsed === null || $parsed->annotations === '') {
+            throw new RangeError('Invalid ISO 8601 string.');
+        }
+        $yearRaw = $parsed->year;
+        $dateRest = $parsed->dateRest;
+        $hourStr = $parsed->hour;
+        $minStr = $parsed->minute;
+        $secStr = $parsed->second;
+        $fractionRaw = $parsed->fraction;
+        $offsetRaw = $parsed->offset;
+        $annotationSection = $parsed->annotations;
+        $isDateOnly = $parsed->hour === '';
 
         if (!str_starts_with($dateRest, '-')) {
             $dateRest = sprintf(
@@ -96,10 +92,6 @@ final class ZonedParse
             throw new RangeError("Invalid ZonedDateTime string \"{$text}\": day out of range.");
         }
         DateParse::validateOptionalTime($hourStr, $minStr, $secStr, $text, 'ZonedDateTime');
-        if ($fractionRaw !== '' && $secStr === '') {
-            throw new RangeError("Invalid ZonedDateTime string \"{$text}\": a fraction requires seconds.");
-        }
-
         // Leap second: 60 maps to second 59 while retaining the fractional part.
         $normalSec = $secNum === 60 ? 59 : $secNum;
 
@@ -112,13 +104,6 @@ final class ZonedParse
         // the offset is matched against the zone below.
         $inlineOffsetHasSeconds = false;
         if ($hasInlineOffset) {
-            if (
-                $offsetRaw !== 'Z'
-                && $offsetRaw !== 'z'
-                && preg_match(sprintf('/^(?:%s)$/D', DateParse::NUMERIC_OFFSET_PATTERN), $offsetRaw) !== 1
-            ) {
-                throw new RangeError("Invalid ZonedDateTime string \"{$text}\": UTC offset out of range.");
-            }
             [$inlineSign, $inlineAbsSec, $inlineFracNs] = IsoOffset::parts($offsetRaw);
             $inlineOffsetSec = $inlineSign * $inlineAbsSec;
             $inlineOffsetSubNs = $inlineSign * $inlineFracNs;
@@ -201,40 +186,6 @@ final class ZonedParse
         }
 
         return ZonedDateTime::fromEpochParts($epochSec, $subNs, $tzId, $calendarId ?? 'iso8601');
-    }
-
-    /**
-     * Matches $text against the datetime spellings, then the date-only one.
-     *
-     * A date-only match is normalized to the same nine-element layout with empty time
-     * groups, so the caller has a single shape to destructure.
-     *
-     * @return array{0: array<array-key, string>, 1: bool} [groups, isDateOnly]
-     * @throws RangeError if nothing matches.
-     */
-    private static function match(string $text): array
-    {
-        foreach ([
-            self::PATTERN_EXT_DATE_EXT_TIME,
-            self::PATTERN_EXT_DATE_CPT_TIME,
-            self::PATTERN_CPT_DATE_EXT_TIME,
-            self::PATTERN_CPT_DATE_CPT_TIME,
-        ] as $pattern) {
-            /** @var list<string> $m */
-            $m = [];
-            if (preg_match($pattern, $text, $m) === 1) {
-                return [$m, false];
-            }
-        }
-
-        /** @var list<string> $dm */
-        $dm = [];
-        if (preg_match(self::PATTERN_DATE_ONLY, $text, $dm) !== 1) {
-            throw new RangeError(
-                "Invalid ZonedDateTime string \"{$text}\": expected ISO 8601 with bracket timezone annotation.",
-            );
-        }
-        return [[$dm[0], $dm[1], $dm[2], '', '', '', '', '', $dm[3]], true];
     }
 
     /**
