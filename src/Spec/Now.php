@@ -6,6 +6,7 @@ namespace Calendrics\Spec;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
+use Calendrics\Spec\Internal\TimeZoneHelper;
 
 /**
  * The Temporal.Now namespace object.
@@ -152,73 +153,6 @@ final class Now
             }
             return date_default_timezone_get();
         }
-        if ($timeZone === '') {
-            throw new RangeError('Temporal.Now: timeZone string must not be empty.');
-        }
-
-        // Reject minus-zero extended year.
-        if (str_starts_with($timeZone, '-000000')) {
-            throw new RangeError('Temporal.Now: year −000000 is invalid (minus zero).');
-        }
-
-        // Detect ISO datetime strings (YYYY-MM-DDTHH... or YYYYMMDDThh...).
-        if (preg_match('/^\d{4,}-\d{2}-\d{2}[Tt]|\d{8}[Tt]/', $timeZone) === 1) {
-            return self::extractTzFromDatetime($timeZone);
-        }
-
-        return self::validateStandaloneTz($timeZone);
-    }
-
-    /**
-     * Extracts a PHP-usable timezone string from a full ISO datetime string.
-     *
-     * Prefers the IANA annotation [TZ] over the inline offset/Z.
-     * Rejects bare datetimes (no TZ info) and sub-minute offsets.
-     *
-     */
-    private static function extractTzFromDatetime(string $s): string
-    {
-        // IANA annotation [!?timezone_id] takes precedence.
-        $m = [];
-        if (preg_match('/\[!?([^\]]+)\]\s*$/', $s, $m) === 1) {
-            $tzId = $m[1]; // regex [^\]]+ guarantees non-empty
-            // Any offset annotation with a seconds component is sub-minute → invalid.
-            if (preg_match('/^[+-]\d{2}:\d{2}:/', $tzId) === 1) {
-                throw new RangeError("Temporal.Now: sub-minute offset in time zone annotation [{$tzId}].");
-            }
-            return $tzId;
-        }
-
-        // No IANA annotation — check for sub-minute inline offset (±HH:MM:SS...).
-        if (preg_match('/[+-]\d{2}:?\d{2}:\d/', $s) === 1) {
-            throw new RangeError("Temporal.Now: datetime string \"{$s}\" has a sub-minute UTC offset.");
-        }
-
-        // Z → UTC.
-        if (preg_match('/Z\s*$/i', $s) === 1) {
-            return 'UTC';
-        }
-
-        // ±HH:MM or ±HHMM → return that offset.
-        if (preg_match('/([+-]\d{2}:?\d{2})\s*$/', $s, $m) === 1) {
-            return $m[1];
-        }
-
-        // Bare datetime string with no timezone information.
-        throw new RangeError("Temporal.Now: datetime string \"{$s}\" has no time zone information.");
-    }
-
-    /**
-     * Validates a standalone (non-datetime) timezone string.
-     * Rejects any UTC offset with a seconds component (sub-minute precision).
-     *
-     */
-    private static function validateStandaloneTz(string $s): string
-    {
-        // Reject offsets with a seconds component: ±HH:MM:... or ±HHMM:...
-        if (preg_match('/^[+-]\d{2}:?\d{2}:/', $s) === 1) {
-            throw new RangeError("Temporal.Now: time zone offset \"{$s}\" has sub-minute precision.");
-        }
-        return $s;
+        return TimeZoneHelper::normalizeTimezoneId($timeZone);
     }
 }
