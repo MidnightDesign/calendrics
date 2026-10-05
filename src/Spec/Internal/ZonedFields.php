@@ -147,7 +147,7 @@ final class ZonedFields
         // say) a TypeError here — between the syntax RangeErrors above and the suitability
         // RangeErrors below, which is the ordering the fixtures pin down.
         $year = $yr !== null ? CalendarMath::toFiniteInt($yr, 'ZonedDateTime year') : 0;
-        $day = intval($dy);
+        $day = DateFieldNumber::day($dy, 'ZonedDateTime day');
         $hour = intval($hr);
         $minute = intval($mn);
         $second = intval($sc);
@@ -177,7 +177,7 @@ final class ZonedFields
             $month = $calendar->monthCodeToMonth($mc, $year);
         }
         if ($hasMonth) {
-            $newMonth = CalendarMath::toFiniteInt($bag['month'] ?? null, 'ZonedDateTime month');
+            $newMonth = DateFieldNumber::month($bag['month'] ?? null, 'ZonedDateTime month');
             if ($hasMC && $newMonth !== $month) {
                 throw new RangeError('Conflicting month and monthCode fields.');
             }
@@ -377,9 +377,7 @@ final class ZonedFields
         if (!is_string($raw)) {
             throw new TypeError('ZonedDateTime monthCode must be a string.');
         }
-        if (preg_match('/^M(\d{2})(L?)$/', $raw) !== 1) {
-            throw new RangeError("Invalid monthCode for ISO calendar: \"{$raw}\".");
-        }
+        MonthCode::validate($raw);
     }
 
     /**

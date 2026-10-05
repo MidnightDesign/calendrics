@@ -55,9 +55,9 @@ final readonly class PartialDateFields
         } elseif ($hasMonth) {
             $monthCode = null;
         }
-        $month = $hasMonth ? CalendarMath::toFiniteInt($fields['month'], "{$context} month") : null;
+        $month = $hasMonth ? DateFieldNumber::month($fields['month'], "{$context} month") : null;
         if (array_key_exists('day', $fields)) {
-            $day = CalendarMath::toFiniteInt($fields['day'], "{$context} day");
+            $day = DateFieldNumber::day($fields['day'], "{$context} day");
         }
         if ($month !== null && $month < 1) {
             throw new RangeError("Invalid month {$month}: must be at least 1.");

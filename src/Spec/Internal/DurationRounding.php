@@ -198,8 +198,8 @@ final class DurationRounding
         $absNs = $absSubNs % 1_000;
         $absD = abs((int) $d->days);
 
-        // Balance hours into days: DST-aware when ZDT IANA relativeTo is present.
-        if ($zdtInfoRound !== null) {
+        // A time largestUnit rounds the exact elapsed time directly. Only date units need zoned day balancing.
+        if ($zdtInfoRound !== null && $luIdx >= 6) {
             $timeOnlyNs =
                 ($absH * 3_600_000_000_000)
                 + ($absM * 60_000_000_000)
@@ -231,19 +231,23 @@ final class DurationRounding
             $timeOnlyNs -= $absMs * 1_000_000;
             $absUs = intdiv($timeOnlyNs, num2: 1_000);
             $absNs = $timeOnlyNs - ($absUs * 1_000);
-        } else {
+        } elseif ($zdtInfoRound === null) {
             $absD += intdiv(num1: $absH, num2: 24);
             $absH %= 24;
         }
 
-        // Compute totalNs, guarding against int64 overflow for large day counts.
-        $subDayNs =
-            ($absH * 3_600_000_000_000)
-            + ($absM * 60_000_000_000)
-            + ($absS * 1_000_000_000)
-            + ($absMs * 1_000_000)
-            + ($absUs * 1_000)
-            + $absNs;
+        // Date-unit rounding needs only the bounded time remainder. A time largestUnit
+        // retains its exact seconds/subseconds pair until the final rounding below.
+        $subDayNs = 0;
+        if ($luIdx >= 6) {
+            $subDayNs =
+                ($absH * 3_600_000_000_000)
+                + ($absM * 60_000_000_000)
+                + ($absS * 1_000_000_000)
+                + ($absMs * 1_000_000)
+                + ($absUs * 1_000)
+                + $absNs;
+        }
 
         // Nanoseconds per unit (time units only; days and above handled separately).
         /** @var array<string,int> */
