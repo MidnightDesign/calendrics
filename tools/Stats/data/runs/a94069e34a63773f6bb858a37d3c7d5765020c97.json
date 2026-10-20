@@ -1,0 +1,116 @@
+{
+    "sha": "a94069e34a63773f6bb858a37d3c7d5765020c97",
+    "status": "ok",
+    "duration_seconds": 9,
+    "coverage": {
+        "lines": {
+            "total": 13946,
+            "code": 9930,
+            "comments": 4016,
+            "executable": 6357,
+            "executed": 5598,
+            "percent": 88.06
+        },
+        "methods": {
+            "count": 267,
+            "tested": 158,
+            "percent": 59.18
+        },
+        "classes": {
+            "count": 8,
+            "tested": 0,
+            "percent": 0
+        },
+        "traits": {
+            "count": 0,
+            "tested": 0,
+            "percent": 0
+        },
+        "by_dir": {
+            "/": {
+                "lines": {
+                    "total": 13946,
+                    "code": 9930,
+                    "comments": 4016,
+                    "executable": 6357,
+                    "executed": 5598,
+                    "percent": 88.06
+                },
+                "methods": {
+                    "count": 267,
+                    "tested": 158,
+                    "percent": 59.18
+                },
+                "classes": {
+                    "count": 8,
+                    "tested": 0,
+                    "percent": 0
+                },
+                "traits": {
+                    "count": 0,
+                    "tested": 0,
+                    "percent": 0
+                }
+            },
+            "/Exception": {
+                "lines": {
+                    "total": 12,
+                    "code": 8,
+                    "comments": 4,
+                    "executable": 0,
+                    "executed": 0,
+                    "percent": 0
+                },
+                "methods": {
+                    "count": 0,
+                    "tested": 0,
+                    "percent": 0
+                },
+                "classes": {
+                    "count": 0,
+                    "tested": 0,
+                    "percent": 0
+                },
+                "traits": {
+                    "count": 0,
+                    "tested": 0,
+                    "percent": 0
+                }
+            }
+        }
+    },
+    "tests": {
+        "tests": 3387,
+        "assertions": 49704,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 836,
+        "time": 5.07,
+        "by_suite": {
+            "porcelain": {
+                "tests": 0,
+                "assertions": 0,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0,
+                "time": 0
+            },
+            "test262": {
+                "tests": 3138,
+                "assertions": 49326,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 836,
+                "time": 4.71
+            },
+            "other": {
+                "tests": 249,
+                "assertions": 378,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0,
+                "time": 0.36
+            }
+        }
+    }
+}

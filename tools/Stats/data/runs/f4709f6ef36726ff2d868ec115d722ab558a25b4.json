@@ -1,0 +1,191 @@
+{
+    "sha": "f4709f6ef36726ff2d868ec115d722ab558a25b4",
+    "status": "ok",
+    "duration_seconds": 51,
+    "coverage": {
+        "lines": {
+            "total": 28282,
+            "code": 20566,
+            "comments": 7716,
+            "executable": 11969,
+            "executed": 10982,
+            "percent": 91.75
+        },
+        "methods": {
+            "count": 618,
+            "tested": 433,
+            "percent": 70.06
+        },
+        "classes": {
+            "count": 24,
+            "tested": 7,
+            "percent": 29.17
+        },
+        "traits": {
+            "count": 3,
+            "tested": 0,
+            "percent": 0
+        },
+        "by_dir": {
+            "/": {
+                "lines": {
+                    "total": 28282,
+                    "code": 20566,
+                    "comments": 7716,
+                    "executable": 11969,
+                    "executed": 10982,
+                    "percent": 91.75
+                },
+                "methods": {
+                    "count": 618,
+                    "tested": 433,
+                    "percent": 70.06
+                },
+                "classes": {
+                    "count": 24,
+                    "tested": 7,
+                    "percent": 29.17
+                },
+                "traits": {
+                    "count": 3,
+                    "tested": 0,
+                    "percent": 0
+                }
+            },
+            "/Exception": {
+                "lines": {
+                    "total": 12,
+                    "code": 8,
+                    "comments": 4,
+                    "executable": 0,
+                    "executed": 0,
+                    "percent": 0
+                },
+                "methods": {
+                    "count": 0,
+                    "tested": 0,
+                    "percent": 0
+                },
+                "classes": {
+                    "count": 0,
+                    "tested": 0,
+                    "percent": 0
+                },
+                "traits": {
+                    "count": 0,
+                    "tested": 0,
+                    "percent": 0
+                }
+            },
+            "/Spec": {
+                "lines": {
+                    "total": 24007,
+                    "code": 18093,
+                    "comments": 5914,
+                    "executable": 11282,
+                    "executed": 10328,
+                    "percent": 91.54
+                },
+                "methods": {
+                    "count": 459,
+                    "tested": 281,
+                    "percent": 61.22
+                },
+                "classes": {
+                    "count": 15,
+                    "tested": 2,
+                    "percent": 13.33
+                },
+                "traits": {
+                    "count": 1,
+                    "tested": 0,
+                    "percent": 0
+                }
+            },
+            "/Spec/Internal": {
+                "lines": {
+                    "total": 4330,
+                    "code": 3406,
+                    "comments": 924,
+                    "executable": 1715,
+                    "executed": 1469,
+                    "percent": 85.66
+                },
+                "methods": {
+                    "count": 152,
+                    "tested": 95,
+                    "percent": 62.5
+                },
+                "classes": {
+                    "count": 6,
+                    "tested": 2,
+                    "percent": 33.33
+                },
+                "traits": {
+                    "count": 1,
+                    "tested": 0,
+                    "percent": 0
+                }
+            },
+            "/Spec/Internal/Calendar": {
+                "lines": {
+                    "total": 3322,
+                    "code": 2638,
+                    "comments": 684,
+                    "executable": 1266,
+                    "executed": 1076,
+                    "percent": 84.99
+                },
+                "methods": {
+                    "count": 127,
+                    "tested": 80,
+                    "percent": 62.99
+                },
+                "classes": {
+                    "count": 5,
+                    "tested": 1,
+                    "percent": 20
+                },
+                "traits": {
+                    "count": 0,
+                    "tested": 0,
+                    "percent": 0
+                }
+            }
+        }
+    },
+    "tests": {
+        "tests": 7504,
+        "assertions": 496127,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1466,
+        "time": 40.97,
+        "by_suite": {
+            "porcelain": {
+                "tests": 889,
+                "assertions": 1648,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0,
+                "time": 3.07
+            },
+            "test262": {
+                "tests": 6615,
+                "assertions": 494479,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 1466,
+                "time": 37.9
+            },
+            "other": {
+                "tests": 0,
+                "assertions": 0,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0,
+                "time": 0
+            }
+        }
+    }
+}
