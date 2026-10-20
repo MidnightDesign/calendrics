@@ -152,7 +152,7 @@ final readonly class LocaleIdentifier
             }
             $seen[$before] = true;
             $matched = false;
-            foreach (self::aliasRules() as $rule) {
+            foreach (self::aliasRules($fields) as $rule) {
                 $from = $rule['from'];
                 if (!self::matches($fields, $from)) {
                     continue;
@@ -206,13 +206,39 @@ final readonly class LocaleIdentifier
         return array_diff($pattern['variants'], $fields['variants']) === [];
     }
 
-    /** @return list<AliasRule> */
-    private static function aliasRules(): array
+    /**
+     * @param LanguageFields $fields
+     * @return array<int, AliasRule>
+     */
+    private static function aliasRules(array $fields): array
     {
-        /** @var list<AliasRule>|null $rules */
-        static $rules = null;
-        if ($rules !== null) {
-            return $rules;
+        $index = self::aliasRuleIndex();
+        $rules = $index['*'] ?? [];
+        foreach ([
+            'language' => $fields['language'],
+            'script' => $fields['script'],
+            'region' => $fields['region'],
+        ] as $field => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $rules += $index[sprintf('%s:%s', $field, $value)] ?? [];
+        }
+        foreach ($fields['variants'] as $variant) {
+            $rules += $index[sprintf('variant:%s', $variant)] ?? [];
+        }
+        // Bucket order must never replace the global precedence of alias rules.
+        ksort($rules, SORT_NUMERIC);
+        return $rules;
+    }
+
+    /** @return array<string, array<int, AliasRule>> */
+    private static function aliasRuleIndex(): array
+    {
+        /** @var array<string, array<int, AliasRule>>|null $ruleIndex */
+        static $ruleIndex = null;
+        if ($ruleIndex !== null) {
+            return $ruleIndex;
         }
         $rules = [];
         foreach ([
@@ -236,7 +262,28 @@ final readonly class LocaleIdentifier
             }
         }
         usort($rules, self::compareRules(...));
-        return $rules;
+        $ruleIndex = [];
+        foreach ($rules as $rank => $rule) {
+            $key = '*';
+            foreach ([
+                'language' => $rule['from']['language'],
+                'script' => $rule['from']['script'],
+                'region' => $rule['from']['region'],
+            ] as $field => $value) {
+                if ($value === null) {
+                    continue;
+                }
+                $key = sprintf('%s:%s', $field, $value);
+                break;
+            }
+            if ($key === '*' && $rule['from']['variants'] !== []) {
+                $key = sprintf('variant:%s', $rule['from']['variants'][0]);
+            }
+            // Every match contains this required field; the full matcher still
+            // checks the remaining fields after candidates regain rank order.
+            $ruleIndex[$key][$rank] = $rule;
+        }
+        return $ruleIndex;
     }
 
     /**
