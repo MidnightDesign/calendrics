@@ -457,20 +457,18 @@ final class DurationTotal
             );
         }
 
-        // Convert fracNs → ms → fracDays via two exact divisions.
-        // Direct division fracNs / (nsPerDay * 365) loses precision (86400e9 * 365 > 2^53).
-        // Dividing fracNs by 1e6 first (ns → ms) gives the same float64 as the JS test's
-        // ms-level computation (fracMs / dayMs), avoiding the 1-ULP rounding difference.
-        $fracDays = ((float) $fracNs / 1_000_000.0) / 86_400_000.0;
-        // Compute fractional part first (matching TC39 test evaluation order):
-        // test: $fractionalYear = $partialYearDays / 365 + ($fractionalDay / 365)
-        // then: $fullYears + $fractionalYear
-        // Float addition is non-associative: (a+b)+c ≠ a+(b+c) at this precision.
-        $fracPart =
-            ((float) ($sign * $remainingDays) / (float) $daysInNextYear) + ($fracDays / (float) $daysInNextYear);
-        $result = (float) ($years * $sign) + $fracPart;
-
-        return self::toIntIfWhole($result);
+        // Include whole years in the exact numerator before the single Number conversion.
+        // Separately rounding the day and sub-day fractions can change the final result by one ulp.
+        $absFracNs = abs($fracNs);
+        return self::toIntIfWhole(
+            (float) $sign
+            * self::divideExact(
+                ((($years * $daysInNextYear) + $remainingDays) * 86_400) + intdiv($absFracNs, num2: 1_000_000_000),
+                $absFracNs % 1_000_000_000,
+                $daysInNextYear * 86_400,
+                0,
+            ),
+        );
     }
 
     /**
