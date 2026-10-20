@@ -13,6 +13,7 @@ use Calendrics\Spec\Internal\DateParse;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\IsoLexical;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PlainLocaleFormattable;
@@ -618,21 +619,13 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
             return new self($month, $day, $calendarId ?? 'iso8601', 1972);
         }
 
-        // Try full date string formats: YYYY-MM-DD, ±YYYYYY-MM-DD, YYYYMMDD, ±YYYYYYMMDD
-        // Also handles MM-DD (without --) as a bare month-day string.
-        // date: year + rest, optional T+time, optional offset, bracket annotations
-        $datePattern = sprintf(
-            '/^([+-]\d{6}|\d{4})(-\d{2}-\d{2}|\d{4})(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:[Zz]|%s)?)?((?:\[[^\]]*\])*)$/',
-            DateParse::NUMERIC_OFFSET_PATTERN,
-        );
-
-        /** @var list<string> $m */
-        $m = [];
-        if (preg_match($datePattern, $s, $m) !== 1) {
-            throw new RangeError("PlainMonthDay::from() cannot parse \"{$s}\": invalid ISO 8601 date string.");
+        // A full date supplies the reference year for non-ISO calendars.
+        $parsed = IsoLexical::date($s);
+        if ($parsed === null) {
+            throw new RangeError('Invalid ISO 8601 date string.');
         }
-
-        [, $yearRaw, $dateRest] = $m;
+        $yearRaw = $parsed->year;
+        $dateRest = $parsed->dateRest;
 
         // Reject minus-zero extended year (-000000).
         if (preg_match('/^-0{6}$/', $yearRaw) === 1) {
@@ -649,20 +642,12 @@ final class PlainMonthDay implements PlainLocaleFormattable, Stringable
         }
 
         // Validate the time portion if present.
-        DateParse::validateOptionalTime($m[3], $m[4], $m[5], $s, 'PlainMonthDay');
-        if ($m[3] !== '') {
-            // Reject UTC designator (Z) — not valid for PlainMonthDay.
-            $afterDate = substr(string: $s, offset: strlen($yearRaw) + strlen($dateRest));
-            $bracketPos = strpos(haystack: $afterDate, needle: '[');
-            $timeOffset = $bracketPos !== false
-                ? substr(string: $afterDate, offset: 0, length: $bracketPos)
-                : $afterDate;
-            if (preg_match('/[Zz]/', $timeOffset) === 1) {
-                throw new RangeError("PlainMonthDay::from() cannot parse \"{$s}\": Z (UTC) designator is not valid.");
-            }
+        DateParse::validateOptionalTime($parsed->hour, $parsed->minute, $parsed->second, $s, 'PlainMonthDay');
+        if ($parsed->hasUtcDesignator()) {
+            throw new RangeError('PlainMonthDay cannot contain a UTC designator.');
         }
 
-        $calendarId = CalendarMath::validateAnnotations($m[7], $s);
+        $calendarId = CalendarMath::validateAnnotations($parsed->annotations, $s);
         $isoYear = (int) $yearRaw;
 
         // For non-ISO calendars, project the ISO date through the calendar and find reference year.

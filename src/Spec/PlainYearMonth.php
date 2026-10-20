@@ -14,6 +14,7 @@ use Calendrics\Spec\Internal\EpochRounding;
 use Calendrics\Spec\Internal\FieldBag;
 use Calendrics\Spec\Internal\HasPlainLocaleString;
 use Calendrics\Spec\Internal\HasStringRepresentations;
+use Calendrics\Spec\Internal\IsoLexical;
 use Calendrics\Spec\Internal\MonthCode;
 use Calendrics\Spec\Internal\Options;
 use Calendrics\Spec\Internal\PartialDateFields;
@@ -536,28 +537,12 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             );
         }
 
-        // Full regex for a PlainYearMonth string.
-        // Date part: YYYY-MM | ±YYYYYY-MM (year-month only — NO day)
-        //         OR: YYYY-MM-DD | ±YYYYYY-MM-DD (full date)
-        //         OR: YYYYMMDD | YYYYMM | ±YYYYYYMMDD | ±YYYYYY MM (compact)
-        // Optional time: T + HH[:MM[:SS[frac]]]
-        // Optional non-Z offset: ±HH[:MM[:SS[.frac]]] or ±HHMM...
-        // Z is never valid for PlainYearMonth
-        // Bracket annotations are allowed
-        // Groups: 1=year, 2=month[-day], 3=HH, 4=MM, 5=SS, 6=frac, 7=annotations
-        $pattern = sprintf(
-            '/^([+-]\d{6}|\d{4})(-\d{2}(?:-\d{2})?|\d{2}(?:\d{2})?)(?:[Tt ](\d{2})(?::?(\d{2})(?::?(\d{2})([.,]\d+)?)?)?(?:%s)?)?((?:\[[^\]]*\])*)$/',
-            DateParse::NUMERIC_OFFSET_PATTERN,
-        );
-
-        /** @var list<string> $m */
-        $m = [];
-        if (preg_match($pattern, $s, $m) !== 1) {
-            throw new RangeError("PlainYearMonth::from() cannot parse \"{$s}\": invalid ISO 8601 year-month string.");
+        $parsed = IsoLexical::date($s, allowYearMonth: true);
+        if ($parsed === null || $parsed->hasUtcDesignator()) {
+            throw new RangeError('Invalid ISO 8601 date string.');
         }
-
-        $yearRaw = $m[1];
-        $dateRest = $m[2];
+        $yearRaw = $parsed->year;
+        $dateRest = $parsed->dateRest;
 
         // Reject minus-zero extended year (-000000).
         if (preg_match('/^-0{6}$/', $yearRaw) === 1) {
@@ -582,10 +567,10 @@ final class PlainYearMonth implements PlainLocaleFormattable, Stringable
             }
         }
 
-        DateParse::validateOptionalTime($m[3], $m[4], $m[5], $s, 'PlainYearMonth');
+        DateParse::validateOptionalTime($parsed->hour, $parsed->minute, $parsed->second, $s, 'PlainYearMonth');
 
         // Validate bracket annotations and extract calendar ID.
-        $annotationSection = $m[7];
+        $annotationSection = $parsed->annotations;
         $calendarId = CalendarMath::validateAnnotations($annotationSection, $s);
 
         // Per TC39 spec: year-month form (no day) with non-ISO calendar is invalid,

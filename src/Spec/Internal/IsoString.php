@@ -16,13 +16,10 @@ use Calendrics\Exception\RangeError;
  */
 final class IsoString
 {
-    private const string YEAR = '(?:[+-][0-9]{6}|[0-9]{4})';
     private const string MONTH = '(?:0[1-9]|1[0-2])';
     private const string DAY = '(?:0[1-9]|[12][0-9]|3[01])';
     private const string HOUR = '(?:[01][0-9]|2[0-3])';
     private const string MINUTE = '[0-5][0-9]';
-    private const string SECOND = '(?:[0-5][0-9]|60)';
-    private const string FRACTION = '(?:[.,][0-9]{1,9})?';
 
     /** @return array{calendar: ?string, timeZone: ?string, offset: ?string} */
     public static function parse(string $input): array
@@ -50,47 +47,23 @@ final class IsoString
         $calendar = preg_match('/\[!?u-ca=([^\]]+)\]/', $annotations, $calendarParts) === 1 ? $calendarParts[1] : null;
         $timeZone = ($annotationParts[1] ?? '') !== '' ? $annotationParts[1] : null;
         $result = ['calendar' => $calendar, 'timeZone' => $timeZone, 'offset' => null];
-        $time = sprintf(
-            '%s(?::%s(?::%s%s)?|%s(?:%s%s)?)?',
-            self::HOUR,
-            self::MINUTE,
-            self::SECOND,
-            self::FRACTION,
-            self::MINUTE,
-            self::SECOND,
-            self::FRACTION,
-        );
-        $offset = sprintf(
-            '[+-]%s(?::%s(?::%s%s)?|%s(?:%s%s)?)?',
-            self::HOUR,
-            self::MINUTE,
-            self::MINUTE,
-            self::FRACTION,
-            self::MINUTE,
-            self::MINUTE,
-            self::FRACTION,
-        );
-        $date = [];
-        if (preg_match(sprintf('/\A(%s)(-[0-9]{2}-[0-9]{2}|[0-9]{4})(.*)\z/', self::YEAR), $body, $date) === 1) {
-            $rest = str_replace('-', replace: '', subject: $date[2]);
+        $parsed = IsoLexical::date($body);
+        if ($parsed !== null) {
+            $rest = str_replace('-', replace: '', subject: $parsed->dateRest);
             self::validateDate(
-                $date[1],
-                (int) substr($rest, offset: 0, length: 2),
-                (int) substr($rest, offset: 2, length: 2),
+                $parsed->year,
+                (int) substr(string: $rest, offset: 0, length: 2),
+                (int) substr(string: $rest, offset: 2, length: 2),
                 $input,
             );
-            if ($date[3] !== '') {
-                $timeParts = [];
-                if (preg_match(sprintf('/\A[Tt ]%s([Zz]|%s)?\z/', $time, $offset), $date[3], $timeParts) !== 1) {
-                    throw new RangeError(sprintf('Invalid time in ISO string "%s".', $input));
-                }
-                $result['offset'] = $timeParts[1] ?? null;
-            }
+            DateParse::validateOptionalTime($parsed->hour, $parsed->minute, $parsed->second, $input, 'ISO');
+            $result['offset'] = $parsed->offset !== '' ? $parsed->offset : null;
             return $result;
         }
+        $date = [];
         // Try the short date forms before time: unprefixed times that also match
         // a year-month or month-day are reserved for the date grammar.
-        if (preg_match(sprintf('/\A(%s)-?(%s)\z/', self::YEAR, self::MONTH), $body, $date) === 1) {
+        if (preg_match(sprintf('/\A(%s)-?(%s)\z/', IsoLexical::YEAR, self::MONTH), $body, $date) === 1) {
             self::validateDate($date[1], (int) $date[2], 1, $input);
             self::requireIsoShortDate($calendar, $input);
             return $result;
@@ -103,9 +76,10 @@ final class IsoString
             self::requireIsoShortDate($calendar, $input);
             return $result;
         }
-        $timeParts = [];
-        if (preg_match(sprintf('/\A[Tt]?%s(%s)?\z/', $time, $offset), $body, $timeParts) === 1) {
-            $result['offset'] = $timeParts[1] ?? null;
+        $parsed = IsoLexical::time($body);
+        if ($parsed !== null && !$parsed->hasUtcDesignator()) {
+            DateParse::validateOptionalTime($parsed->hour, $parsed->minute, $parsed->second, $input, 'ISO');
+            $result['offset'] = $parsed->offset !== '' ? $parsed->offset : null;
             return $result;
         }
         throw new RangeError(sprintf('Invalid ISO string "%s".', $input));
