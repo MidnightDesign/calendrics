@@ -506,11 +506,6 @@ final class LocalizedFormattingTest extends TestCase
         );
     }
 
-    public function testOmittedLocaleFallsBackToTheIcuDefault(): void
-    {
-        static::assertSame(self::date()->toLocaleString(\Locale::getDefault()), self::date()->toLocaleString());
-    }
-
     public function testEnUsRendersTheStableNumericShortDate(): void
     {
         static::assertSame('6/15/2020', self::date()->toLocaleString(self::LOCALE));

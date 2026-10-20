@@ -6,7 +6,6 @@ namespace Calendrics\Spec\Internal;
 
 use Calendrics\Exception\RangeError;
 use Calendrics\Exception\TypeError;
-use Calendrics\Spec\Internal\Calendar\CalendarFactory;
 use Calendrics\Spec\Internal\Calendar\IntlCalendarFactory;
 
 /**
@@ -44,6 +43,7 @@ final class IntlFormatter
         'hourCycle',
         'minute',
         'month',
+        'numberingSystem',
         'second',
         'timeStyle',
         'timeZone',
@@ -127,26 +127,14 @@ final class IntlFormatter
     /**
      * Resolves a locale value from a string, array, or null.
      *
-     * Returns the first non-empty string from the input, or the system default locale.
+     * Canonicalizes the complete list, chooses its first supported locale, and
+     * falls back to the configured ICU default when no requested locale matches.
      *
      * @param string|array<array-key, mixed>|null $locales
      */
     public static function resolveLocale(string|array|null $locales): string
     {
-        if (is_string($locales) && $locales !== '') {
-            return $locales;
-        }
-        if (is_array($locales)) {
-            $values = array_values($locales);
-            for ($i = 0, $n = count($values); $i < $n; $i++) {
-                /** @var mixed $candidate */
-                $candidate = $values[$i];
-                if (is_string($candidate) && $candidate !== '') {
-                    return $candidate;
-                }
-            }
-        }
-        return \Locale::getDefault();
+        return LocaleList::resolve($locales);
     }
 
     /**
@@ -158,14 +146,14 @@ final class IntlFormatter
      * `@calendar=` keyword or from the region's default (e.g. `th-TH` → `buddhist`).
      *
      * @param array<string, mixed> $opts
-     * @throws RangeError if the `calendar` option is not a recognized calendar identifier.
+     * Unsupported well-formed calendar options retain the locale's calendar.
      */
     public static function resolveCalendar(string $locale, array $opts): string
     {
         /** @var mixed $calendarOpt */
         $calendarOpt = $opts['calendar'] ?? null;
-        if (is_string($calendarOpt) && $calendarOpt !== '') {
-            return CalendarFactory::canonicalize($calendarOpt);
+        if (is_string($calendarOpt) && LocaleList::supportsCalendar($locale, $calendarOpt)) {
+            return $calendarOpt;
         }
 
         $calendar = IntlCalendarFactory::forLocale(timeZone: null, locale: $locale);
@@ -240,6 +228,16 @@ final class IntlFormatter
      */
     public static function normalizeOptions(array $opts): array
     {
+        foreach (['calendar', 'numberingSystem'] as $name) {
+            if (($opts[$name] ?? null) === null) {
+                continue;
+            }
+            $value = Options::coerceEnumOption($opts[$name], $name);
+            if (preg_match('/\A[a-zA-Z0-9]{3,8}(?:-[a-zA-Z0-9]{3,8})*\z/', $value) !== 1) {
+                throw new RangeError(sprintf('%s must be a Unicode locale type.', $name));
+            }
+            $opts[$name] = LocaleIdentifier::canonicalType($name === 'calendar' ? 'ca' : 'nu', strtolower($value));
+        }
         if (($opts['hour12'] ?? null) !== null) {
             $opts['hour12'] = self::booleanValue($opts['hour12']);
         }
@@ -415,7 +413,7 @@ final class IntlFormatter
      * Reads `dateStyle` and `timeStyle` from $opts (each: "full"|"long"|"medium"|"short") and maps
      * them to IntlDateFormatter constants. When neither style is provided, uses a pattern built
      * from individual component options, or defaults based on the $defaultComponents parameter.
-     * Appends a `@calendar=…` extension to $locale if $opts['calendar'] is set.
+     * Supported explicit calendar and numbering options replace the locale's keywords.
      * Supports `hour12` and `hourCycle` options for hour format control.
      *
      * @param array<string, mixed> $opts
@@ -430,22 +428,29 @@ final class IntlFormatter
         /** @var mixed $calendarOpt */
         $calendarOpt = $opts['calendar'] ?? null;
         if (is_string($calendarOpt)) {
-            $calendarId = CalendarFactory::canonicalize($calendarOpt);
-            $locale = sprintf('%s@calendar=%s', $locale, IntlCalendarFactory::icuType($calendarId));
+            $calendarKeyword = LocaleList::calendarKeyword($locale, $calendarOpt);
+            if ($calendarKeyword !== null) {
+                $locale = self::withLocaleKeyword($locale, 'calendar', $calendarKeyword);
+            }
+        }
+
+        /** @var mixed $numbering */
+        $numbering = $opts['numberingSystem'] ?? null;
+        if (is_string($numbering) && LocaleList::supportsNumberingSystem($numbering)) {
+            $locale = self::withLocaleKeyword($locale, 'numbers', $numbering);
         }
 
         $timeZone = self::icuTimeZoneId($timeZone);
 
         $hourCycle = self::checkedKeyword($opts, 'hourCycle', self::HOUR_CYCLES);
-        if ($hourCycle !== null) {
-            $locale = self::applyHourCycle($locale, $hourCycle);
-        } elseif (($opts['hour12'] ?? null) !== null) {
-            // hour12=false -> h23, hour12=true -> h12
+        if (($opts['hour12'] ?? null) !== null) {
             /** @var mixed $hour12Raw */
             $hour12Raw = $opts['hour12'];
             $isTrue = self::booleanValue($hour12Raw);
-            $hc = $isTrue ? 'h12' : 'h23';
+            $hc = self::preferredHourCycle($locale, $isTrue);
             $locale = self::applyHourCycle($locale, $hc);
+        } elseif ($hourCycle !== null) {
+            $locale = self::applyHourCycle($locale, $hourCycle);
         }
 
         // IntlDateFormatter only respects the calendar an explicit IntlCalendar instance
@@ -594,25 +599,58 @@ final class IntlFormatter
         return sprintf('GMT%s%s:%s', $m[1], $m[2], $m[3]);
     }
 
-    /**
-     * Spells the hour cycle as a locale keyword, in the dialect $locale already uses.
-     *
-     * ICU reads a locale's keywords in one dialect at a time, so a BCP 47 `-u-`
-     * extension bolted onto a locale that carries a legacy `@keyword` section is
-     * dropped without complaint — `en-US-u-hc-h23@calendar=hebrew` formats in h12.
-     * The `@` case therefore has to extend the legacy keyword list instead, and it
-     * is reached whenever the `calendar` option is set, because that option is
-     * itself appended as `@calendar=`.
-     */
+    /** Replace the requested hour cycle without disturbing other locale keywords. */
     private static function applyHourCycle(string $locale, string $hourCycle): string
     {
-        if (str_contains($locale, '@')) {
-            return sprintf('%s;hours=%s', $locale, $hourCycle);
+        return self::withLocaleKeyword($locale, 'hours', $hourCycle);
+    }
+
+    /** Use the matched locale's default cycle, without a requested hours override. */
+    private static function preferredHourCycle(string $locale, bool $twelveHour): string
+    {
+        $base = self::withLocaleKeyword($locale, 'hours', null);
+        $pattern = new \IntlDatePatternGenerator($base)->getBestPattern($twelveHour ? 'h' : 'H');
+        if ($pattern === false) {
+            throw new \RuntimeException('ICU could not resolve the preferred hour cycle.');
         }
-        if (str_contains($locale, '-u-')) {
-            return sprintf('%s-hc-%s', $locale, $hourCycle);
+        $quoted = false;
+        foreach (str_split($pattern) as $character) {
+            if ($character === "'") {
+                $quoted = !$quoted;
+            } elseif (!$quoted && in_array($character, ['h', 'H', 'K', 'k'], strict: true)) {
+                return $twelveHour ? ($character === 'K' ? 'h11' : 'h12') : ($character === 'k' ? 'h24' : 'h23');
+            }
         }
-        return sprintf('%s-u-hc-%s', $locale, $hourCycle);
+        throw new \RuntimeException('ICU returned no hour field for the matched locale.');
+    }
+
+    /** Replace one ICU keyword while preserving the other resolved locale choices. */
+    private static function withLocaleKeyword(string $locale, string $key, ?string $value): string
+    {
+        $canonical = \Locale::canonicalize($locale) ?? throw new \RuntimeException(
+            'ICU could not canonicalize the resolved locale.',
+        );
+        $parts = explode('@', $canonical, limit: 2);
+        $keywords = [];
+        foreach (isset($parts[1]) ? explode(';', $parts[1]) : [] as $entry) {
+            $keyword = explode('=', $entry, limit: 2);
+            if (count($keyword) !== 2) {
+                throw new \RuntimeException('ICU returned an invalid locale keyword.');
+            }
+            [$name, $existing] = $keyword;
+            $keywords[$name] = $existing;
+        }
+        if ($value === null) {
+            unset($keywords[$key]);
+        } else {
+            $keywords[$key] = $value;
+        }
+        ksort($keywords, SORT_STRING);
+        $entries = [];
+        foreach ($keywords as $name => $entry) {
+            $entries[] = sprintf('%s=%s', $name, $entry);
+        }
+        return $entries === [] ? $parts[0] : sprintf('%s@%s', $parts[0], implode(';', $entries));
     }
 
     /**
