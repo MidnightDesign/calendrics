@@ -201,6 +201,10 @@ final class CalendarFactory
             return new PureIndianCalendar();
         }
 
+        if ($id === 'chinese' || $id === 'dangi') {
+            return new ChineseCalendar($id);
+        }
+
         return new IntlCalendarBridge($id);
     }
 }
