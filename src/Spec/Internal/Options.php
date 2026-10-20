@@ -208,52 +208,36 @@ final class Options
     }
 
     /**
-     * Performs the universal part of TC39 ToTemporalRoundingIncrement on an already-
-     * read `roundingIncrement` value: ToIntegerWithTruncation followed by the
-     * "finite and ≥ 1" validation, returning the truncated integer.
+     * Converts an already-read roundingIncrement using ToTemporalRoundingIncrement:
+     * Stringable values stringify, strings use StringNumericLiteral, and finite
+     * numbers truncate toward zero to an integer in 1–1e9. Check the numeric bounds
+     * before narrowing to a PHP integer. Unit-specific limits and divisibility
+     * checks belong to the caller.
      *
-     * A Number (int or float) truncates toward zero; a non-finite float (NaN/±∞) is a
-     * RangeError. Other scalar inputs (numeric string, bool) are coerced through PHP's
-     * int cast, faithfully reproducing the inlined original this replaces — which
-     * relied on a loose `(int)` cast over the int|float|string|bool values the option
-     * resolver produces — without its suppression. Operation-specific bounds (the
-     * per-unit maximum and the even-divisibility check) are deliberately left at the
-     * call sites; only the coerce + finite + ≥ 1 core lives here.
-     *
-     * Two-tier design: this is the Duration-facing core (no upper bound). Plain* and
-     * ZonedDateTime use {@see CalendarMath::validateRoundingIncrement()}, which adds the
-     * universal 1e9 upper bound for time-domain increments.
-     *
-     * The two RangeError messages match the {@see Calendrics\Spec\Duration::round()}
-     * original byte-for-byte (the test262 suite asserts on them).
-     *
-     * @throws RangeError if the value is a non-finite number or rounds to < 1.
+     * @return positive-int
+     * @throws RangeError if the value is nonnumeric, non-finite, or truncates outside 1–1e9.
+     * @throws TypeError if a Symbol-like value throws when converted to a string.
      */
     public static function roundingIncrement(mixed $value): int
     {
-        // Mirror the original `is_float($v) ? $v : (int) $v` shape: a float keeps its
-        // NaN/±∞ check before truncation; int/string/bool go straight through the int
-        // cast. Any other type never reaches here from the option resolver; it maps to
-        // 0 so the ≥ 1 check rejects it (matching the original's effective behavior).
-        if (is_float($value)) {
-            // @infection-ignore-all || ⇒ && is equivalent under test262: is_nan and
-            // is_infinite are mutually exclusive, so the && form never enters this branch,
-            // but every non-finite float then casts to (int) 0 (PHP: (int) NAN/INF/-INF === 0)
-            // and is rejected by the `< 1` check below — still a RangeError, only the message
-            // differs, and test262 asserts the exception type, not the text.
-            if (is_nan($value) || is_infinite($value)) {
-                throw new RangeError('roundingIncrement must be a finite positive integer.');
-            }
-            $increment = (int) $value;
-        } elseif (is_int($value) || is_string($value) || is_bool($value)) {
-            $increment = (int) $value;
+        if ($value instanceof Stringable) {
+            $value = (string) $value;
+        }
+        if (is_string($value)) {
+            $number = StringNumericLiteral::fromString($value);
+        } elseif (is_int($value) || is_float($value) || is_bool($value)) {
+            $number = (float) $value;
         } else {
-            $increment = 0;
+            throw new RangeError('roundingIncrement must be numeric.');
         }
-        if ($increment < 1) {
-            throw new RangeError('roundingIncrement must be at least 1.');
+        if (!is_finite($number)) {
+            throw new RangeError('roundingIncrement must be a finite number.');
         }
-        return $increment;
+        if ($number < 1 || $number >= 1_000_000_001) {
+            throw new RangeError('roundingIncrement must truncate to an integer between 1 and 1e9.');
+        }
+        /** @var positive-int */
+        return (int) $number;
     }
 
     /**
