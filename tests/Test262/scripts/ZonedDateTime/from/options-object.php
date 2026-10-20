@@ -8,5 +8,5 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-Assert::sameValue(\Calendrics\Spec\ZonedDateTime::from(['year' => 1976, 'month' => 11, 'day' => 18, 'timeZone' => 'UTC'], [])->epochNanoseconds, 217_123_200_000_000_000, 'UTC');
-Assert::sameValue(\Calendrics\Spec\ZonedDateTime::from(['year' => 1976, 'month' => 11, 'day' => 18, 'timeZone' => 'UTC'], function () {  })->epochNanoseconds, 217_123_200_000_000_000, 'UTC');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read(\Calendrics\Spec\ZonedDateTime::from(['year' => 1976, 'month' => 11, 'day' => 18, 'timeZone' => 'UTC'], [])), 217_123_200_000_000_000, 'UTC');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read(\Calendrics\Spec\ZonedDateTime::from(['year' => 1976, 'month' => 11, 'day' => 18, 'timeZone' => 'UTC'], function () {  })), 217_123_200_000_000_000, 'UTC');

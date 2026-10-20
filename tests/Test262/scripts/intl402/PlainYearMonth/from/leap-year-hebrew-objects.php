@@ -14,7 +14,7 @@ $options = (object) ['overflow' => 'reject'];
 $leapYear = 5784;
 $monthCodes5784 = [JsUndefined::singleton(), 'M01', 'M02', 'M03', 'M04', 'M05', 'M05L', 'M06', 'M07', 'M08', 'M09', 'M10', 'M11', 'M12'];
 for ($month = 1; $month < 14; $month++) {
-$monthCode = $monthCodes5784[$month];
+$monthCode = \Calendrics\Tests\Test262\Js::computedProperty($monthCodes5784, $month);
 $instance = \Calendrics\Spec\PlainYearMonth::from((object) JsUndefined::strip(['year' => $leapYear, 'month' => $month, 'calendar' => $calendar]), $options);
 TemporalHelpers::assertPlainYearMonth($instance, $leapYear, $month, $monthCode, "month {$monthCode} in leap year", 'am', $leapYear, null);
 }

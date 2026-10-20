@@ -18,7 +18,7 @@ $zdt = new \Calendrics\Spec\ZonedDateTime($epochNs, $timeZone);
 $other = new \Calendrics\Spec\ZonedDateTime($epochNs, $timeZone);
 for ($i = 0; $i < (is_string($units) ? strlen($units) : count($units)); ++$i) {
 for ($j = $i; $j < (is_string($units) ? strlen($units) : count($units)); ++$j) {
-$options = JsUndefined::strip(['largestUnit' => $units[$i], 'smallestUnit' => $units[$j]]);
+$options = JsUndefined::strip(['largestUnit' => \Calendrics\Tests\Test262\Js::computedProperty($units, $i), 'smallestUnit' => \Calendrics\Tests\Test262\Js::computedProperty($units, $j)]);
 TemporalHelpers::assertDuration($zdt->since($other, $options), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "epochNs = {$epochNs}, timeZone = {$timeZone}, options = " . (json_encode($options)) . ")");
 }
 }

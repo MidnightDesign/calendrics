@@ -12,5 +12,5 @@ $instance = new \Calendrics\Spec\PlainDate(2000, 1, 1);
 $validStrings = ['T00:30', 't00:30', 'T0030', 't0030', 'T00:30:00', 't00:30:00', 'T003000', 't003000', 'T00:30:00.000000000', 't00:30:00.000000000', 'T003000.000000000', 't003000.000000000'];
 foreach ($validStrings as $arg) {
 $result = $instance->toZonedDateTime((object) JsUndefined::strip(['plainTime' => $arg, 'timeZone' => 'UTC']));
-Assert::sameValue($result->epochNanoseconds, 946_686_600_000_000_000, "T prefix is accepted: {$arg}");
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 946_686_600_000_000_000, "T prefix is accepted: {$arg}");
 }

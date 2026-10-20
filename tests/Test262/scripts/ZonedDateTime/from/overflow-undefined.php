@@ -11,12 +11,12 @@ use Calendrics\Tests\Test262\JsUndefined;
 $validValues = [new \Calendrics\Spec\ZonedDateTime(1_000_000_000_987_654_321, 'UTC'), '2001-09-09T01:46:40.987654321+00:00[UTC]'];
 foreach ($validValues as $value) {
 $explicit = \Calendrics\Spec\ZonedDateTime::from($value, []);
-Assert::sameValue($explicit->epochNanoseconds, 1_000_000_000_987_654_321, 'overflow is ignored');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($explicit), 1_000_000_000_987_654_321, 'overflow is ignored');
 $implicit = \Calendrics\Spec\ZonedDateTime::from($value, []);
-Assert::sameValue($implicit->epochNanoseconds, 1_000_000_000_987_654_321, 'overflow is ignored');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($implicit), 1_000_000_000_987_654_321, 'overflow is ignored');
 $lambda = \Calendrics\Spec\ZonedDateTime::from($value, function () {  });
-Assert::sameValue($lambda->epochNanoseconds, 1_000_000_000_987_654_321, 'overflow is ignored');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($lambda), 1_000_000_000_987_654_321, 'overflow is ignored');
 }
 $propertyBag = ['year' => 2000, 'month' => 15, 'day' => 34, 'hour' => 12, 'timeZone' => 'UTC'];
 $explicit = \Calendrics\Spec\ZonedDateTime::from($propertyBag, []);
-Assert::sameValue($explicit->epochNanoseconds, 978_264_000_000_000_000, 'default overflow is constrain');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($explicit), 978_264_000_000_000_000, 'default overflow is constrain');

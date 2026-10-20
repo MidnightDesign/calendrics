@@ -10,4 +10,4 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $arg = '2016-12-31T23:59:60Z';
 $result = \Calendrics\Spec\Instant::from($arg);
-Assert::sameValue($result->epochNanoseconds, 1_483_228_799_000_000_000, 'leap second is a valid ISO string for Instant');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_483_228_799_000_000_000, 'leap second is a valid ISO string for Instant');

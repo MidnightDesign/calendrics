@@ -10,4 +10,4 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instant = new \Calendrics\Spec\Instant(1_000_000_000_000_000_005);
 $result = $instant->round((object) ['smallestUnit' => 'nanosecond', 'roundingIncrement' => 2.5, 'roundingMode' => 'expand']);
-Assert::sameValue($result->epochNanoseconds, 1_000_000_000_000_000_006, 'roundingIncrement 2.5 truncates to 2');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_000_000_000_006, 'roundingIncrement 2.5 truncates to 2');

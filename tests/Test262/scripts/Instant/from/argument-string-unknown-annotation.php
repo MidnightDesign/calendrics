@@ -12,5 +12,5 @@ $tests = [['1970-01-01T00:00Z[foo=bar]', 'alone'], ['1970-01-01T00:00Z[UTC][foo=
 foreach ($tests as $__entry__) {
 [$arg, $description] = array_pad($__entry__, 2, null);
 $result = \Calendrics\Spec\Instant::from($arg);
-Assert::sameValue($result->epochNanoseconds, 0, "unknown annotation ({$description})");
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 0, "unknown annotation ({$description})");
 }

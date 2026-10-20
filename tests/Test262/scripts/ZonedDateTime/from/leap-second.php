@@ -10,6 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $arg = '2016-12-31T23:59:60+00:00[UTC]';
 $result = \Calendrics\Spec\ZonedDateTime::from($arg);
-Assert::sameValue($result->epochNanoseconds, 1_483_228_799_000_000_000, 'leap second is a valid ISO string for ZonedDateTime');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_483_228_799_000_000_000, 'leap second is a valid ISO string for ZonedDateTime');
 $arg = '2000-05-02T12:34:56+23:59[+23:59:60]';
 Assert::throws(\RangeException::class, function () use (&$arg) { return \Calendrics\Spec\ZonedDateTime::from($arg); }, 'leap second in time zone name not valid');

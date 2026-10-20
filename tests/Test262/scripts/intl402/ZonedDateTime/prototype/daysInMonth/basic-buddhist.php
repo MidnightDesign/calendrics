@@ -14,6 +14,6 @@ $sampleYears = JsUndefined::strip([2515 => [31, 29, 31, 30, 31, 30, 31, 31, 30, 
 foreach ($sampleYears as $year => $daysInMonth) {
 for ($month = 1; $month < 13; $month++) {
 $date = \Calendrics\Spec\ZonedDateTime::from(JsUndefined::strip(['year' => $year, 'month' => $month, 'day' => 1, 'calendar' => $calendar, 'hour' => 12, 'minute' => 34, 'timeZone' => 'UTC']));
-Assert::sameValue($date->daysInMonth, $daysInMonth[$month - 1], "{$date}");
+Assert::sameValue($date->daysInMonth, \Calendrics\Tests\Test262\Js::computedProperty($daysInMonth, $month - 1), "{$date}");
 }
 }

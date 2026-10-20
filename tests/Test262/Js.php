@@ -13,6 +13,40 @@ namespace Calendrics\Tests\Test262;
  */
 final class Js
 {
+    /** Computed property reads must cross the same boundary even for dynamic keys. */
+    public static function computedProperty(mixed $receiver, mixed $key): mixed
+    {
+        if ($key === 'epochNanoseconds') {
+            return JsEpoch::read($receiver);
+        }
+        if (!is_int($key) && !is_string($key)) {
+            Assert::incomplete('Computed property key coercion is not supported');
+        }
+        if (is_array($receiver)) {
+            return $receiver[$key] ?? null;
+        }
+        if ($receiver instanceof \ArrayAccess) {
+            return $receiver->offsetExists($key) ? $receiver->offsetGet($key) : null;
+        }
+        if (is_string($receiver)) {
+            if (!is_int($key) && !ctype_digit($key)) {
+                Assert::incomplete('Computed string property requires an integer index');
+            }
+            return $receiver[(int) $key] ?? null;
+        }
+        if (is_object($receiver)) {
+            $name = (string) $key;
+            if (property_exists($receiver, $name)) {
+                return new \ReflectionProperty($receiver, $name)->getValue($receiver);
+            }
+            if (method_exists($receiver, '__get')) {
+                return $receiver->__get($name);
+            }
+            return null;
+        }
+        throw new \TypeError('Cannot read a computed property of this receiver');
+    }
+
     /**
      * Implements JS String.prototype.slice / Array.prototype.slice.
      *
@@ -316,6 +350,9 @@ final class Js
      */
     public static function destructure(mixed $value, string $field): mixed
     {
+        if ($field === 'epochNanoseconds') {
+            return JsEpoch::read($value);
+        }
         if (is_array($value)) {
             return $value[$field] ?? null;
         }
@@ -343,6 +380,9 @@ final class Js
         };
         foreach ($taken as $name) {
             unset($props[$name]);
+        }
+        if (array_key_exists('epochNanoseconds', $props)) {
+            JsEpoch::read($value);
         }
         return (object) $props;
     }

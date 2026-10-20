@@ -16,9 +16,9 @@ $monthsInYear = \Calendrics\Spec\PlainYearMonth::from((object) JsUndefined::stri
 for ($month = 1; $month < $monthsInYear; $month++) {
 $date = \Calendrics\Spec\PlainYearMonth::from((object) JsUndefined::strip(['year' => $year, 'month' => $month, 'calendar' => $calendar]));
 if ($date->inLeapYear) {
-Assert::sameValue($date->monthCode, $leapYearMonthCodes[$month - 1], '');
+Assert::sameValue($date->monthCode, \Calendrics\Tests\Test262\Js::computedProperty($leapYearMonthCodes, $month - 1), '');
 } else {
-Assert::sameValue($date->monthCode, $commonYearMonthCodes[$month - 1], '');
+Assert::sameValue($date->monthCode, \Calendrics\Tests\Test262\Js::computedProperty($commonYearMonthCodes, $month - 1), '');
 }
 }
 }

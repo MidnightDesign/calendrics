@@ -24,7 +24,7 @@ $month = $monthStart->month;
 $monthCode = $monthStart->monthCode;
 $daysInMonth = $monthStart->daysInMonth;
 Assert::sameValue($month, $i, '');
-Assert::sameValue($daysInMonth, $days[$i - 1], '');
+Assert::sameValue($daysInMonth, \Calendrics\Tests\Test262\Js::computedProperty($days, $i - 1), '');
 if (\Calendrics\Tests\Test262\Js::endsWith($monthCode, 'L')) {
 Assert::sameValue($date->with(JsUndefined::strip(['monthCode' => $monthCode]))->monthCode, $leap, '');
 $leapMonthIndex = $i;

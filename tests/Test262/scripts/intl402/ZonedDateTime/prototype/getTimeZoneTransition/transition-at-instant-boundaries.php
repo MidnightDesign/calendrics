@@ -13,11 +13,11 @@ $min = \Calendrics\Spec\ZonedDateTime::fromEpochParts(-8640000000000, 0, $id);
 $max = \Calendrics\Spec\ZonedDateTime::fromEpochParts(8640000000000, 0, $id);
 $next = $min->getTimeZoneTransition('next');
 if ($next) {
-Assert::assertTrue($next->epochNanoseconds > $min->epochNanoseconds, 'If there\'s any next transition, it should be after |min|');
+Assert::assertTrue((\Calendrics\Tests\Test262\JsEpoch::comparisonOperand($next) <=> \Calendrics\Tests\Test262\JsEpoch::comparisonOperand($min)) > 0, 'If there\'s any next transition, it should be after |min|');
 }
 $prev = $max->getTimeZoneTransition('previous');
 if ($prev) {
-Assert::assertTrue($prev->epochNanoseconds < $max->epochNanoseconds, 'If there\'s any previous transition, it should be before |max|');
+Assert::assertTrue((\Calendrics\Tests\Test262\JsEpoch::comparisonOperand($prev) <=> \Calendrics\Tests\Test262\JsEpoch::comparisonOperand($max)) < 0, 'If there\'s any previous transition, it should be before |max|');
 }
 Assert::sameValue($max->getTimeZoneTransition('next'), null, 'There shouldn\'t be any next transition after |max|');
 Assert::sameValue($min->getTimeZoneTransition('previous'), null, 'There shouldn\'t be any previous transition before |min|');

@@ -10,7 +10,7 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $orig = new \Calendrics\Spec\ZonedDateTime(946_684_800_000_000_010, 'UTC');
 $result = \Calendrics\Spec\ZonedDateTime::from($orig);
-Assert::sameValue($result->epochNanoseconds, 946_684_800_000_000_010, 'ZonedDateTime is copied');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 946_684_800_000_000_010, 'ZonedDateTime is copied');
 Assert::sameValue($result->timeZoneId, $orig->timeZoneId, 'time zone is the same');
 Assert::sameValue($result->calendarId, $orig->calendarId, 'calendar is the same');
 Assert::notSameValue($result, $orig, 'When a ZonedDateTime is given, the returned value is not the original ZonedDateTime');

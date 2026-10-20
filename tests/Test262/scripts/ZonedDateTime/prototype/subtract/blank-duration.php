@@ -11,4 +11,4 @@ use Calendrics\Tests\Test262\JsUndefined;
 $dt = new \Calendrics\Spec\ZonedDateTime(1, 'UTC');
 $blank = new \Calendrics\Spec\Duration();
 $result = $dt->subtract($blank);
-Assert::sameValue($result->epochNanoseconds, 1, 'result is unchanged');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1, 'result is unchanged');

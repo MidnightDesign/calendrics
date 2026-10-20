@@ -10,6 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instant = new \Calendrics\Spec\Instant(1_000_000_000_987_654_321);
 $explicit = $instant->round((object) ['smallestUnit' => 'second']);
-Assert::sameValue($explicit->epochNanoseconds, 1_000_000_001_000_000_000, 'default roundingIncrement is 1');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($explicit), 1_000_000_001_000_000_000, 'default roundingIncrement is 1');
 $implicit = $instant->round((object) ['smallestUnit' => 'second']);
-Assert::sameValue($implicit->epochNanoseconds, 1_000_000_001_000_000_000, 'default roundingIncrement is 1');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($implicit), 1_000_000_001_000_000_000, 'default roundingIncrement is 1');

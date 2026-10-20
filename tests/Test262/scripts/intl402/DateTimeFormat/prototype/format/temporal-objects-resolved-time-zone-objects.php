@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-$usDayPeriodSpace = (\Calendrics\Tests\Test262\Js::truthy($__logical0 = \Calendrics\Tests\Test262\Js::arrayFind(new \Calendrics\Tests\Test262\IntlDateTimeFormat('en-US', (object) ['timeStyle' => 'short'])->formatToParts(0), fn($part, $i, $parts) => $part->type === 'literal' && $parts[$i + 1]->type === 'dayPeriod')?->value) ? $__logical0 : '');
+$usDayPeriodSpace = (\Calendrics\Tests\Test262\Js::truthy($__logical0 = \Calendrics\Tests\Test262\Js::arrayFind(new \Calendrics\Tests\Test262\IntlDateTimeFormat('en-US', (object) ['timeStyle' => 'short'])->formatToParts(0), fn($part, $i, $parts) => $part->type === 'literal' && \Calendrics\Tests\Test262\Js::computedProperty($parts, $i + 1)->type === 'dayPeriod')?->value) ? $__logical0 : '');
 $formatter = new \Calendrics\Tests\Test262\IntlDateTimeFormat('en-US', (object) ['timeZone' => 'Pacific/Apia']);
 $date = new \Calendrics\Spec\PlainDate(2021, 8, 4);
 $dateResult = $formatter->format($date);

@@ -24,7 +24,7 @@ $zdt = $minValidDt->toZonedDateTime('-01', (object) JsUndefined::strip(['disambi
 Assert::throws(\RangeException::class, function () use (&$minValidDt) { return $minValidDt->toZonedDateTime('+01'); }, '');
 foreach (['earlier', 'later'] as $disambiguation) {
 $zdt = $maxDt->toZonedDateTime('+00');
-// SKIP (int64 overflow): Assert::sameValue($zdt->epochNanoseconds, 8640000000000000000000, ...);
+// SKIP (int64 overflow): Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($zdt), 8640000000000000000000, ...);
 \PHPUnit\Framework\Assert::assertTrue(true); // skip counted as assertion
 /* skipped */;
 }

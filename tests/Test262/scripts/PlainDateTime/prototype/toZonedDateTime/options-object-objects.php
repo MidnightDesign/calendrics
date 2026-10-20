@@ -10,6 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\PlainDateTime(2000, 5, 2);
 $result1 = $instance->toZonedDateTime('UTC', (object) []);
-Assert::sameValue($result1->epochNanoseconds, 957_225_600_000_000_000, 'options may be an empty plain object');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result1), 957_225_600_000_000_000, 'options may be an empty plain object');
 $result2 = $instance->toZonedDateTime('UTC', function () {  });
-Assert::sameValue($result2->epochNanoseconds, 957_225_600_000_000_000, 'options may be a function object');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result2), 957_225_600_000_000_000, 'options may be a function object');

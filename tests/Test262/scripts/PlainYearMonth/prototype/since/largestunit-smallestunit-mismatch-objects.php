@@ -13,8 +13,8 @@ $later = new \Calendrics\Spec\PlainYearMonth(2001, 6);
 $units = ['years', 'months'];
 for ($largestIdx = 1; $largestIdx < (is_string($units) ? strlen($units) : count($units)); $largestIdx++) {
 for ($smallestIdx = 0; $smallestIdx < $largestIdx; $smallestIdx++) {
-$largestUnit = $units[$largestIdx];
-$smallestUnit = $units[$smallestIdx];
+$largestUnit = \Calendrics\Tests\Test262\Js::computedProperty($units, $largestIdx);
+$smallestUnit = \Calendrics\Tests\Test262\Js::computedProperty($units, $smallestIdx);
 Assert::throws(\RangeException::class, function () use (&$later, &$earlier, &$largestUnit, &$smallestUnit) { return $later->since($earlier, (object) JsUndefined::strip(['largestUnit' => $largestUnit, 'smallestUnit' => $smallestUnit])); }, '');
 }
 }

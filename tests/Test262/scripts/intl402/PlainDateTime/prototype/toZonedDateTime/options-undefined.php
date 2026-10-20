@@ -14,7 +14,7 @@ $timeZone = 'America/Vancouver';
 foreach ([[$datetimeEarlier, 972_808_496_987_654_321], [$datetimeLater, 954_671_696_987_654_321]] as $__entry__) {
 [$datetime, $expected] = array_pad($__entry__, 2, null);
 $explicit = $datetime->toZonedDateTime($timeZone);
-Assert::sameValue($explicit->epochNanoseconds, $expected, 'default disambiguation is compatible');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($explicit), $expected, 'default disambiguation is compatible');
 $implicit = $datetime->toZonedDateTime($timeZone);
-Assert::sameValue($implicit->epochNanoseconds, $expected, 'default disambiguation is compatible');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($implicit), $expected, 'default disambiguation is compatible');
 }

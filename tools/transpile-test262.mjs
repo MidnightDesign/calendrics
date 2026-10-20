@@ -268,6 +268,13 @@ const PHP_IMPLEMENTED_METHODS = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+function isEpochNanosecondsAccess(node) {
+  return node?.type === 'MemberExpression' && (
+    (!node.computed && node.property.name === 'epochNanoseconds')
+    || (node.computed && node.property.type === 'Literal' && node.property.value === 'epochNanoseconds')
+  );
+}
+
 function overflowsInt64(bigint) {
   return bigint > PHP_INT_MAX || bigint < PHP_INT_MIN;
 }
@@ -1030,7 +1037,9 @@ class Emitter {
           const keyName = objectPatternKey(prop);
           // Determine access pattern: objectVars in array mode → ['key'], in object mode → ->key.
           // Variables NOT in objectVars are Temporal instances / primitives → ->key.
-          const access_plain = prop.key.type === 'Identifier'
+          const access_plain = keyName === 'epochNanoseconds'
+            ? `${HARNESS_NS}JsEpoch::read(${objPhp})`
+            : prop.key.type === 'Identifier'
             ? (rhsIsObjectValue
               ? (this.objectMode ? `${objPhp}->${keyName}` : `${objPhp}['${keyName}']`)
               : `${objPhp}->${keyName}`)
@@ -2221,6 +2230,10 @@ class Emitter {
   }
 
   transpileMember(node) {
+    if (isEpochNanosecondsAccess(node)) {
+      const receiver = this.transpileExpr(node.object);
+      return receiver === null ? null : `${HARNESS_NS}JsEpoch::read(${receiver})`;
+    }
     if (!node.computed) {
       // Function-name read: `Temporal.X.method.name` / `Temporal.X.prototype.method.name`.
       // In JS a built-in method's `.name` is its own name; the spec fixtures assert
@@ -2333,12 +2346,13 @@ class Emitter {
     const obj = this.transpileExpr(node.object);
     const idx = this.transpileExpr(node.property);
     if (obj === null || idx === null) return null;
-    if (this.objectMode
-        && node.object.type === 'Identifier'
-        && this.objectVars.has(node.object.name)) {
-      return `${obj}->{${idx}}`;
+    if (node.property.type === 'Literal') {
+      if (this.objectMode && node.object.type === 'Identifier' && this.objectVars.has(node.object.name)) {
+        return `${obj}->{${idx}}`;
+      }
+      return `${obj}[${idx}]`;
     }
-    return `${obj}[${idx}]`;
+    return `${HARNESS_NS}Js::computedProperty(${obj}, ${idx})`;
   }
 
   transpileCall(node) {
@@ -3242,8 +3256,14 @@ class Emitter {
   }
 
   transpileUpdate(node) {
+    if (isEpochNanosecondsAccess(node.argument)) {
+      this.emitIncomplete('updating epochNanoseconds is not supported');
+      return null;
+    }
     // x++, x--, ++x, --x
-    const arg = this.transpileExpr(node.argument);
+    const arg = node.argument.type === 'MemberExpression'
+      ? this.transpilePattern(node.argument)
+      : this.transpileExpr(node.argument);
     if (arg === null) return null;
     return node.prefix ? `${node.operator}${arg}` : `${arg}${node.operator}`;
   }
@@ -3278,6 +3298,16 @@ class Emitter {
   }
 
   transpileBinary(node) {
+    // Compare actual epoch values at runtime, independent of binding names,
+    // factories, aliases and unrelated property mutations. Each operand is read
+    // separately so a null receiver throws before the next operand is evaluated.
+    if (['<', '<=', '>', '>=', '===', '!==', '==', '!='].includes(node.operator)
+        && isEpochNanosecondsAccess(node.left) && isEpochNanosecondsAccess(node.right)) {
+      const left = this.transpileExpr(node.left.object);
+      const right = this.transpileExpr(node.right.object);
+      if (left === null || right === null) return null;
+      return `(${HARNESS_NS}JsEpoch::comparisonOperand(${left}) <=> ${HARNESS_NS}JsEpoch::comparisonOperand(${right})) ${phpOperator(node)} 0`;
+    }
     // Handle `key in obj` — JS property existence check.
     // Map to array_key_exists($key, $obj) for array-mode objects or
     // property_exists($obj, $key) for real objects.
@@ -3359,6 +3389,10 @@ class Emitter {
   }
 
   transpileAssignment(node) {
+    if (isEpochNanosecondsAccess(node.left)) {
+      this.emitIncomplete('assigning epochNanoseconds is not supported');
+      return null;
+    }
     const left  = this.transpilePattern(node.left);
     const right = this.transpileExpr(node.right);
     if (right === null) return null;
@@ -3817,7 +3851,8 @@ class Emitter {
     // and defer the incomplete-marker to end of script.
     if (fnNode?.type === 'ArrowFunctionExpression' && fnNode.body?.type === 'BinaryExpression') {
       const op = fnNode.body.operator;
-      if (op === '<' || op === '<=' || op === '>' || op === '>=') {
+      if (['<', '<=', '>', '>='].includes(op)
+          && !(isEpochNanosecondsAccess(fnNode.body.left) && isEpochNanosecondsAccess(fnNode.body.right))) {
         this.emitSkipAndDefer(node, `PHP comparison operator '${op}' does not trigger valueOf()`);
         return null;
       }

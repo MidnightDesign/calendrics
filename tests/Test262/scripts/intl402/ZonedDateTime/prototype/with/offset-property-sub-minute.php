@@ -14,12 +14,12 @@ Assert::sameValue($instance->offset, '-00:44:30', 'original offset');
 $properties = ['day' => 2, 'offset' => '-00:45'];
 foreach (['ignore', 'prefer'] as $offset) {
 $result = $instance->with($properties, JsUndefined::strip(['offset' => $offset]));
-Assert::sameValue($result->epochNanoseconds, 132_270_000_000_000, "ignores new offset (offset={$offset})");
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 132_270_000_000_000, "ignores new offset (offset={$offset})");
 Assert::sameValue($result->offset, $instance->offset, 'offset property is unchanged');
 TemporalHelpers::assertPlainDateTime($result->toPlainDateTime(), 1970, 1, 'M01', 2, 12, 0, 0, 0, 0, 0, 'wall time is not shifted');
 }
 $result = $instance->with($properties, ['offset' => 'use']);
-Assert::sameValue($result->epochNanoseconds, 132_300_000_000_000, 'accepts HH:MM rounded offset (offset=use)');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 132_300_000_000_000, 'accepts HH:MM rounded offset (offset=use)');
 Assert::sameValue($result->offset, $instance->offset, 'offset property is unchanged');
 TemporalHelpers::assertPlainDateTime($result->toPlainDateTime(), 1970, 1, 'M01', 2, 12, 0, 30, 0, 0, 0, 'wall time is shifted by the difference between exact and rounded offset');
 Assert::throws(\RangeException::class, function () use (&$instance, &$properties) { return $instance->with($properties, ['offset' => 'reject']); }, 'no fuzzy matching is done in with()');

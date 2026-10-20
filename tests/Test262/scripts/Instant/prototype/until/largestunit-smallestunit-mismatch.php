@@ -13,8 +13,8 @@ $later = new \Calendrics\Spec\Instant(1_000_090_061_987_654_321);
 $units = ['hours', 'minutes', 'seconds', 'milliseconds', 'microseconds', 'nanoseconds'];
 for ($largestIdx = 1; $largestIdx < (is_string($units) ? strlen($units) : count($units)); $largestIdx++) {
 for ($smallestIdx = 0; $smallestIdx < $largestIdx; $smallestIdx++) {
-$largestUnit = $units[$largestIdx];
-$smallestUnit = $units[$smallestIdx];
+$largestUnit = \Calendrics\Tests\Test262\Js::computedProperty($units, $largestIdx);
+$smallestUnit = \Calendrics\Tests\Test262\Js::computedProperty($units, $smallestIdx);
 Assert::throws(\RangeException::class, function () use (&$earlier, &$later, &$largestUnit, &$smallestUnit) { return $earlier->until($later, JsUndefined::strip(['largestUnit' => $largestUnit, 'smallestUnit' => $smallestUnit])); }, '');
 }
 }

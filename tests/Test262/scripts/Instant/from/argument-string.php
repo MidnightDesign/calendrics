@@ -12,5 +12,5 @@ $tests = [['1976-11-18T15:23z', 217_178_580_000_000_000], ['1976-11-18T15:23:30.
 foreach ($tests as $__entry__) {
 [$arg, $expected] = array_pad($__entry__, 2, null);
 $result = \Calendrics\Spec\Instant::from($arg);
-Assert::sameValue($result->epochNanoseconds, $expected, "Instant.from({$arg})");
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), $expected, "Instant.from({$arg})");
 }

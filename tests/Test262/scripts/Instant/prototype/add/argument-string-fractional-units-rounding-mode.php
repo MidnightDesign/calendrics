@@ -9,5 +9,5 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $epoch = new \Calendrics\Spec\Instant(0);
-Assert::sameValue($epoch->add('PT1.03125H')->epochNanoseconds, 3_712_500_000_000, 'positive fractional units rounded with correct rounding mode');
-Assert::sameValue($epoch->add('-PT1.03125H')->epochNanoseconds, -3_712_500_000_000, 'negative fractional units rounded with correct rounding mode');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($epoch->add('PT1.03125H')), 3_712_500_000_000, 'positive fractional units rounded with correct rounding mode');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($epoch->add('-PT1.03125H')), -3_712_500_000_000, 'negative fractional units rounded with correct rounding mode');

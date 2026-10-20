@@ -10,4 +10,4 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
 $instant = new \Calendrics\Spec\Instant(1_000_000_000_987_654_321);
-TemporalHelpers::checkRoundingIncrementOptionWrongType(function ($roundingIncrement) use (&$instant) { return $instant->round(JsUndefined::strip(['smallestUnit' => 'second', 'roundingIncrement' => $roundingIncrement])); }, fn($result, $descr) => Assert::sameValue($result->epochNanoseconds, 1_000_000_001_000_000_000, $descr), fn($result, $descr) => Assert::sameValue($result->epochNanoseconds, 1_000_000_000_000_000_000, $descr));
+TemporalHelpers::checkRoundingIncrementOptionWrongType(function ($roundingIncrement) use (&$instant) { return $instant->round(JsUndefined::strip(['smallestUnit' => 'second', 'roundingIncrement' => $roundingIncrement])); }, fn($result, $descr) => Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_001_000_000_000, $descr), fn($result, $descr) => Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_000_000_000_000, $descr));

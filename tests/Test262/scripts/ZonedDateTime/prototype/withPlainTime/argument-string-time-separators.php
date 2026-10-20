@@ -14,5 +14,5 @@ $instance = new \Calendrics\Spec\ZonedDateTime(0, $timeZone);
 foreach ($tests as $__entry__) {
 [$arg, $description] = array_pad($__entry__, 2, null);
 $result = $instance->withPlainTime($arg);
-Assert::sameValue($result->epochNanoseconds, 45_296_987_654_321, "variant time separators ({$description})");
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 45_296_987_654_321, "variant time separators ({$description})");
 }

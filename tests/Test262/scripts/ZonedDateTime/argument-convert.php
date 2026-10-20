@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-Assert::sameValue(new \Calendrics\Spec\ZonedDateTime(false, 'UTC')->epochNanoseconds, 0, 'boolean defaults');
-Assert::sameValue(new \Calendrics\Spec\ZonedDateTime(true, 'UTC')->epochNanoseconds, 1, 'boolean defaults');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read(new \Calendrics\Spec\ZonedDateTime(false, 'UTC')), 0, 'boolean defaults');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read(new \Calendrics\Spec\ZonedDateTime(true, 'UTC')), 1, 'boolean defaults');
 Assert::throws(\TypeError::class, fn() => new \Calendrics\Spec\ZonedDateTime(\Calendrics\Tests\Test262\JsSymbol::singleton(), 'UTC'), "symbol");
 Assert::throws(\TypeError::class, fn() => new \Calendrics\Spec\ZonedDateTime(null, 'UTC'), "undefined");

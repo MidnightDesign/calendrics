@@ -21,5 +21,5 @@ $expected = ['get overflow.toString', 'call overflow.toString'];
 $actual = new \Calendrics\Tests\Test262\ObserverTrace();
 $observer = TemporalHelpers::toPrimitiveObserver($actual, 'constrain', 'overflow');
 $result = $datetime->with(['second' => 41], JsUndefined::strip(['overflow' => $observer]));
-Assert::sameValue($result->epochNanoseconds, 1_000_000_001_987_654_321, 'object with toString');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_001_987_654_321, 'object with toString');
 Assert::compareObserverTrace($actual, $expected, 'order of operations');

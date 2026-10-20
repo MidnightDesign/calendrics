@@ -10,4 +10,4 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $str = '1970-01-01T00:02:00.000000000+00:02[+01:30]';
 $result = \Calendrics\Spec\Instant::from($str);
-Assert::sameValue($result->epochNanoseconds, 0, 'UTC offset determined from offset part of string');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 0, 'UTC offset determined from offset part of string');

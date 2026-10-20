@@ -14,7 +14,7 @@ $options = (object) ['overflow' => 'reject'];
 $leapYear = 5784;
 $monthLengths5784 = [JsUndefined::singleton(), ['M01', 30], ['M02', 29], ['M03', 29], ['M04', 29], ['M05', 30], ['M05L', 30], ['M06', 29], ['M07', 30], ['M08', 29], ['M09', 30], ['M10', 29], ['M11', 30], ['M12', 29]];
 for ($month = 1; $month < 14; $month++) {
-[$monthCode, $day] = array_pad($monthLengths5784[$month], 2, null);
+[$monthCode, $day] = array_pad(\Calendrics\Tests\Test262\Js::computedProperty($monthLengths5784, $month), 2, null);
 $startOfMonth = \Calendrics\Spec\PlainDateTime::from((object) JsUndefined::strip(['year' => $leapYear, 'month' => $month, 'day' => 1, 'hour' => 12, 'minute' => 34, 'calendar' => $calendar]), $options);
 TemporalHelpers::assertPlainDateTime($startOfMonth, $leapYear, $month, $monthCode, 1, 12, 34, 0, 0, 0, 0, "Start of month {$monthCode} in leap year", 'am', $leapYear);
 $endOfMonth = \Calendrics\Spec\PlainDateTime::from((object) JsUndefined::strip(['year' => $leapYear, 'month' => $month, 'day' => $day, 'hour' => 12, 'minute' => 34, 'calendar' => $calendar]), $options);

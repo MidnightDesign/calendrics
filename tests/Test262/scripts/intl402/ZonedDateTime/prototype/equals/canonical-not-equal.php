@@ -9,5 +9,5 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $ids = \DateTimeZone::listIdentifiers();
-$forEachDistinctPair = function ($array, $func) use (&$i, &$j) { for ($i = 0; $i < (is_string($array) ? strlen($array) : count($array)); $i++) { for ($j = $i + 1; $j < (is_string($array) ? strlen($array) : count($array)); $j++) { $func($array[$i], $array[$j]); } } };
+$forEachDistinctPair = function ($array, $func) use (&$i, &$j) { for ($i = 0; $i < (is_string($array) ? strlen($array) : count($array)); $i++) { for ($j = $i + 1; $j < (is_string($array) ? strlen($array) : count($array)); $j++) { $func(\Calendrics\Tests\Test262\Js::computedProperty($array, $i), \Calendrics\Tests\Test262\Js::computedProperty($array, $j)); } } };
 $forEachDistinctPair($ids, function ($id1, $id2) use (&$instance) { $instance = new \Calendrics\Spec\ZonedDateTime(0, $id1); Assert::assertTrue(!$instance->equals($instance->withTimeZone($id2)), "{$id1} does not equal {$id2}"); });

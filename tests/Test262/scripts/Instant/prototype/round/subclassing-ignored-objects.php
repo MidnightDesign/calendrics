@@ -9,4 +9,4 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
-TemporalHelpers::checkSubclassingIgnored(\Calendrics\Spec\Instant::class, [10], 'round', [(object) ['smallestUnit' => 'second', 'roundingMode' => 'ceil']], function ($result) { Assert::sameValue($result->epochNanoseconds, 1_000_000_000, 'epochNanoseconds result'); });
+TemporalHelpers::checkSubclassingIgnored(\Calendrics\Spec\Instant::class, [10], 'round', [(object) ['smallestUnit' => 'second', 'roundingMode' => 'ceil']], function ($result) { Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_000, 'epochNanoseconds result'); });

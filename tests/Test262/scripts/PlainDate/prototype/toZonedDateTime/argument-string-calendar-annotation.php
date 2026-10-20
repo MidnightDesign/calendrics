@@ -13,5 +13,5 @@ $instance = new \Calendrics\Spec\PlainDate(2000, 5, 2);
 foreach ($tests as $__entry__) {
 [$arg, $description] = array_pad($__entry__, 2, null);
 $result = $instance->toZonedDateTime(JsUndefined::strip(['plainTime' => $arg, 'timeZone' => 'UTC']));
-Assert::sameValue($result->epochNanoseconds, 957_270_896_987_654_321, "calendar annotation ({$description})");
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 957_270_896_987_654_321, "calendar annotation ({$description})");
 }

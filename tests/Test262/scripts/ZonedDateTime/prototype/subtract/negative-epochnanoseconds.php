@@ -10,4 +10,4 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $datetime = new \Calendrics\Spec\ZonedDateTime(-13_849_764_999_999_999, 'UTC');
 $result = $datetime->subtract(new \Calendrics\Spec\Duration(0, 0, 0, 1));
-Assert::sameValue($result->epochNanoseconds, -13_936_164_999_999_999, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), -13_936_164_999_999_999, '');

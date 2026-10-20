@@ -13,5 +13,5 @@ $fallBackFields = ['timeZone' => 'America/Vancouver', 'year' => 2000, 'month' =>
 foreach ([[$springForwardFields, 954_671_400_000_000_000], [$fallBackFields, 972_808_200_000_000_000]] as $__entry__) {
 [$fields, $expected] = array_pad($__entry__, 2, null);
 $explicit = \Calendrics\Spec\ZonedDateTime::from($fields, []);
-Assert::sameValue($explicit->epochNanoseconds, $expected, 'default disambiguation is compatible (later)');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($explicit), $expected, 'default disambiguation is compatible (later)');
 }

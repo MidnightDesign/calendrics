@@ -11,7 +11,7 @@ use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
 $validValues = [new \Calendrics\Spec\ZonedDateTime(1_000_000_000_987_654_321, 'UTC'), '2001-09-09T01:46:40.987654321+00:00[UTC]'];
 foreach ($validValues as $value) {
-TemporalHelpers::checkStringOptionWrongType('overflow', 'constrain', function ($overflow) use (&$value) { return \Calendrics\Spec\ZonedDateTime::from($value, (object) JsUndefined::strip(['overflow' => $overflow])); }, fn($result, $descr) => Assert::sameValue($result->epochNanoseconds, 1_000_000_000_987_654_321, $descr));
+TemporalHelpers::checkStringOptionWrongType('overflow', 'constrain', function ($overflow) use (&$value) { return \Calendrics\Spec\ZonedDateTime::from($value, (object) JsUndefined::strip(['overflow' => $overflow])); }, fn($result, $descr) => Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_000_987_654_321, $descr));
 }
 $propertyBag = (object) ['year' => 2001, 'month' => 9, 'day' => 9, 'hour' => 1, 'minute' => 46, 'second' => 40, 'timeZone' => 'UTC'];
 Assert::throws(\RangeException::class, function () use (&$propertyBag) { return \Calendrics\Spec\ZonedDateTime::from($propertyBag, (object) ['overflow' => null]); }, 'null');
@@ -25,5 +25,5 @@ $expected = ['get overflow.toString', 'call overflow.toString'];
 $actual = new \Calendrics\Tests\Test262\ObserverTrace();
 $observer = TemporalHelpers::toPrimitiveObserver($actual, 'constrain', 'overflow');
 $result = \Calendrics\Spec\ZonedDateTime::from($propertyBag, (object) JsUndefined::strip(['overflow' => $observer]));
-Assert::sameValue($result->epochNanoseconds, 1_000_000_000_000_000_000, 'object with toString');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 1_000_000_000_000_000_000, 'object with toString');
 Assert::compareObserverTrace($actual, $expected, 'order of operations');

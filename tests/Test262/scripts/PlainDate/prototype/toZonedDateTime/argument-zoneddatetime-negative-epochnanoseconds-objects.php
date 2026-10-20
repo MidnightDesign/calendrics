@@ -11,4 +11,4 @@ use Calendrics\Tests\Test262\JsUndefined;
 $datetime = new \Calendrics\Spec\ZonedDateTime(-13_849_764_999_999_999, 'UTC');
 $instance = new \Calendrics\Spec\PlainDate(2000, 5, 2);
 $result = $instance->toZonedDateTime((object) JsUndefined::strip(['plainTime' => $datetime, 'timeZone' => 'UTC']));
-Assert::sameValue($result->epochNanoseconds, 957_286_235_000_000_001, '');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 957_286_235_000_000_001, '');

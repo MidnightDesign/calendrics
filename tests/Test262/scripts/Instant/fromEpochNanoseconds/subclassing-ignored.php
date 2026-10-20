@@ -9,4 +9,4 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
-TemporalHelpers::checkSubclassingIgnoredStatic(\Calendrics\Spec\Instant::class, 'fromEpochNanoseconds', [10], function ($result) { Assert::sameValue($result->epochNanoseconds, 10, 'epochNanoseconds result'); });
+TemporalHelpers::checkSubclassingIgnoredStatic(\Calendrics\Spec\Instant::class, 'fromEpochNanoseconds', [10], function ($result) { Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($result), 10, 'epochNanoseconds result'); });

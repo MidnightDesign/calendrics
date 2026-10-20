@@ -16,8 +16,8 @@ $parts = $dtf->formatRangeToParts($minDate, $maxDate);
 $weekdayParts = $parts->filter(function ($p) { return $p->type === 'weekday'; });
 Assert::assertTrue((is_string($weekdayParts) ? strlen($weekdayParts) : count($weekdayParts)) > 0, 'formatRangeToParts should include weekday parts');
 for ($i = 0; $i < (is_string($weekdayParts) ? strlen($weekdayParts) : count($weekdayParts)); $i++) {
-$isValidWeekday = \Calendrics\Tests\Test262\Js::indexOf($weekdays, $weekdayParts[$i]->value) >= 0;
-Assert::assertTrue($isValidWeekday, 'weekday part should be a valid weekday name, got: ' . $weekdayParts[$i]->value);
+$isValidWeekday = \Calendrics\Tests\Test262\Js::indexOf($weekdays, \Calendrics\Tests\Test262\Js::computedProperty($weekdayParts, $i)->value) >= 0;
+Assert::assertTrue($isValidWeekday, 'weekday part should be a valid weekday name, got: ' . \Calendrics\Tests\Test262\Js::computedProperty($weekdayParts, $i)->value);
 }
 $dayParts = $parts->filter(function ($p) { return $p->type === 'day'; });
 Assert::assertTrue((is_string($dayParts) ? strlen($dayParts) : count($dayParts)) >= 2, 'formatRangeToParts should include day parts for both dates');

@@ -15,7 +15,7 @@ $yearSymbol = (object) [353 => 'D', 354 => 'R', 355 => 'C', 383 => 'D', 384 => '
 $daySymbol = fn($date) => $date->dayOfWeek % 7 + 1;
 $daysInYear = $startOfYear->daysInYear;
 Assert::sameValue(property_exists($yearSymbol, $daysInYear), true, '');
-return "" . ($daySymbol($startOfYear)) . "" . ($yearSymbol->{$daysInYear}) . "" . ($daySymbol($firstDayOfPesach)) . "";
+return "" . ($daySymbol($startOfYear)) . "" . (\Calendrics\Tests\Test262\Js::computedProperty($yearSymbol, $daysInYear)) . "" . ($daySymbol($firstDayOfPesach)) . "";
 };
 $validKeviahSymbols = new \Calendrics\Tests\Test262\JsSet(['2D3', '2C5', '2D5', '2C7', '3R5', '3R7', '5R7', '5C1', '5D1', '5C3', '7D1', '7C3', '7D3', '7C5']);
 for ($year = 3700; $year <= 5800; ++$year) {

@@ -10,6 +10,6 @@ use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\ZonedDateTime(1_000_000_000_000_000_000, 'UTC');
 $resultHours = $instance->add('-PT24.567890123H');
-Assert::sameValue($resultHours->epochNanoseconds, 999_911_555_595_557_200, 'negative fractional hours');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($resultHours), 999_911_555_595_557_200, 'negative fractional hours');
 $resultMinutes = $instance->add('-PT1440.567890123M');
-Assert::sameValue($resultMinutes->epochNanoseconds, 999_913_565_926_592_620, 'negative fractional minutes');
+Assert::sameValue(\Calendrics\Tests\Test262\JsEpoch::read($resultMinutes), 999_913_565_926_592_620, 'negative fractional minutes');
