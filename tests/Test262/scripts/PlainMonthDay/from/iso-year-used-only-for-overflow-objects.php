@@ -9,12 +9,16 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 use Calendrics\Tests\Test262\TemporalHelpers;
-$outOfRangeCommonYear = -999_999;
-$outOfRangeLeapYear = -1_000_000;
-$result = \Calendrics\Spec\PlainMonthDay::from((object) JsUndefined::strip(['year' => $outOfRangeCommonYear, 'month' => 1, 'day' => 1]));
-TemporalHelpers::assertPlainMonthDay($result, 'M01', 1, 'ISO year is not checked for range');
-$commonResult = \Calendrics\Spec\PlainMonthDay::from((object) JsUndefined::strip(['year' => $outOfRangeCommonYear, 'monthCode' => 'M02', 'day' => 29]));
-TemporalHelpers::assertPlainMonthDay($commonResult, 'M02', 28, 'ISO year is used to apply overflow');
-Assert::throws(\RangeException::class, function () use (&$outOfRangeCommonYear) { \Calendrics\Spec\PlainMonthDay::from((object) JsUndefined::strip(['year' => $outOfRangeCommonYear, 'monthCode' => 'M02', 'day' => 29]), (object) ['overflow' => 'reject']); }, 'ISO year is used to apply overflow');
-$leapResult = \Calendrics\Spec\PlainMonthDay::from((object) JsUndefined::strip(['year' => $outOfRangeLeapYear, 'monthCode' => 'M02', 'day' => 29]));
-TemporalHelpers::assertPlainMonthDay($leapResult, 'M02', 29, 'ISO year is used to apply overflow');
+$outOfRangeCommonYears = [-999_999, 1_000_000_000_000_005];
+$outOfRangeLeapYears = [-1_000_000, 1_000_000_000_000_004];
+foreach ($outOfRangeCommonYears as $year) {
+$result = \Calendrics\Spec\PlainMonthDay::from((object) JsUndefined::strip(['year' => $year, 'month' => 1, 'day' => 1]));
+TemporalHelpers::assertPlainMonthDay($result, 'M01', 1, "ISO year {$year} is not checked for range");
+$commonResult = \Calendrics\Spec\PlainMonthDay::from((object) JsUndefined::strip(['year' => $year, 'monthCode' => 'M02', 'day' => 29]));
+TemporalHelpers::assertPlainMonthDay($commonResult, 'M02', 28, "ISO year {$year} is used to apply overflow");
+Assert::throws(\RangeException::class, function () use (&$year) { \Calendrics\Spec\PlainMonthDay::from((object) JsUndefined::strip(['year' => $year, 'monthCode' => 'M02', 'day' => 29]), (object) ['overflow' => 'reject']); }, 'ISO year is used to apply overflow');
+}
+foreach ($outOfRangeLeapYears as $year) {
+$leapResult = \Calendrics\Spec\PlainMonthDay::from((object) JsUndefined::strip(['year' => $year, 'monthCode' => 'M02', 'day' => 29]));
+TemporalHelpers::assertPlainMonthDay($leapResult, 'M02', 29, "ISO year {$year} is used to check leap year status");
+}
