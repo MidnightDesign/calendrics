@@ -3090,7 +3090,9 @@ class Emitter {
     }
     // new Intl.DateTimeFormat(locales?, options?) → the harness's IntlDateTimeFormat
     // shim, which formats through the same ext-intl plumbing the spec layer uses.
-    // Other Intl constructors (DurationFormat, …) have no ext-intl equivalent.
+    // new Intl.Locale(tag, options?) → a bare calendar-carrying object, which the
+    // fixtures only pass where Temporal must reject it. Other Intl constructors
+    // (DurationFormat, …) have no ext-intl equivalent.
     if (callee.type === 'MemberExpression' && !callee.computed
         && callee.object.type === 'Identifier' && callee.object.name === 'Intl'
         && callee.property.type === 'Identifier') {
@@ -3098,6 +3100,11 @@ class Emitter {
         const args = this.transpileArgs(node.arguments);
         if (args === null) return null;
         return `new ${HARNESS_NS}IntlDateTimeFormat(${args})`;
+      }
+      if (callee.property.name === 'Locale') {
+        const args = this.transpileArgs(node.arguments);
+        if (args === null) return null;
+        return `new ${HARNESS_NS}IntlLocale(${args})`;
       }
       this.emitIncomplete(`untranslatable: Intl.${callee.property.name} has no harness shim`);
       return null;
