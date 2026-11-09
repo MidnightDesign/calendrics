@@ -47,6 +47,7 @@ enum RoundingMode: string
      *
      * @throws InvalidArgument for HalfCeil and HalfFloor, which have no PHP equivalent.
      * @psalm-api
+     * @mutation-free
      */
     public function toPhpRoundingMode(): \RoundingMode
     {
@@ -69,6 +70,7 @@ enum RoundingMode: string
      *
      * @throws InvalidArgument for HalfOdd, which has no Temporal equivalent.
      * @psalm-api
+     * @pure
      */
     public static function fromPhpRoundingMode(\RoundingMode $mode): self
     {

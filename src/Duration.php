@@ -67,6 +67,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * Parses an ISO 8601 duration string into a Duration.
      *
      * @throws \Calendrics\Exception\RangeError if the string is not a valid ISO 8601 duration.
+     * @mutation-free
      */
     public static function parse(string $text): self
     {
@@ -80,6 +81,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * (years, months, or weeks).
      *
      * @throws \Calendrics\Exception\RangeError if calendar units are present without a relativeTo anchor.
+     * @mutation-free
      */
     public static function compare(self $one, self $two, PlainDate|ZonedDateTime|null $relativeTo = null): int
     {
@@ -92,6 +94,8 @@ final class Duration implements \Stringable, \JsonSerializable
 
     /**
      * Returns a new Duration with all fields negated.
+     *
+     * @mutation-free
      */
     public function negated(): self
     {
@@ -100,6 +104,8 @@ final class Duration implements \Stringable, \JsonSerializable
 
     /**
      * Returns a new Duration with all fields made positive.
+     *
+     * @mutation-free
      */
     public function abs(): self
     {
@@ -108,6 +114,8 @@ final class Duration implements \Stringable, \JsonSerializable
 
     /**
      * Returns true when both Durations have identical field values.
+     *
+     * @mutation-free
      */
     public function equals(self $other): bool
     {
@@ -119,6 +127,7 @@ final class Duration implements \Stringable, \JsonSerializable
      *
      * @throws \TypeError if no recognized Duration field is provided.
      * @throws \Calendrics\Exception\RangeError if the resulting fields have mixed signs.
+     * @mutation-free
      */
     public function with(
         ?int $years = null,
@@ -174,6 +183,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * they cancel out to zero.
      *
      * @throws \Calendrics\Exception\RangeError if either duration has calendar fields.
+     * @mutation-free
      */
     public function add(self $other): self
     {
@@ -187,6 +197,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * they cancel out to zero.
      *
      * @throws \Calendrics\Exception\RangeError if either duration has calendar fields.
+     * @mutation-free
      */
     public function subtract(self $other): self
     {
@@ -201,6 +212,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * calendar fields (years, months, or weeks).
      *
      * @throws \Calendrics\Exception\RangeError if options are invalid or calendar units are used without a relativeTo anchor.
+     * @mutation-free
      */
     public function round(
         ?Unit $smallestUnit = null,
@@ -230,6 +242,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * involves calendar fields (years, months, or weeks).
      *
      * @throws \Calendrics\Exception\RangeError if calendar units are used without a relativeTo anchor.
+     * @mutation-free
      */
     public function total(Unit $unit, PlainDate|ZonedDateTime|null $relativeTo = null): int|float
     {
@@ -247,6 +260,7 @@ final class Duration implements \Stringable, \JsonSerializable
      * @param int|null  $fractionalSecondDigits Number of sub-second digits (0-9), or null for auto.
      * @param Unit|null $smallestUnit           Overrides fractionalSecondDigits when provided.
      * @param RoundingMode $roundingMode        Rounding mode for sub-second truncation (default: Trunc).
+     * @mutation-free
      */
     public function toString(
         ?int $fractionalSecondDigits = null,
@@ -264,27 +278,43 @@ final class Duration implements \Stringable, \JsonSerializable
         return $this->spec->toString($opts);
     }
 
-    /** Returns the ISO 8601 string representation. */
+    /**
+     * Returns the ISO 8601 string representation.
+     *
+     * @mutation-free
+     */
     #[\Override]
     public function __toString(): string
     {
         return $this->toString();
     }
 
-    /** Returns the ISO 8601 string representation for JSON encoding. */
+    /**
+     * Returns the ISO 8601 string representation for JSON encoding.
+     *
+     * @mutation-free
+     */
     #[\Override]
     public function jsonSerialize(): string
     {
         return $this->toString();
     }
 
-    /** Returns the underlying spec-layer instance. */
+    /**
+     * Returns the underlying spec-layer instance.
+     *
+     * @mutation-free
+     */
     public function toSpec(): Spec\Duration
     {
         return $this->spec;
     }
 
-    /** Wraps a spec-layer Duration instance into a porcelain Duration. */
+    /**
+     * Wraps a spec-layer Duration instance into a porcelain Duration.
+     *
+     * @mutation-free
+     */
     public static function fromSpec(Spec\Duration $spec): self
     {
         return new self(
@@ -301,7 +331,10 @@ final class Duration implements \Stringable, \JsonSerializable
         );
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>
+     * @mutation-free
+     */
     public function __debugInfo(): array
     {
         return [

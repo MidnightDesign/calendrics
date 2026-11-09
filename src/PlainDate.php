@@ -63,6 +63,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param non-empty-string|null   $era
      * @param int|null                $eraYear
      * @param Overflow                $overflow
+     * @mutation-free
      */
     public static function fromFields(
         ?int $year = null,
@@ -103,6 +104,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param string $text ISO 8601 date string (e.g. "2020-01-01").
      * @return self
      * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
+     * @mutation-free
      */
     public static function parse(string $text): self
     {
@@ -120,6 +122,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      *
      * @param \DateTimeInterface $dt       Source date-time; its own zone determines the civil date.
      * @param Calendar           $calendar Calendar projection (default ISO 8601).
+     * @mutation-free
      */
     public static function fromDateTime(\DateTimeInterface $dt, Calendar $calendar = Calendar::Iso8601): self
     {
@@ -132,6 +135,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * Compares two PlainDates chronologically.
      *
      * @return int Negative if $one is earlier, positive if later, zero if equal.
+     * @mutation-free
      */
     public static function compare(self $one, self $two): int
     {
@@ -154,6 +158,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param Overflow         $overflow  How to handle out-of-range values.
      * @return self A new PlainDate with the overridden fields.
      * @throws \Calendrics\Exception\RangeError if the resulting date is invalid (overflow: reject) or fields conflict.
+     * @mutation-free
      */
     public function with(
         ?int $year = null,
@@ -201,6 +206,8 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * Accepts a {@see Calendar} case or any Temporal date-bearing value
      * (PlainDate, PlainDateTime, PlainMonthDay, PlainYearMonth, ZonedDateTime),
      * whose own calendar is used (mirrors TC39 ToTemporalCalendarIdentifier).
+     *
+     * @mutation-free
      */
     public function withCalendar(Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar): self
     {
@@ -213,6 +220,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param Duration $duration The duration to add.
      * @param Overflow $overflow How to handle out-of-range values after calendar arithmetic.
      * @return self
+     * @mutation-free
      */
     public function add(Duration $duration, Overflow $overflow = Overflow::Constrain): self
     {
@@ -227,6 +235,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param Duration $duration The duration to subtract.
      * @param Overflow $overflow How to handle out-of-range values after calendar arithmetic.
      * @return self
+     * @mutation-free
      */
     public function subtract(Duration $duration, Overflow $overflow = Overflow::Constrain): self
     {
@@ -244,6 +253,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param RoundingMode $roundingMode      How to round the result.
      * @param int          $roundingIncrement The rounding increment for the smallest unit.
      * @return Duration
+     * @mutation-free
      */
     public function since(
         self $other,
@@ -271,6 +281,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param RoundingMode $roundingMode      How to round the result.
      * @param int          $roundingIncrement The rounding increment for the smallest unit.
      * @return Duration
+     * @mutation-free
      */
     public function until(
         self $other,
@@ -294,6 +305,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      *
      * @param self $other The date to compare with.
      * @return bool
+     * @mutation-free
      */
     public function equals(self $other): bool
     {
@@ -305,6 +317,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      *
      * @param CalendarDisplay $calendarName Whether to include the calendar annotation.
      * @return string
+     * @mutation-free
      */
     public function toString(CalendarDisplay $calendarName = CalendarDisplay::Auto): string
     {
@@ -363,6 +376,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      *
      * @param PlainTime|null $time The time to combine with, or null for midnight.
      * @return PlainDateTime
+     * @mutation-free
      */
     public function toPlainDateTime(?PlainTime $time = null): PlainDateTime
     {
@@ -382,6 +396,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * @param PlainTime|null $time     Optional time; if null, midnight is used.
      * @return ZonedDateTime
      * @throws \Calendrics\Exception\RangeError if the timezone is invalid or the result is out of range.
+     * @mutation-free
      */
     public function toZonedDateTime(string $timeZone, ?PlainTime $time = null): ZonedDateTime
     {
@@ -402,6 +417,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      *
      * @return PlainYearMonth
      * @psalm-api
+     * @mutation-free
      */
     public function toPlainYearMonth(): PlainYearMonth
     {
@@ -413,6 +429,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      *
      * @return PlainMonthDay
      * @psalm-api
+     * @mutation-free
      */
     public function toPlainMonthDay(): PlainMonthDay
     {
@@ -427,6 +444,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * Returns the ISO 8601 string representation.
      *
      * @return string
+     * @mutation-free
      */
     #[\Override]
     public function __toString(): string
@@ -438,6 +456,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * Returns the ISO 8601 string for JSON serialization.
      *
      * @return string
+     * @mutation-free
      */
     #[\Override]
     public function jsonSerialize(): string
@@ -453,6 +472,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * Returns the underlying spec-layer PlainDate.
      *
      * @return SpecPlainDate
+     * @mutation-free
      */
     public function toSpec(): SpecPlainDate
     {
@@ -464,6 +484,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      *
      * @param SpecPlainDate $spec The spec-layer instance to wrap.
      * @return self
+     * @mutation-free
      */
     public static function fromSpec(SpecPlainDate $spec): self
     {
@@ -478,6 +499,7 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * Returns debug information for var_dump().
      *
      * @return array<string, mixed>
+     * @mutation-free
      */
     public function __debugInfo(): array
     {
