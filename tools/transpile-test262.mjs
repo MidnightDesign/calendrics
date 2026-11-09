@@ -53,6 +53,16 @@ const HARNESS_NS_BARE = `${ROOT_NS}\\Tests\\Test262\\`;
 const SPEC_NS = `\\${SPEC_NS_BARE}`;
 const HARNESS_NS = `\\${HARNESS_NS_BARE}`;
 
+/**
+ * Intl constructors with a harness shim. DateTimeFormat formats through the same
+ * ext-intl plumbing the spec layer uses; Locale is a bare non-Temporal object the
+ * fixtures only pass where Temporal must reject it.
+ */
+const INTL_SHIMS = new Map([
+  ['DateTimeFormat', 'IntlDateTimeFormat'],
+  ['Locale', 'IntlLocale'],
+]);
+
 const PHP_INT_MAX = 9_223_372_036_854_775_807n;
 const PHP_INT_MIN = -9_223_372_036_854_775_808n;
 
@@ -3088,23 +3098,16 @@ class Emitter {
     if (deepTarget && (deepTarget.type === 'staticMethod' || deepTarget.type === 'instanceMethod')) {
       return `throw new \\TypeError('PHP: cannot use method as constructor')`;
     }
-    // new Intl.DateTimeFormat(locales?, options?) → the harness's IntlDateTimeFormat
-    // shim, which formats through the same ext-intl plumbing the spec layer uses.
-    // new Intl.Locale(tag, options?) → a bare calendar-carrying object, which the
-    // fixtures only pass where Temporal must reject it. Other Intl constructors
-    // (DurationFormat, …) have no ext-intl equivalent.
+    // new Intl.X(…) → X's harness shim from INTL_SHIMS. Other Intl
+    // constructors (DurationFormat, …) have no ext-intl equivalent.
     if (callee.type === 'MemberExpression' && !callee.computed
         && callee.object.type === 'Identifier' && callee.object.name === 'Intl'
         && callee.property.type === 'Identifier') {
-      if (callee.property.name === 'DateTimeFormat') {
+      const shim = INTL_SHIMS.get(callee.property.name);
+      if (shim) {
         const args = this.transpileArgs(node.arguments);
         if (args === null) return null;
-        return `new ${HARNESS_NS}IntlDateTimeFormat(${args})`;
-      }
-      if (callee.property.name === 'Locale') {
-        const args = this.transpileArgs(node.arguments);
-        if (args === null) return null;
-        return `new ${HARNESS_NS}IntlLocale(${args})`;
+        return `new ${HARNESS_NS}${shim}(${args})`;
       }
       this.emitIncomplete(`untranslatable: Intl.${callee.property.name} has no harness shim`);
       return null;
