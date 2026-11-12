@@ -48,6 +48,7 @@ enum Calendar: string
      * to IslamicCivil, 'HEBREW' resolves to Hebrew).
      *
      * @throws InvalidArgument if the identifier is not a known calendar.
+     * @pure
      */
     public static function fromId(string $id): self
     {

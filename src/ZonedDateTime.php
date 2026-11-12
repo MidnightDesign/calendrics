@@ -110,6 +110,7 @@ final class ZonedDateTime implements
      * @param Disambiguation $disambiguation How to resolve ambiguous wall-clock times.
      * @param OffsetOption   $offsetOption   How to handle a provided UTC offset.
      * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
+     * @mutation-free
      */
     public static function parse(
         string $text,
@@ -147,6 +148,7 @@ final class ZonedDateTime implements
      * @param Disambiguation          $disambiguation
      * @param OffsetOption            $offsetOption
      * @param Overflow                $overflow
+     * @mutation-free
      */
     public static function fromFields(
         string $timeZone,
@@ -220,6 +222,7 @@ final class ZonedDateTime implements
      * Compares two ZonedDateTimes by their epoch nanoseconds.
      *
      * @return int -1, 0, or 1.
+     * @mutation-free
      */
     public static function compare(self $one, self $two): int
     {
@@ -236,6 +239,8 @@ final class ZonedDateTime implements
      * PHP's `\DateTimeImmutable` carries microsecond precision; sub-microsecond
      * Temporal bits (the lowest three decimal digits of `epochNanoseconds`) are
      * therefore always zero on the resulting ZonedDateTime.
+     *
+     * @mutation-free
      */
     public static function fromDateTime(\DateTimeInterface $dt): self
     {
@@ -265,6 +270,7 @@ final class ZonedDateTime implements
      * @param Disambiguation $disambiguation How to resolve ambiguous wall-clock times.
      * @param OffsetOption   $offsetOption   How to use the provided offset.
      * @throws \Calendrics\Exception\RangeError if fields are invalid.
+     * @mutation-free
      */
     public function with(
         ?int $year = null,
@@ -324,6 +330,7 @@ final class ZonedDateTime implements
      *
      * @param Duration $duration The duration to add.
      * @param Overflow $overflow How to handle out-of-range values after calendar arithmetic.
+     * @mutation-free
      */
     public function add(Duration $duration, Overflow $overflow = Overflow::Constrain): self
     {
@@ -335,6 +342,7 @@ final class ZonedDateTime implements
      *
      * @param Duration $duration The duration to subtract.
      * @param Overflow $overflow How to handle out-of-range values after calendar arithmetic.
+     * @mutation-free
      */
     public function subtract(Duration $duration, Overflow $overflow = Overflow::Constrain): self
     {
@@ -349,6 +357,7 @@ final class ZonedDateTime implements
      * @param Unit         $smallestUnit      The smallest unit in the result (default: Nanosecond).
      * @param RoundingMode $roundingMode      How to round the result (default: Trunc).
      * @param int          $roundingIncrement The rounding increment for the smallest unit.
+     * @mutation-free
      */
     public function since(
         self $other,
@@ -373,6 +382,7 @@ final class ZonedDateTime implements
      * @param Unit         $smallestUnit      The smallest unit in the result (default: Nanosecond).
      * @param RoundingMode $roundingMode      How to round the result (default: Trunc).
      * @param int          $roundingIncrement The rounding increment for the smallest unit.
+     * @mutation-free
      */
     public function until(
         self $other,
@@ -396,6 +406,7 @@ final class ZonedDateTime implements
      * @param RoundingMode $roundingMode       Rounding mode (default: HalfExpand).
      * @param int          $roundingIncrement  Must evenly divide the next-larger unit.
      * @throws \Calendrics\Exception\RangeError for invalid unit or increment values.
+     * @mutation-free
      */
     public function round(
         Unit $smallestUnit,
@@ -415,6 +426,8 @@ final class ZonedDateTime implements
      *
      * For most time zones this is midnight (00:00:00), but DST transitions
      * that skip midnight may produce a different start-of-day time.
+     *
+     * @mutation-free
      */
     public function startOfDay(): self
     {
@@ -423,6 +436,8 @@ final class ZonedDateTime implements
 
     /**
      * Returns true if this ZonedDateTime represents the same instant, time zone, and calendar.
+     *
+     * @mutation-free
      */
     public function equals(self $other): bool
     {
@@ -442,6 +457,7 @@ final class ZonedDateTime implements
      * @param OffsetDisplay    $offset                 Whether to include the UTC offset.
      * @param TimeZoneDisplay  $timeZoneName           Whether to include the time zone name.
      * @param CalendarDisplay  $calendarName           Whether to include the calendar annotation.
+     * @mutation-free
      */
     public function toString(
         ?int $fractionalSecondDigits = null,
@@ -540,6 +556,8 @@ final class ZonedDateTime implements
 
     /**
      * Returns the ISO 8601 string representation (default formatting).
+     *
+     * @mutation-free
      */
     #[\Override]
     public function __toString(): string
@@ -549,6 +567,8 @@ final class ZonedDateTime implements
 
     /**
      * Returns the ISO 8601 string for JSON serialization.
+     *
+     * @mutation-free
      */
     #[\Override]
     public function jsonSerialize(): string
@@ -562,6 +582,8 @@ final class ZonedDateTime implements
 
     /**
      * Returns an Instant representing the same point in time.
+     *
+     * @mutation-free
      */
     public function toInstant(): Instant
     {
@@ -576,6 +598,8 @@ final class ZonedDateTime implements
      * `epochNanoseconds` are dropped (they cannot be represented by PHP's
      * native date-time types). Fixed-offset zones like `+05:30` are passed
      * through to `\DateTimeZone` as-is.
+     *
+     * @mutation-free
      */
     public function toDateTime(): \DateTimeImmutable
     {
@@ -587,6 +611,8 @@ final class ZonedDateTime implements
 
     /**
      * Returns a PlainDate containing the local date in this time zone.
+     *
+     * @mutation-free
      */
     public function toPlainDate(): PlainDate
     {
@@ -595,6 +621,8 @@ final class ZonedDateTime implements
 
     /**
      * Returns a PlainTime containing the local time in this time zone.
+     *
+     * @mutation-free
      */
     public function toPlainTime(): PlainTime
     {
@@ -603,6 +631,8 @@ final class ZonedDateTime implements
 
     /**
      * Returns a PlainDateTime containing the local date and time in this time zone.
+     *
+     * @mutation-free
      */
     public function toPlainDateTime(): PlainDateTime
     {
@@ -616,6 +646,7 @@ final class ZonedDateTime implements
      *
      * @param string $timeZone IANA timezone identifier, UTC offset string, or 'UTC'.
      * @throws \Calendrics\Exception\RangeError if the time zone is invalid.
+     * @mutation-free
      */
     public function withTimeZone(string $timeZone): self
     {
@@ -630,6 +661,8 @@ final class ZonedDateTime implements
      * Accepts a {@see Calendar} case or any Temporal date-bearing value
      * (PlainDate, PlainDateTime, PlainMonthDay, PlainYearMonth, ZonedDateTime),
      * whose own calendar is used (mirrors TC39 ToTemporalCalendarIdentifier).
+     *
+     * @mutation-free
      */
     public function withCalendar(Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar): self
     {
@@ -642,6 +675,7 @@ final class ZonedDateTime implements
      * If $time is null (or omitted), the time is set to midnight (00:00:00).
      *
      * @param PlainTime|null $time The time to set, or null for midnight.
+     * @mutation-free
      */
     public function withPlainTime(?PlainTime $time = null): self
     {
@@ -658,6 +692,7 @@ final class ZonedDateTime implements
      * Returns null for fixed-offset time zones (UTC, +-HH:MM).
      *
      * @param TransitionDirection $direction Whether to search forward ('next') or backward ('previous').
+     * @mutation-free
      */
     public function getTimeZoneTransition(TransitionDirection $direction): ?self
     {
@@ -676,6 +711,8 @@ final class ZonedDateTime implements
 
     /**
      * Returns the underlying spec-layer ZonedDateTime.
+     *
+     * @mutation-free
      */
     public function toSpec(): Spec\ZonedDateTime
     {
@@ -684,6 +721,8 @@ final class ZonedDateTime implements
 
     /**
      * Creates a porcelain ZonedDateTime from a spec-layer ZonedDateTime.
+     *
+     * @mutation-free
      */
     public static function fromSpec(Spec\ZonedDateTime $spec): self
     {
@@ -703,6 +742,7 @@ final class ZonedDateTime implements
      * Returns debug information for var_dump().
      *
      * @return array<string, mixed>
+     * @mutation-free
      */
     public function __debugInfo(): array
     {

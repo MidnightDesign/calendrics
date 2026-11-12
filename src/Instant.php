@@ -39,6 +39,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      *
      * @param string $text ISO 8601 string (e.g. "2020-01-01T00:00:00Z").
      * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
+     * @mutation-free
      */
     public static function parse(string $text): self
     {
@@ -50,6 +51,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      *
      * @param int $epochMilliseconds Milliseconds since the Unix epoch.
      * @throws \Calendrics\Exception\RangeError if the value is out of range.
+     * @mutation-free
      */
     public static function fromEpochMilliseconds(int $epochMilliseconds): self
     {
@@ -60,6 +62,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      * Creates an Instant from a Unix timestamp in nanoseconds.
      *
      * @param int $epochNanoseconds Nanoseconds since the Unix epoch.
+     * @mutation-free
      */
     public static function fromEpochNanoseconds(int $epochNanoseconds): self
     {
@@ -72,6 +75,8 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      * PHP's `\DateTimeImmutable` carries microsecond precision; sub-microsecond
      * Temporal bits (the lowest three decimal digits of `epochNanoseconds`) are
      * therefore always zero on the resulting Instant.
+     *
+     * @mutation-free
      */
     public static function fromDateTime(\DateTimeInterface $dt): self
     {
@@ -86,6 +91,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      * native date-time types).
      *
      * @param \DateTimeZone|null $tz Display time zone, or null for UTC.
+     * @mutation-free
      */
     public function toDateTime(?\DateTimeZone $tz = null): \DateTimeImmutable
     {
@@ -96,6 +102,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      * Compares two Instants chronologically.
      *
      * @return int -1, 0, or 1.
+     * @mutation-free
      */
     public static function compare(self $one, self $two): int
     {
@@ -104,6 +111,8 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
 
     /**
      * Returns true when both Instants represent the same point in time.
+     *
+     * @mutation-free
      */
     public function equals(self $other): bool
     {
@@ -117,6 +126,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      *
      * @param Duration $duration The duration to add.
      * @throws \Calendrics\Exception\RangeError if the duration contains calendar fields.
+     * @mutation-free
      */
     public function add(Duration $duration): self
     {
@@ -130,6 +140,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      *
      * @param Duration $duration The duration to subtract.
      * @throws \Calendrics\Exception\RangeError if the duration contains calendar fields.
+     * @mutation-free
      */
     public function subtract(Duration $duration): self
     {
@@ -143,6 +154,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      * @param RoundingMode $roundingMode       Rounding mode (default: HalfExpand).
      * @param int          $roundingIncrement  Must evenly divide the next-larger unit.
      * @throws \Calendrics\Exception\RangeError for invalid unit or increment values.
+     * @mutation-free
      */
     public function round(
         Unit $smallestUnit,
@@ -164,6 +176,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      * @param Unit         $smallestUnit      The smallest unit in the result (default: Nanosecond).
      * @param RoundingMode $roundingMode      How to round the result (default: Trunc).
      * @param int          $roundingIncrement The rounding increment for the smallest unit.
+     * @mutation-free
      */
     public function since(
         self $other,
@@ -188,6 +201,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      * @param Unit         $smallestUnit      The smallest unit in the result (default: Nanosecond).
      * @param RoundingMode $roundingMode      How to round the result (default: Trunc).
      * @param int          $roundingIncrement The rounding increment for the smallest unit.
+     * @mutation-free
      */
     public function until(
         self $other,
@@ -209,6 +223,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      *
      * @param string $timeZone IANA timezone identifier, UTC offset string, or 'UTC'.
      * @throws \Calendrics\Exception\RangeError if the time zone is invalid.
+     * @mutation-free
      */
     public function toZonedDateTime(string $timeZone): ZonedDateTime
     {
@@ -222,6 +237,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      * @param Unit|null     $smallestUnit           Smallest unit to display; overrides $fractionalSecondDigits.
      * @param RoundingMode  $roundingMode           Rounding mode for display (default: Trunc).
      * @param string|null   $timeZone               Time zone for display; null means UTC ('Z' suffix).
+     * @mutation-free
      */
     public function toString(
         ?int $fractionalSecondDigits = null,
@@ -316,6 +332,8 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
 
     /**
      * Returns the ISO 8601 string representation (default formatting).
+     *
+     * @mutation-free
      */
     #[\Override]
     public function __toString(): string
@@ -325,6 +343,8 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
 
     /**
      * Returns the ISO 8601 string for JSON serialization.
+     *
+     * @mutation-free
      */
     #[\Override]
     public function jsonSerialize(): string
@@ -334,6 +354,8 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
 
     /**
      * Returns the underlying spec-layer Instant.
+     *
+     * @mutation-free
      */
     public function toSpec(): Spec\Instant
     {
@@ -342,6 +364,8 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
 
     /**
      * Creates a porcelain Instant from a spec-layer Instant.
+     *
+     * @mutation-free
      */
     public static function fromSpec(Spec\Instant $spec): self
     {
@@ -357,6 +381,7 @@ final class Instant implements \Stringable, \JsonSerializable, HasEpochSpec
      * Returns a human-readable representation for debugging.
      *
      * @return array<string, mixed>
+     * @mutation-free
      */
     public function __debugInfo(): array
     {

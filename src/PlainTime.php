@@ -49,6 +49,7 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      *
      * @param string $text An ISO 8601 time string (e.g. "13:45:30.123456789").
      * @throws \Calendrics\Exception\RangeError if the string is invalid.
+     * @mutation-free
      */
     public static function parse(string $text): self
     {
@@ -64,6 +65,8 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      *
      * PHP's `\DateTimeImmutable` carries microsecond precision; the resulting
      * PlainTime always has `nanosecond = 0`.
+     *
+     * @mutation-free
      */
     public static function fromDateTime(\DateTimeInterface $dt): self
     {
@@ -83,6 +86,7 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      * Compares two PlainTime values.
      *
      * @return int -1, 0, or 1.
+     * @mutation-free
      */
     public static function compare(self $one, self $two): int
     {
@@ -101,6 +105,7 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      * @param int<0, 999>|null $microsecond 0–999, or null to keep.
      * @param int<0, 999>|null $nanosecond  0–999, or null to keep.
      * @throws \Calendrics\Exception\RangeError if a field value is out of range.
+     * @mutation-free
      */
     public function with(
         ?int $hour = null,
@@ -143,6 +148,7 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      * Calendar fields (years, months, weeks, days) in the duration are silently ignored.
      *
      * @param Duration $duration The duration to add.
+     * @mutation-free
      */
     public function add(Duration $duration): self
     {
@@ -155,6 +161,7 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      * Calendar fields (years, months, weeks, days) in the duration are silently ignored.
      *
      * @param Duration $duration The duration to subtract.
+     * @mutation-free
      */
     public function subtract(Duration $duration): self
     {
@@ -168,6 +175,7 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      * @param RoundingMode $roundingMode       Rounding mode (default: HalfExpand).
      * @param int          $roundingIncrement  Must evenly divide the next-larger unit.
      * @throws \Calendrics\Exception\RangeError for invalid unit or increment values.
+     * @mutation-free
      */
     public function round(
         Unit $smallestUnit,
@@ -189,6 +197,7 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      * @param Unit         $smallestUnit       The smallest unit in the result (default: Nanosecond).
      * @param RoundingMode $roundingMode       Rounding mode (default: Trunc).
      * @param int          $roundingIncrement  Rounding increment (default: 1).
+     * @mutation-free
      */
     public function since(
         self $other,
@@ -215,6 +224,7 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      * @param Unit         $smallestUnit       The smallest unit in the result (default: Nanosecond).
      * @param RoundingMode $roundingMode       Rounding mode (default: Trunc).
      * @param int          $roundingIncrement  Rounding increment (default: 1).
+     * @mutation-free
      */
     public function until(
         self $other,
@@ -235,6 +245,8 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
 
     /**
      * Returns true if this PlainTime represents the same time as $other.
+     *
+     * @mutation-free
      */
     public function equals(self $other): bool
     {
@@ -247,6 +259,7 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      * @param int|null      $fractionalSecondDigits Number of fractional second digits (0-9), or null for 'auto'.
      * @param Unit|null     $smallestUnit           Smallest unit to display; overrides $fractionalSecondDigits.
      * @param RoundingMode  $roundingMode           Rounding mode for display (default: Trunc).
+     * @mutation-free
      */
     public function toString(
         ?int $fractionalSecondDigits = null,
@@ -312,6 +325,8 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
 
     /**
      * Returns the ISO 8601 string representation (default formatting).
+     *
+     * @mutation-free
      */
     #[\Override]
     public function __toString(): string
@@ -321,6 +336,8 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
 
     /**
      * Returns the ISO 8601 string for JSON serialization.
+     *
+     * @mutation-free
      */
     #[\Override]
     public function jsonSerialize(): string
@@ -330,6 +347,8 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
 
     /**
      * Returns the underlying spec-layer PlainTime.
+     *
+     * @mutation-free
      */
     public function toSpec(): SpecPlainTime
     {
@@ -338,6 +357,8 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
 
     /**
      * Creates a porcelain PlainTime from a spec-layer PlainTime.
+     *
+     * @mutation-free
      */
     public static function fromSpec(SpecPlainTime $spec): self
     {
@@ -355,6 +376,7 @@ final class PlainTime implements \Stringable, \JsonSerializable, HasTimeOfDaySpe
      * Returns a human-readable representation for debugging.
      *
      * @return array<string, int>
+     * @mutation-free
      */
     public function __debugInfo(): array
     {

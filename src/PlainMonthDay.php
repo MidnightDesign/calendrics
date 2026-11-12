@@ -100,6 +100,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * @param non-empty-string|null   $era
      * @param int|null                $eraYear
      * @param Overflow                $overflow
+     * @mutation-free
      */
     public static function fromFields(
         ?int $month = null,
@@ -140,6 +141,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * @param string $text ISO 8601 month-day string (e.g. "--12-25" or "12-25").
      * @return self
      * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
+     * @mutation-free
      */
     public static function parse(string $text): self
     {
@@ -160,6 +162,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * @param Overflow        $overflow  How to handle out-of-range values.
      * @return self A new PlainMonthDay with the overridden fields.
      * @throws \Calendrics\Exception\RangeError if the resulting month-day is invalid (overflow: reject) or fields conflict.
+     * @mutation-free
      */
     public function with(
         ?int $month = null,
@@ -188,6 +191,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      *
      * @param self $other The month-day to compare with.
      * @return bool
+     * @mutation-free
      */
     public function equals(self $other): bool
     {
@@ -199,6 +203,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      *
      * @param CalendarDisplay $calendarName Whether to include the calendar annotation.
      * @return string
+     * @mutation-free
      */
     public function toString(CalendarDisplay $calendarName = CalendarDisplay::Auto): string
     {
@@ -258,6 +263,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * @param int $year The year to combine with this month-day.
      * @return PlainDate
      * @throws \Calendrics\Exception\RangeError if the resulting date is invalid.
+     * @mutation-free
      */
     public function toPlainDate(int $year): PlainDate
     {
@@ -272,6 +278,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * Returns the ISO 8601 string representation.
      *
      * @return string
+     * @mutation-free
      */
     #[\Override]
     public function __toString(): string
@@ -283,6 +290,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * Returns the ISO 8601 string for JSON serialization.
      *
      * @return string
+     * @mutation-free
      */
     #[\Override]
     public function jsonSerialize(): string
@@ -298,6 +306,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * Returns the underlying spec-layer PlainMonthDay.
      *
      * @return SpecPlainMonthDay
+     * @mutation-free
      */
     public function toSpec(): SpecPlainMonthDay
     {
@@ -309,6 +318,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      *
      * @param SpecPlainMonthDay $spec The spec-layer instance to wrap.
      * @return self
+     * @mutation-free
      */
     public static function fromSpec(SpecPlainMonthDay $spec): self
     {
@@ -323,6 +333,7 @@ final class PlainMonthDay implements \Stringable, \JsonSerializable
      * Returns debug information for var_dump().
      *
      * @return array<string, mixed>
+     * @mutation-free
      */
     public function __debugInfo(): array
     {

@@ -104,6 +104,7 @@ final class PlainDateTime implements
      * @param non-empty-string|null   $era
      * @param int|null                $eraYear
      * @param Overflow                $overflow
+     * @mutation-free
      */
     public static function fromFields(
         ?int $year = null,
@@ -168,6 +169,7 @@ final class PlainDateTime implements
      * @param string $text ISO 8601 datetime string (e.g. "2020-01-01T12:30:00").
      * @return self
      * @throws \Calendrics\Exception\RangeError if the string cannot be parsed.
+     * @mutation-free
      */
     public static function parse(string $text): self
     {
@@ -189,6 +191,7 @@ final class PlainDateTime implements
      *
      * @param \DateTimeInterface $dt       Source date-time; its own zone determines the civil fields.
      * @param Calendar           $calendar Calendar projection (default ISO 8601).
+     * @mutation-free
      */
     public static function fromDateTime(\DateTimeInterface $dt, Calendar $calendar = Calendar::Iso8601): self
     {
@@ -214,6 +217,7 @@ final class PlainDateTime implements
      * Compares two PlainDateTimes chronologically.
      *
      * @return int Negative if $one is earlier, positive if later, zero if equal.
+     * @mutation-free
      */
     public static function compare(self $one, self $two): int
     {
@@ -242,6 +246,7 @@ final class PlainDateTime implements
      * @param Overflow         $overflow    How to handle out-of-range values.
      * @return self A new PlainDateTime with the overridden fields.
      * @throws \Calendrics\Exception\RangeError if the resulting datetime is invalid (overflow: reject) or fields conflict.
+     * @mutation-free
      */
     public function with(
         ?int $year = null,
@@ -309,6 +314,8 @@ final class PlainDateTime implements
      * Accepts a {@see Calendar} case or any Temporal date-bearing value
      * (PlainDate, PlainDateTime, PlainMonthDay, PlainYearMonth, ZonedDateTime),
      * whose own calendar is used (mirrors TC39 ToTemporalCalendarIdentifier).
+     *
+     * @mutation-free
      */
     public function withCalendar(Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar): self
     {
@@ -321,6 +328,7 @@ final class PlainDateTime implements
      * @param Duration $duration The duration to add.
      * @param Overflow $overflow How to handle out-of-range values after calendar arithmetic.
      * @return self
+     * @mutation-free
      */
     public function add(Duration $duration, Overflow $overflow = Overflow::Constrain): self
     {
@@ -335,6 +343,7 @@ final class PlainDateTime implements
      * @param Duration $duration The duration to subtract.
      * @param Overflow $overflow How to handle out-of-range values after calendar arithmetic.
      * @return self
+     * @mutation-free
      */
     public function subtract(Duration $duration, Overflow $overflow = Overflow::Constrain): self
     {
@@ -352,6 +361,7 @@ final class PlainDateTime implements
      * @param RoundingMode $roundingMode      How to round the result.
      * @param int          $roundingIncrement The rounding increment for the smallest unit.
      * @return Duration
+     * @mutation-free
      */
     public function since(
         self $other,
@@ -379,6 +389,7 @@ final class PlainDateTime implements
      * @param RoundingMode $roundingMode      How to round the result.
      * @param int          $roundingIncrement The rounding increment for the smallest unit.
      * @return Duration
+     * @mutation-free
      */
     public function until(
         self $other,
@@ -405,6 +416,7 @@ final class PlainDateTime implements
      * @param int          $roundingIncrement Must evenly divide the next-larger unit.
      * @return self
      * @throws \Calendrics\Exception\RangeError for invalid unit or increment values.
+     * @mutation-free
      */
     public function round(
         Unit $smallestUnit,
@@ -425,6 +437,7 @@ final class PlainDateTime implements
      *
      * @param self $other The datetime to compare with.
      * @return bool
+     * @mutation-free
      */
     public function equals(self $other): bool
     {
@@ -439,6 +452,7 @@ final class PlainDateTime implements
      * @param Unit|null       $smallestUnit           Smallest unit to display; overrides $fractionalSecondDigits.
      * @param RoundingMode    $roundingMode           Rounding mode for display (default: Trunc).
      * @return string
+     * @mutation-free
      */
     public function toString(
         CalendarDisplay $calendarName = CalendarDisplay::Auto,
@@ -530,6 +544,7 @@ final class PlainDateTime implements
      * Returns the date part as a PlainDate.
      *
      * @return PlainDate
+     * @mutation-free
      */
     public function toPlainDate(): PlainDate
     {
@@ -540,6 +555,7 @@ final class PlainDateTime implements
      * Returns the time part as a PlainTime.
      *
      * @return PlainTime
+     * @mutation-free
      */
     public function toPlainTime(): PlainTime
     {
@@ -553,6 +569,7 @@ final class PlainDateTime implements
      *
      * @param PlainTime|null $time The time to set, or null for midnight.
      * @return self
+     * @mutation-free
      */
     public function withPlainTime(?PlainTime $time = null): self
     {
@@ -573,6 +590,7 @@ final class PlainDateTime implements
      * @param Disambiguation $disambiguation How to resolve ambiguous wall-clock times.
      * @return ZonedDateTime
      * @throws \Calendrics\Exception\RangeError if the time zone is invalid or the result is out of range.
+     * @mutation-free
      */
     public function toZonedDateTime(
         string $timeZone,
@@ -593,6 +611,7 @@ final class PlainDateTime implements
      * Returns the ISO 8601 string representation.
      *
      * @return string
+     * @mutation-free
      */
     #[\Override]
     public function __toString(): string
@@ -604,6 +623,7 @@ final class PlainDateTime implements
      * Returns the ISO 8601 string for JSON serialization.
      *
      * @return string
+     * @mutation-free
      */
     #[\Override]
     public function jsonSerialize(): string
@@ -619,6 +639,7 @@ final class PlainDateTime implements
      * Returns the underlying spec-layer PlainDateTime.
      *
      * @return SpecPlainDateTime
+     * @mutation-free
      */
     public function toSpec(): SpecPlainDateTime
     {
@@ -630,6 +651,7 @@ final class PlainDateTime implements
      *
      * @param SpecPlainDateTime $spec The spec-layer instance to wrap.
      * @return self
+     * @mutation-free
      */
     public static function fromSpec(SpecPlainDateTime $spec): self
     {
@@ -655,6 +677,7 @@ final class PlainDateTime implements
      * Returns debug information for var_dump().
      *
      * @return array<string, mixed>
+     * @mutation-free
      */
     public function __debugInfo(): array
     {
