@@ -7,6 +7,18 @@ All notable changes to this project are documented in this file. It is generated
 
 Until 1.0.0 the public API may change between minor versions.
 
+## [0.3.4](https://github.com/MidnightDesign/calendrics/compare/v0.3.3...v0.3.4) (2026-11-12)
+
+
+### Build System
+
+* upgrade Psalm to 7 ([#298](https://github.com/MidnightDesign/calendrics/issues/298)) ([c9d0fdc](https://github.com/MidnightDesign/calendrics/commit/c9d0fdcccc8860bbb1c1fbbc85272115ea6a2139))
+
+
+### Continuous Integration
+
+* pin the runner to ubuntu-24.04 ([#293](https://github.com/MidnightDesign/calendrics/issues/293)) ([291c1b5](https://github.com/MidnightDesign/calendrics/commit/291c1b542c8a6f44050ea14f6a651a30fa6a34e5))
+
 ## [0.3.3](https://github.com/MidnightDesign/calendrics/compare/v0.3.2...v0.3.3) (2026-10-05)
 
 
