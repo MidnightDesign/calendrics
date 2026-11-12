@@ -509,6 +509,7 @@ final class CalendarMath
      * math in one place; a Sakamoto-style formula would have to repeat it, and
      * repeats it wrongly for negative years unless every division floors too.
      *
+     * @psalm-api Only called from property hooks, which Psalm does not analyze.
      * @return int<1, 7>
      */
     public static function isoWeekday(int $year, int $month, int $day): int
