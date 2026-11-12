@@ -8,6 +8,6 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-foreach (['-12:12:59.9', '2021-08-19T17:30:45.123456789-12:12:59.9[-12:12:59.9]'] as $timeZone) {
+foreach (['-12:12:59.9', '-12:12:59', '-121259', '+15:59:00', '-170100', '2021-08-19T17:30:45.123456789-12:12:59.9[-12:12:59.9]', '2021-08-19T17:30:45-12:12:59[-12:12:59]', '2021-08-19T17:30:45-121259[-121259]', '2021-08-19T17:30:45+15:59:00[+15:59:00]', '2021-08-19T17:30:45-170100[-170100]'] as $timeZone) {
 Assert::throws(\RangeException::class, function () use (&$timeZone) { return \Calendrics\Spec\ZonedDateTime::from((object) JsUndefined::strip(['year' => 2020, 'month' => 5, 'day' => 2, 'timeZone' => $timeZone])); }, "{$timeZone} is not a valid time zone string");
 }

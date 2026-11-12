@@ -20,3 +20,9 @@ $relativeTo = '1970-01-01T00:00+00:44:30.123456789[+00:45]';
 Assert::throws(\RangeException::class, function () use (&$action, &$relativeTo) { return $action($relativeTo); }, 'rounding is not accepted between ISO offset and time zone');
 $relativeTo = '1970-01-01T00:00-00:44:59[-00:44:59]';
 Assert::throws(\RangeException::class, function () use (&$action, &$relativeTo) { return $action($relativeTo); }, 'sub-minute offset not accepted as time zone identifier');
+$relativeTo = '1970-01-01T00:00-00:45:00[-00:45:00]';
+Assert::throws(\RangeException::class, function () use (&$action, &$relativeTo) { return $action($relativeTo); }, 'offset with zero seconds not accepted as time zone identifier (ISO string)');
+foreach (['-00:44:59', '-004459', '+00:45:00', '+004500', '+15:59:00', '-170100'] as $timeZone) {
+$relativeTo = (object) JsUndefined::strip(['year' => 1970, 'month' => 1, 'day' => 1, 'timeZone' => $timeZone]);
+Assert::throws(\RangeException::class, function () use (&$action, &$relativeTo) { return $action($relativeTo); }, "{$timeZone} is not a valid time zone string in property bag");
+}
