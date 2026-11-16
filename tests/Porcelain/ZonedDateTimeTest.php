@@ -582,7 +582,7 @@ final class ZonedDateTimeTest extends CalendricsTestCase
     public function testRoundWithIncrement(): void
     {
         $zdt = ZonedDateTime::parse('2020-01-01T13:47:00+00:00[UTC]');
-        $result = $zdt->round(Unit::Minute, RoundingMode::HalfExpand, 15);
+        $result = $zdt->round(Unit::Minute, RoundingMode::HalfExpand, roundingIncrement: 15);
 
         static::assertSame(45, $result->minute);
     }
@@ -689,7 +689,7 @@ final class ZonedDateTimeTest extends CalendricsTestCase
         $zdt = ZonedDateTime::parse('2020-06-15T13:45:30.123456789+00:00[UTC]');
         $pt = $zdt->toPlainTime();
 
-        static::assertPlainTimeIs(13, 45, 30, 123, 456, 789, $pt);
+        static::assertPlainTimeIs(13, min: 45, sec: 30, ms: 123, us: 456, ns: 789, time: $pt);
     }
 
     public function testToPlainDateTime(): void
@@ -1180,7 +1180,7 @@ final class ZonedDateTimeTest extends CalendricsTestCase
     public function testRoundForwardsRoundingIncrement(): void
     {
         $zdt = ZonedDateTime::parse('2020-01-01T13:07:00+00:00[UTC]');
-        $result = $zdt->round(Unit::Minute, RoundingMode::Trunc, 5);
+        $result = $zdt->round(Unit::Minute, RoundingMode::Trunc, roundingIncrement: 5);
 
         static::assertSame(5, $result->minute);
     }

@@ -91,7 +91,7 @@ final class IsoString
         // Try the short date forms before time: unprefixed times that also match
         // a year-month or month-day are reserved for the date grammar.
         if (preg_match(sprintf('/\A(%s)-?(%s)\z/', self::YEAR, self::MONTH), $body, $date) === 1) {
-            self::validateDate($date[1], (int) $date[2], 1, $input);
+            self::validateDate($date[1], (int) $date[2], day: 1, input: $input);
             self::requireIsoShortDate($calendar, $input);
             return $result;
         }

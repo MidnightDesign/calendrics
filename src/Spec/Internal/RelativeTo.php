@@ -40,7 +40,7 @@ final class RelativeTo
             $relativeTo,
             ZonedFields::CALENDAR_FIELDS,
             ['offset', 'timeZone'],
-            'relativeTo',
+            context: 'relativeTo',
         );
         if (array_key_exists('timeZone', $bag)) {
             return ZonedDateTime::from($bag);

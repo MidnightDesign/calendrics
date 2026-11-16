@@ -358,7 +358,7 @@ final class Duration implements Stringable
 
         if ($hoursFrac !== '') {
             // Distribute fractional hours (1 H = 3 600 000 000 000 ns) into smaller units.
-            [$dm, $ds, $dms, $dus, $dns] = self::distributeFracNs($hoursFrac, 3_600_000_000_000);
+            [$dm, $ds, $dms, $dus, $dns] = self::distributeFracNs($hoursFrac, nsPerUnit: 3_600_000_000_000);
             $minutes += $dm;
             $seconds += $ds;
             $milliseconds = $dms;
@@ -366,7 +366,7 @@ final class Duration implements Stringable
             $nanoseconds = $dns;
         } elseif ($minutesFrac !== '') {
             // Distribute fractional minutes (1 M = 60 000 000 000 ns) into smaller units.
-            [, $ds, $dms, $dus, $dns] = self::distributeFracNs($minutesFrac, 60_000_000_000);
+            [, $ds, $dms, $dus, $dns] = self::distributeFracNs($minutesFrac, nsPerUnit: 60_000_000_000);
             $seconds += $ds;
             $milliseconds = $dms;
             $microseconds = $dus;
@@ -546,7 +546,7 @@ final class Duration implements Stringable
 
             // smallestUnit overrides fractionalSecondDigits
             if (array_key_exists('smallestUnit', $options) && $options['smallestUnit'] !== null) {
-                $su = Options::coerceEnumOption($options['smallestUnit'], 'smallestUnit');
+                $su = Options::coerceEnumOption($options['smallestUnit'], optionName: 'smallestUnit');
                 $digits = match ($su) {
                     'second', 'seconds' => 0,
                     'millisecond', 'milliseconds' => 3,
@@ -562,7 +562,7 @@ final class Duration implements Stringable
             if (array_key_exists('roundingMode', $options) && $options['roundingMode'] !== null) {
                 $roundingMode = Options::roundingMode(Options::coerceEnumOption(
                     $options['roundingMode'],
-                    'roundingMode',
+                    optionName: 'roundingMode',
                 ));
             }
         }
@@ -741,7 +741,7 @@ final class Duration implements Stringable
             $u = $totalOf['unit'] ?? '';
             // A present, non-null unit is a string-typed option: ToString-coerce a
             // Stringable (JsSymbol throws TypeError), reject other types via RangeError.
-            $unit = $u === null ? '' : Options::coerceEnumOption($u, 'Unit');
+            $unit = $u === null ? '' : Options::coerceEnumOption($u, optionName: 'Unit');
         } else {
             $unit = $totalOf;
         }
