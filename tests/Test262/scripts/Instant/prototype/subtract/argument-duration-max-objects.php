@@ -13,6 +13,7 @@ $maxCases = [['PT2400000000H', 'string with max hours'], [(object) ['hours' => 2
 foreach ($maxCases as $__entry__) {
 [$arg, $descr] = array_pad($__entry__, 2, null);
 $result = $instance->subtract($arg);
+Assert::sameValue($result->epochParts(), [-8640000000000, 0], "operation succeeds with {$descr}");
 }
 $minCases = [['-PT2400000000H', 'string with min hours'], [(object) JsUndefined::strip(['hours' => -2_400_000_000]), 'property bag with min hours'], ['-PT144000000000M', 'string with min minutes'], [(object) JsUndefined::strip(['minutes' => -144_000_000_000]), 'property bag with min minutes'], ['-PT8640000000000S', 'string with min seconds'], [(object) JsUndefined::strip(['seconds' => -8_640_000_000_000]), 'property bag with min seconds']];
 foreach ($minCases as $__entry__) {
