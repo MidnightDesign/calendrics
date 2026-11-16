@@ -21,4 +21,5 @@ $minCases = [['-PT2400000000H', 'string with min hours'], [JsUndefined::strip(['
 foreach ($minCases as $__entry__) {
 [$arg, $descr] = array_pad($__entry__, 2, null);
 $result = $instance->add($arg);
+Assert::sameValue($result->epochParts(), [-8640000000000, 0], "operation succeeds with {$descr}");
 }

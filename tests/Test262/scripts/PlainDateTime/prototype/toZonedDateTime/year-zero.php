@@ -11,9 +11,10 @@ use Calendrics\Tests\Test262\JsUndefined;
 $instance = new \Calendrics\Spec\PlainDateTime(0, 10, 29, 10, 46, 38, 271, 986, 102);
 foreach (['earlier', 'later', 'compatible', 'reject'] as $disambiguation) {
 $result = $instance->toZonedDateTime('+06:00', JsUndefined::strip(['disambiguation' => $disambiguation]));
+Assert::sameValue($result->epochParts(), [-62141109202, 271986102], 'Result is 0000-10-29T04:46:38.271986102Z regardless of disambiguation');
 }
 $instanceLeap = new \Calendrics\Spec\PlainDateTime(0, 2, 29);
 foreach (['earlier', 'later', 'compatible', 'reject'] as $disambiguation) {
 $result = $instanceLeap->toZonedDateTime('-00:01', JsUndefined::strip(['disambiguation' => $disambiguation]));
+Assert::sameValue($result->epochParts(), [-62162121540, 0], 'Result is 0000-02-29T00:01Z regardless of disambiguation');
 }
-\PHPUnit\Framework\Assert::assertTrue(true, 'Script completed without throwing');

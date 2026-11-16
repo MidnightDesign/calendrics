@@ -9,4 +9,7 @@ declare(strict_types=1);
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
 $instance = \Calendrics\Spec\ZonedDateTime::fromEpochParts(-65261246400, 500000000, 'UTC');
-\PHPUnit\Framework\Assert::assertTrue(true, 'Script completed without throwing');
+Assert::sameValue($instance->round((object) ['smallestUnit' => 'second', 'roundingMode' => 'floor'])->epochParts(), [-65261246400, 0], 'Rounding down is towards the Big Bang, not the epoch or 1 BCE (roundingMode floor)');
+Assert::sameValue($instance->round((object) ['smallestUnit' => 'second', 'roundingMode' => 'trunc'])->epochParts(), [-65261246400, 0], 'Rounding down is towards the Big Bang, not the epoch or 1 BCE (roundingMode trunc)');
+Assert::sameValue($instance->round((object) ['smallestUnit' => 'second', 'roundingMode' => 'ceil'])->epochParts(), [-65261246399, 0], 'Rounding up is away from the Big Bang, not the epoch or 1 BCE (roundingMode ceil)');
+Assert::sameValue($instance->round((object) ['smallestUnit' => 'second', 'roundingMode' => 'halfExpand'])->epochParts(), [-65261246399, 0], 'Rounding up is away from the Big Bang, not the epoch or 1 BCE (roundingMode halfExpand)');
