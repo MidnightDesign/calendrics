@@ -8,5 +8,8 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
+use Calendrics\Tests\Test262\TemporalHelpers;
 Assert::throws(\RangeException::class, fn() => new \Calendrics\Spec\PlainDateTime(-271_821, 4, 19, 0, 0, 0, 0, 0, 0), 'negative year out of bounds');
 Assert::throws(\RangeException::class, fn() => new \Calendrics\Spec\PlainDateTime(275_760, 9, 14, 0, 0, 0, 0, 0, 0), 'positive year out of bounds');
+TemporalHelpers::assertPlainDateTime(new \Calendrics\Spec\PlainDateTime(-271_821, 4, 19, 0, 0, 0, 0, 0, 1), -271_821, 4, 'M04', 19, 0, 0, 0, 0, 0, 1, 'negative boundary');
+TemporalHelpers::assertPlainDateTime(new \Calendrics\Spec\PlainDateTime(275_760, 9, 13, 23, 59, 59, 999, 999, 999), 275_760, 9, 'M09', 13, 23, 59, 59, 999, 999, 999, 'positive boundary');
