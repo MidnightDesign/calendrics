@@ -4,9 +4,7 @@
 
 ## Public API policy
 
-This project follows [Semantic Versioning](https://semver.org). Until 1.0.0 the public API may change between minor versions.
-
-From 1.0.0 onward, both API layers are supported under the same contract:
+This project follows [Semantic Versioning](https://semver.org). Both API layers are supported under the same contract:
 
 - **Porcelain (`Calendrics\`, excluding `Calendrics\Internal\`)** — public methods, property names and types, enum cases, and constructor parameters are stable within a major version.
 - **Spec (`Calendrics\Spec\`)** — same contract as porcelain. This layer tracks the TC39 Temporal specification. A behavior change that brings either layer in line with that specification is a bug fix, not a breaking change.
@@ -23,7 +21,7 @@ New enum cases may be added in a minor version. Removing or renaming a case, or 
 
 Releases are automated with [release-please](https://github.com/googleapis/release-please). Pull requests are squash-merged, so the pull request title becomes the commit subject release-please reads — it has to be a [Conventional Commit](https://www.conventionalcommits.org/):
 
-| Prefix | Changelog section | Bump below 1.0.0 |
+| Prefix | Changelog section | Version bump |
 |--------|-------------------|------------------|
 | `feat:` | Features | minor |
 | `fix:` | Bug Fixes | patch |
@@ -36,9 +34,9 @@ Releases are automated with [release-please](https://github.com/googleapis/relea
 | `build:` | Build System | patch |
 | `ci:` | Continuous Integration | patch |
 | `style:` | not listed | — |
-| `feat!:`, or any type with a `BREAKING CHANGE:` footer | ⚠ BREAKING CHANGES | minor |
+| `feat!:`, or any type with a `BREAKING CHANGE:` footer | ⚠ BREAKING CHANGES | major |
 
-Breaking changes bump the minor version while the project is below 1.0.0, matching the policy above; from 1.0.0 they bump the major. The table reflects the configured changelog sections; it does not promise a release for changes hidden from the changelog.
+The table reflects the configured changelog sections; it does not promise a release for changes hidden from the changelog.
 
 After release-eligible changes are merged to `master`, release-please opens or updates a release pull request that accumulates the pending changelog. Nothing ships until that pull request is merged — then release-please writes `CHANGELOG.md`, tags `vX.Y.Z`, and publishes the GitHub release. Packagist publishes from the tag.
 
