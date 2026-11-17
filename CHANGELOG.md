@@ -7,6 +7,13 @@ All notable changes to this project are documented in this file. It is generated
 
 Until 1.0.0 the public API may change between minor versions.
 
+## [1.0.1](https://github.com/MidnightDesign/calendrics/compare/v1.0.0...v1.0.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* map PHP time zone abbreviations to fixed offsets in fromDateTime() ([#310](https://github.com/MidnightDesign/calendrics/issues/310)) ([a1b9ad0](https://github.com/MidnightDesign/calendrics/commit/a1b9ad0f2aa7725ac8c048fe810201d89c05036e))
+
 ## [1.0.0](https://github.com/MidnightDesign/calendrics/compare/v0.3.3...v1.0.0) (2026-11-17)
 
 
