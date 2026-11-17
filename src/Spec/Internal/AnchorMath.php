@@ -51,7 +51,7 @@ final class AnchorMath
         int $months,
         string $calendarId = 'iso8601',
     ): \DateTimeImmutable {
-        return self::addCalendarFields($date, 0, $months, 0, 0, $calendarId);
+        return self::addCalendarFields($date, years: 0, months: $months, weeks: 0, days: 0, calendarId: $calendarId);
     }
 
     public static function addYearsClamped(
@@ -59,7 +59,7 @@ final class AnchorMath
         int $years,
         string $calendarId = 'iso8601',
     ): \DateTimeImmutable {
-        return self::addCalendarFields($date, $years, 0, 0, 0, $calendarId);
+        return self::addCalendarFields($date, $years, months: 0, weeks: 0, days: 0, calendarId: $calendarId);
     }
 
     /** Adds the calendar fields together so constrain is applied only once. */
@@ -79,7 +79,7 @@ final class AnchorMath
             $months,
             $weeks,
             $days,
-            'constrain',
+            overflow: 'constrain',
         );
         return $date->setDate($year, $month, $day);
     }
@@ -144,7 +144,7 @@ final class AnchorMath
         // Add 1 calendar day to the local date.
         $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
             ->setDate($year, $month, $day)
-            ->setTime(0, 0, 0);
+            ->setTime(hour: 0, minute: 0, second: 0);
         $next = $dt->modify('+1 day');
         $tomorrowEpoch = self::localToEpochSec(
             (int) $next->format('Y'),
@@ -189,7 +189,7 @@ final class AnchorMath
         while (true) {
             $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
                 ->setDate($curYear, $curMonth, $curDay)
-                ->setTime(0, 0, 0);
+                ->setTime(hour: 0, minute: 0, second: 0);
             $next = $dt->modify($sign > 0 ? '+1 day' : '-1 day');
             $nextYear = (int) $next->format('Y');
             $nextMonth = (int) $next->format('n');
@@ -236,7 +236,7 @@ final class AnchorMath
         $startEpoch = $knownStartEpoch ?? self::localToEpochSec($year, $month, $day, $hour, $minute, $second, $tzId);
         $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
             ->setDate($year, $month, $day)
-            ->setTime(0, 0, 0);
+            ->setTime(hour: 0, minute: 0, second: 0);
         $end = $dt->modify(sprintf('%+d days', $days));
         $endEpoch = self::localToEpochSec(
             (int) $end->format('Y'),
@@ -275,7 +275,7 @@ final class AnchorMath
         // Start from the date after adding absDays calendar days in the given direction.
         $dt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
             ->setDate($year, $month, $day)
-            ->setTime(0, 0, 0);
+            ->setTime(hour: 0, minute: 0, second: 0);
         if ($absDays > 0) {
             $dtAfterDays = $dt->modify(sprintf('%+d days', $direction * $absDays));
         } else {
@@ -299,7 +299,7 @@ final class AnchorMath
             $useKnownEpoch = false;
             $nextDt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
                 ->setDate($curYear, $curMonth, $curDay)
-                ->setTime(0, 0, 0)
+                ->setTime(hour: 0, minute: 0, second: 0)
                 ->modify($step);
             $nextYear = (int) $nextDt->format('Y');
             $nextMonth = (int) $nextDt->format('n');
@@ -353,6 +353,13 @@ final class AnchorMath
         \DateTimeImmutable $startDate,
         string $calendarId = 'iso8601',
     ): \DateTimeImmutable {
-        return self::addCalendarFields($startDate, (int) $d->years, (int) $d->months, (int) $d->weeks, 0, $calendarId);
+        return self::addCalendarFields(
+            $startDate,
+            (int) $d->years,
+            (int) $d->months,
+            (int) $d->weeks,
+            days: 0,
+            calendarId: $calendarId,
+        );
     }
 }

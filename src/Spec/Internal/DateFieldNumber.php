@@ -11,12 +11,12 @@ final class DateFieldNumber
 {
     public static function month(mixed $value, string $context): int
     {
-        return self::bounded($value, $context, 13);
+        return self::bounded($value, $context, maximum: 13);
     }
 
     public static function day(mixed $value, string $context): int
     {
-        return self::bounded($value, $context, 31);
+        return self::bounded($value, $context, maximum: 31);
     }
 
     /**
