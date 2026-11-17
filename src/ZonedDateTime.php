@@ -228,9 +228,17 @@ final class ZonedDateTime implements
     /**
      * Creates a ZonedDateTime from a PHP `\DateTimeInterface`.
      *
-     * The zone of `$dt` (as returned by `\DateTimeZone::getName()`) is used as
-     * the resulting `timeZoneId`; this preserves both IANA names like
-     * `Europe/Vienna` and fixed-offset strings like `+05:30`.
+     * The resulting `timeZoneId` depends on which of PHP's three kinds of
+     * zone `$dt` carries:
+     *
+     * - An IANA zone such as `Europe/Vienna` or `UTC` keeps its name.
+     * - A UTC offset zone such as `+05:30` keeps its offset string.
+     * - An abbreviation zone, which PHP creates when a parsed string ends in
+     *   an abbreviation such as `CEST`, `CET` or `Z`, becomes the fixed offset
+     *   PHP applied to `$dt`, for example `+02:00`. This keeps PHP's local
+     *   time even for `CET`, which is also an IANA name with daylight saving
+     *   rules. A zero offset, as from `Z` or `GMT`, becomes `UTC`, the
+     *   identifier Temporal itself uses for UTC.
      *
      * PHP's `\DateTimeImmutable` carries microsecond precision; sub-microsecond
      * Temporal bits (the lowest three decimal digits of `epochNanoseconds`) are
@@ -238,9 +246,26 @@ final class ZonedDateTime implements
      */
     public static function fromDateTime(\DateTimeInterface $dt): self
     {
-        $tzId = $dt->getTimezone()->getName();
+        return new self(PhpDateTimeInterop::epochNanoseconds($dt), self::timeZoneIdOf($dt));
+    }
 
-        return new self(PhpDateTimeInterop::epochNanoseconds($dt), $tzId);
+    private static function timeZoneIdOf(\DateTimeInterface $dt): string
+    {
+        $tz = $dt->getTimezone();
+        if (!self::isAbbreviationZone($tz)) {
+            return $tz->getName();
+        }
+
+        return $dt->getOffset() === 0 ? 'UTC' : $dt->format('P');
+    }
+
+    /**
+     * PHP exposes a zone's kind only through its serialized `timezone_type`,
+     * where 2 marks a zone parsed from an abbreviation.
+     */
+    private static function isAbbreviationZone(\DateTimeZone $tz): bool
+    {
+        return $tz->__serialize()['timezone_type'] === 2;
     }
 
     // -------------------------------------------------------------------------
