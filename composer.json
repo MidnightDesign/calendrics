@@ -68,6 +68,7 @@
         "psalm": "psalm",
         "mago": [
             "mago lint",
+            "mago lint --only literal-named-argument --verify-baseline",
             "mago analyze"
         ],
         "mago-format": "mago format",
