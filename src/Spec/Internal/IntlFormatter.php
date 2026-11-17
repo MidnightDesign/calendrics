@@ -243,22 +243,22 @@ final class IntlFormatter
         if (($opts['hour12'] ?? null) !== null) {
             $opts['hour12'] = self::booleanValue($opts['hour12']);
         }
-        self::checkedKeyword($opts, 'hourCycle', self::HOUR_CYCLES);
-        self::checkedKeyword($opts, 'weekday', self::TEXT_WIDTHS);
-        self::checkedKeyword($opts, 'era', self::TEXT_WIDTHS);
-        self::checkedKeyword($opts, 'year', self::NUMBER_WIDTHS);
-        self::checkedKeyword($opts, 'month', self::MONTH_WIDTHS);
-        self::checkedKeyword($opts, 'day', self::NUMBER_WIDTHS);
-        self::checkedKeyword($opts, 'dayPeriod', self::TEXT_WIDTHS);
-        self::checkedKeyword($opts, 'hour', self::NUMBER_WIDTHS);
-        self::checkedKeyword($opts, 'minute', self::NUMBER_WIDTHS);
-        self::checkedKeyword($opts, 'second', self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, name: 'hourCycle', allowed: self::HOUR_CYCLES);
+        self::checkedKeyword($opts, name: 'weekday', allowed: self::TEXT_WIDTHS);
+        self::checkedKeyword($opts, name: 'era', allowed: self::TEXT_WIDTHS);
+        self::checkedKeyword($opts, name: 'year', allowed: self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, name: 'month', allowed: self::MONTH_WIDTHS);
+        self::checkedKeyword($opts, name: 'day', allowed: self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, name: 'dayPeriod', allowed: self::TEXT_WIDTHS);
+        self::checkedKeyword($opts, name: 'hour', allowed: self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, name: 'minute', allowed: self::NUMBER_WIDTHS);
+        self::checkedKeyword($opts, name: 'second', allowed: self::NUMBER_WIDTHS);
         if (($opts['fractionalSecondDigits'] ?? null) !== null) {
             $opts['fractionalSecondDigits'] = self::fractionalDigits($opts['fractionalSecondDigits']);
         }
-        self::checkedKeyword($opts, 'timeZoneName', self::TIME_ZONE_NAME_STYLES);
-        self::checkedKeyword($opts, 'dateStyle', self::FORMAT_STYLES);
-        self::checkedKeyword($opts, 'timeStyle', self::FORMAT_STYLES);
+        self::checkedKeyword($opts, name: 'timeZoneName', allowed: self::TIME_ZONE_NAME_STYLES);
+        self::checkedKeyword($opts, name: 'dateStyle', allowed: self::FORMAT_STYLES);
+        self::checkedKeyword($opts, name: 'timeStyle', allowed: self::FORMAT_STYLES);
         return $opts;
     }
 
@@ -436,7 +436,7 @@ final class IntlFormatter
 
         $timeZone = self::icuTimeZoneId($timeZone);
 
-        $hourCycle = self::checkedKeyword($opts, 'hourCycle', self::HOUR_CYCLES);
+        $hourCycle = self::checkedKeyword($opts, name: 'hourCycle', allowed: self::HOUR_CYCLES);
         if ($hourCycle !== null) {
             $locale = self::applyHourCycle($locale, $hourCycle);
         } elseif (($opts['hour12'] ?? null) !== null) {
@@ -455,8 +455,8 @@ final class IntlFormatter
         // default, as with th-TH → buddhist, which carries no keyword at all.
         $calendarObj = IntlCalendarFactory::forFormatting($timeZone, $locale);
 
-        $dateStyle = self::checkedKeyword($opts, 'dateStyle', self::FORMAT_STYLES);
-        $timeStyle = self::checkedKeyword($opts, 'timeStyle', self::FORMAT_STYLES);
+        $dateStyle = self::checkedKeyword($opts, name: 'dateStyle', allowed: self::FORMAT_STYLES);
+        $timeStyle = self::checkedKeyword($opts, name: 'timeStyle', allowed: self::FORMAT_STYLES);
 
         if ($dateStyle !== null || $timeStyle !== null) {
             self::validateStyleConflicts($opts);
@@ -634,7 +634,7 @@ final class IntlFormatter
 
         // Date components
         if ($allowsDateComponents) {
-            $weekday = self::checkedKeyword($opts, 'weekday', self::TEXT_WIDTHS);
+            $weekday = self::checkedKeyword($opts, name: 'weekday', allowed: self::TEXT_WIDTHS);
             if ($weekday !== null) {
                 $parts[] = match ($weekday) {
                     'narrow' => 'EEEEE',
@@ -642,7 +642,7 @@ final class IntlFormatter
                     'long' => 'EEEE',
                 };
             }
-            $era = self::checkedKeyword($opts, 'era', self::TEXT_WIDTHS);
+            $era = self::checkedKeyword($opts, name: 'era', allowed: self::TEXT_WIDTHS);
             if ($era !== null) {
                 $parts[] = match ($era) {
                     'narrow' => 'GGGGG',
@@ -650,11 +650,11 @@ final class IntlFormatter
                     'long' => 'GGGG',
                 };
             }
-            $year = self::checkedKeyword($opts, 'year', self::NUMBER_WIDTHS);
+            $year = self::checkedKeyword($opts, name: 'year', allowed: self::NUMBER_WIDTHS);
             if ($year !== null) {
                 $parts[] = $year === '2-digit' ? 'yy' : 'y';
             }
-            $month = self::checkedKeyword($opts, 'month', self::MONTH_WIDTHS);
+            $month = self::checkedKeyword($opts, name: 'month', allowed: self::MONTH_WIDTHS);
             if ($month !== null) {
                 $parts[] = match ($month) {
                     'numeric' => 'M',
@@ -664,23 +664,23 @@ final class IntlFormatter
                     'long' => 'MMMM',
                 };
             }
-            $day = self::checkedKeyword($opts, 'day', self::NUMBER_WIDTHS);
+            $day = self::checkedKeyword($opts, name: 'day', allowed: self::NUMBER_WIDTHS);
             if ($day !== null) {
                 $parts[] = $day === '2-digit' ? 'dd' : 'd';
             }
         }
 
         // Time components
-        $hour = self::checkedKeyword($opts, 'hour', self::NUMBER_WIDTHS);
+        $hour = self::checkedKeyword($opts, name: 'hour', allowed: self::NUMBER_WIDTHS);
         if ($hour !== null) {
             // Use 'j' skeleton symbol which picks locale-appropriate hour cycle
             $parts[] = $hour === '2-digit' ? 'jj' : 'j';
         }
-        $minute = self::checkedKeyword($opts, 'minute', self::NUMBER_WIDTHS);
+        $minute = self::checkedKeyword($opts, name: 'minute', allowed: self::NUMBER_WIDTHS);
         if ($minute !== null) {
             $parts[] = $minute === '2-digit' ? 'mm' : 'm';
         }
-        $second = self::checkedKeyword($opts, 'second', self::NUMBER_WIDTHS);
+        $second = self::checkedKeyword($opts, name: 'second', allowed: self::NUMBER_WIDTHS);
         if ($second !== null) {
             $parts[] = $second === '2-digit' ? 'ss' : 's';
         }
@@ -690,7 +690,7 @@ final class IntlFormatter
             $digits = self::fractionalDigits($fsd);
             $parts[] = str_repeat('S', times: $digits);
         }
-        $dayPeriod = self::checkedKeyword($opts, 'dayPeriod', self::TEXT_WIDTHS);
+        $dayPeriod = self::checkedKeyword($opts, name: 'dayPeriod', allowed: self::TEXT_WIDTHS);
         if ($dayPeriod !== null) {
             $parts[] = match ($dayPeriod) {
                 'narrow' => 'BBBBB',
@@ -698,7 +698,7 @@ final class IntlFormatter
                 'long' => 'BBBB',
             };
         }
-        $timeZoneName = self::checkedKeyword($opts, 'timeZoneName', self::TIME_ZONE_NAME_STYLES);
+        $timeZoneName = self::checkedKeyword($opts, name: 'timeZoneName', allowed: self::TIME_ZONE_NAME_STYLES);
         if ($timeZoneName !== null) {
             $parts[] = match ($timeZoneName) {
                 'short' => 'z',

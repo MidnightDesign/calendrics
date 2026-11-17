@@ -7,6 +7,10 @@ excludes = ["tests/Test262/scripts"]
 
 [linter]
 integrations = ["phpunit"]
+# Holds only the literal-named-argument false positives on PHPUnit's
+# @no-named-arguments methods (carthage-software/mago#2741). CI verifies it, so
+# it fails once Mago fixes the bug; then delete the file and this line.
+baseline = "mago-lint-baseline.toml"
 
 [linter.rules.assertion-style]
 level = "error"

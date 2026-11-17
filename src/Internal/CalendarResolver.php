@@ -14,8 +14,9 @@ use Calendrics\ZonedDateTime;
 /** @internal */
 final class CalendarResolver
 {
-    public static function resolve(Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendarLike): Calendar
-    {
+    public static function resolve(
+        Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendarLike,
+    ): Calendar {
         if ($calendarLike instanceof Calendar) {
             return $calendarLike;
         }

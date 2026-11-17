@@ -531,7 +531,15 @@ final class PureHebrewCalendar implements CalendarProtocol
         if ($largestUnit === 'year') {
             $yearDiff = abs($calY2 - $calY1);
             $years = max(0, $yearDiff - 1);
-            while ($this->trialDoesNotSurpass($isoY1, $isoM1, $isoD1, $sign * ($years + 1), 0, $jdn2, $sign)) {
+            while ($this->trialDoesNotSurpass(
+                $isoY1,
+                $isoM1,
+                $isoD1,
+                $sign * ($years + 1),
+                months: 0,
+                targetJdn: $jdn2,
+                sign: $sign,
+            )) {
                 $years++;
             }
             while ($this->trialDoesNotSurpass(
@@ -553,7 +561,15 @@ final class PureHebrewCalendar implements CalendarProtocol
             $monthIndex1 = (int) floor(((235 * $calY1) - 234) / 19) + $calM1;
             $monthIndex2 = (int) floor(((235 * $calY2) - 234) / 19) + $calM2;
             $months = max(0, abs($monthIndex2 - $monthIndex1) - 1);
-            while ($this->trialDoesNotSurpass($isoY1, $isoM1, $isoD1, 0, $sign * ($months + 1), $jdn2, $sign)) {
+            while ($this->trialDoesNotSurpass(
+                $isoY1,
+                $isoM1,
+                $isoD1,
+                years: 0,
+                months: $sign * ($months + 1),
+                targetJdn: $jdn2,
+                sign: $sign,
+            )) {
                 $months++;
             }
         }
@@ -564,9 +580,9 @@ final class PureHebrewCalendar implements CalendarProtocol
             $isoD1,
             $sign * $years,
             $sign * $months,
-            0,
-            0,
-            'constrain',
+            weeks: 0,
+            days: 0,
+            overflow: 'constrain',
         );
         $days = $jdn2 - CalendarMath::toJulianDay($intIsoY, $intIsoM, $intIsoD);
 
@@ -582,7 +598,16 @@ final class PureHebrewCalendar implements CalendarProtocol
         int $targetJdn,
         int $sign,
     ): bool {
-        [$tY, $tM, $tD] = $this->dateAdd($isoY1, $isoM1, $isoD1, $years, $months, 0, 0, 'constrain');
+        [$tY, $tM, $tD] = $this->dateAdd(
+            $isoY1,
+            $isoM1,
+            $isoD1,
+            $years,
+            $months,
+            weeks: 0,
+            days: 0,
+            overflow: 'constrain',
+        );
         $trialJdn = CalendarMath::toJulianDay($tY, $tM, $tD);
 
         if ($months === 0) {

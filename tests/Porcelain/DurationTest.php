@@ -21,14 +21,38 @@ final class DurationTest extends CalendricsTestCase
     {
         $d = new Duration();
 
-        static::assertDurationIs(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, $d);
+        static::assertDurationIs(
+            0,
+            months: 0,
+            weeks: 0,
+            days: 0,
+            hours: 0,
+            minutes: 0,
+            seconds: 0,
+            ms: 0,
+            us: 0,
+            ns: 0,
+            d: $d,
+        );
     }
 
     public function testAllPositive(): void
     {
         $d = new Duration(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
 
-        static::assertDurationIs(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, $d);
+        static::assertDurationIs(
+            1,
+            months: 2,
+            weeks: 3,
+            days: 4,
+            hours: 5,
+            minutes: 6,
+            seconds: 7,
+            ms: 8,
+            us: 9,
+            ns: 10,
+            d: $d,
+        );
     }
 
     public function testAllNegative(): void
@@ -92,7 +116,19 @@ final class DurationTest extends CalendricsTestCase
     {
         $d = Duration::parse('P1Y2M3DT4H5M6S');
 
-        static::assertDurationIs(1, 2, 0, 3, 4, 5, 6, 0, 0, 0, $d);
+        static::assertDurationIs(
+            1,
+            months: 2,
+            weeks: 0,
+            days: 3,
+            hours: 4,
+            minutes: 5,
+            seconds: 6,
+            ms: 0,
+            us: 0,
+            ns: 0,
+            d: $d,
+        );
     }
 
     public function testParseNegative(): void
@@ -279,7 +315,19 @@ final class DurationTest extends CalendricsTestCase
 
         $updated = $d->with(years: 5, days: 6);
 
-        static::assertDurationIs(5, 2, 0, 6, 0, 0, 0, 0, 0, 0, $updated);
+        static::assertDurationIs(
+            5,
+            months: 2,
+            weeks: 0,
+            days: 6,
+            hours: 0,
+            minutes: 0,
+            seconds: 0,
+            ms: 0,
+            us: 0,
+            ns: 0,
+            d: $updated,
+        );
     }
 
     public function testWithAllFields(): void
@@ -297,7 +345,19 @@ final class DurationTest extends CalendricsTestCase
             nanoseconds: 9,
         );
 
-        static::assertDurationIs(1, 2, 3, 0, 4, 5, 6, 7, 8, 9, $updated);
+        static::assertDurationIs(
+            1,
+            months: 2,
+            weeks: 3,
+            days: 0,
+            hours: 4,
+            minutes: 5,
+            seconds: 6,
+            ms: 7,
+            us: 8,
+            ns: 9,
+            d: $updated,
+        );
     }
 
     public function testWithNoFieldsThrows(): void
@@ -534,7 +594,19 @@ final class DurationTest extends CalendricsTestCase
         $spec = $d->toSpec();
         $restored = Duration::fromSpec($spec);
 
-        static::assertDurationIs(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, $restored);
+        static::assertDurationIs(
+            1,
+            months: 2,
+            weeks: 3,
+            days: 4,
+            hours: 5,
+            minutes: 6,
+            seconds: 7,
+            ms: 8,
+            us: 9,
+            ns: 10,
+            d: $restored,
+        );
     }
 
     // -------------------------------------------------------------------------

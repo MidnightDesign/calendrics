@@ -82,7 +82,7 @@ final class DurationRounding
             throw new RangeError('roundingIncrement must not exceed 10^9.');
         }
 
-        $roundingMode = Options::roundingMode(Options::coerceEnumOption($rmRaw, 'roundingMode'));
+        $roundingMode = Options::roundingMode(Options::coerceEnumOption($rmRaw, optionName: 'roundingMode'));
 
         // At least one of smallestUnit or largestUnit must be provided.
         $suProvided = $suRaw !== null;
@@ -106,9 +106,13 @@ final class DurationRounding
             'years' => 9,
         ];
 
-        $suNorm = $suProvided ? Options::normalizeUnit(Options::coerceEnumOption($suRaw, 'smallestUnit')) : null;
+        $suNorm = $suProvided
+            ? Options::normalizeUnit(Options::coerceEnumOption($suRaw, optionName: 'smallestUnit'))
+            : null;
         $luIsAuto = !$luProvided || $luRaw === 'auto';
-        $luNorm = $luIsAuto ? null : Options::normalizeUnit(Options::coerceEnumOption($luRaw, 'largestUnit'));
+        $luNorm = $luIsAuto
+            ? null
+            : Options::normalizeUnit(Options::coerceEnumOption($luRaw, optionName: 'largestUnit'));
 
         // Calendar smallestUnit or largestUnit require relativeTo.
         $suIsCalendar = $suNorm !== null && array_key_exists($suNorm, $UNIT_IDX) && $UNIT_IDX[$suNorm] >= 7;
@@ -545,11 +549,11 @@ final class DurationRounding
         }
         if ($largestUnitIdx <= 1) {
             $ms = 0;
-            $us = self::scaleSeconds($totalSec, 1_000_000, intdiv(num1: $subNs, num2: 1_000));
+            $us = self::scaleSeconds($totalSec, mult: 1_000_000, add: intdiv(num1: $subNs, num2: 1_000));
         }
         if ($largestUnitIdx === 0) {
             $us = 0;
-            $ns = self::scaleSeconds($totalSec, 1_000_000_000, $subNs);
+            $ns = self::scaleSeconds($totalSec, mult: 1_000_000_000, add: $subNs);
         }
 
         $floatMax = 9_007_199_254_740_992;
@@ -765,7 +769,14 @@ final class DurationRounding
             );
             $years = abs($signedYears);
             $months = abs($signedMonths);
-            $current = AnchorMath::addCalendarFields($startDate, $signedYears, $signedMonths, 0, 0, $calendarId);
+            $current = AnchorMath::addCalendarFields(
+                $startDate,
+                $signedYears,
+                $signedMonths,
+                weeks: 0,
+                days: 0,
+                calendarId: $calendarId,
+            );
         }
         if ($luIdx >= 9 && $suIdx >= 8) {
             while (true) {
@@ -783,9 +794,9 @@ final class DurationRounding
                     $startDate,
                     $sign * $years,
                     $sign * ($months + 1),
-                    0,
-                    0,
-                    $calendarId,
+                    weeks: 0,
+                    days: 0,
+                    calendarId: $calendarId,
                 );
                 if ($sign > 0 ? $next > $endDate : $next < $endDate) {
                     break;
@@ -847,7 +858,7 @@ final class DurationRounding
         $tz = new \DateTimeZone('UTC');
         $startDate = new \DateTimeImmutable('now', $tz)
             ->setDate($bag['year'], $bag['month'], $bag['day'])
-            ->setTime(0, 0, 0);
+            ->setTime(hour: 0, minute: 0, second: 0);
 
         // Compute effective largestUnit index.
         $suIdx = $suNorm !== null ? $UNIT_IDX[$suNorm] : 0;
@@ -1053,8 +1064,8 @@ final class DurationRounding
                     $zdtInfoRWR['second'],
                     $zdtInfoRWR['tzId'],
                     $roundedSubDayNs,
-                    0,
-                    $sign,
+                    absDays: 0,
+                    direction: $sign,
                 );
                 $roundedAbsDays = $preDays + $extraDays;
                 // If time overflowed into an extra day, re-round the new remainder.
@@ -1073,8 +1084,8 @@ final class DurationRounding
                         $zdtInfoRWR['second'],
                         $zdtInfoRWR['tzId'],
                         $absSubDayNs,
-                        0,
-                        $sign,
+                        absDays: 0,
+                        direction: $sign,
                     );
                     $roundedAbsDays += $moreDays;
                 }
@@ -1204,7 +1215,14 @@ final class DurationRounding
                 (int) $endDate->format('j'),
                 $luIdx >= 9 ? 'year' : 'month',
             );
-            $current = AnchorMath::addCalendarFields($startDate, $years, $months, 0, 0, $calendarId);
+            $current = AnchorMath::addCalendarFields(
+                $startDate,
+                $years,
+                $months,
+                weeks: 0,
+                days: 0,
+                calendarId: $calendarId,
+            );
             // monthsSignedDays is signed (negative when going backward).
             $monthsSignedDays = (int) $startDate->diff($current)->format('%r%a');
             $absMonthsNs = abs($monthsSignedDays) * $nsPerDay;
@@ -1240,7 +1258,13 @@ final class DurationRounding
         $roundedWeeks = self::applyCalendarRounding($nLow, $nLow + $increment, $progress, $roundingMode, $isPositive);
         $roundedDays = $sign * $roundedWeeks * 7;
 
-        [$ry, $rm, $rw, $rd] = self::balanceDateDuration($startDate, $roundedDays, $luIdx, 7, $calendarId);
+        [$ry, $rm, $rw, $rd] = self::balanceDateDuration(
+            $startDate,
+            $roundedDays,
+            $luIdx,
+            suIdx: 7,
+            calendarId: $calendarId,
+        );
         return new Duration($ry, $rm, $rw, $rd, 0, 0, 0, 0, 0, 0);
     }
 
