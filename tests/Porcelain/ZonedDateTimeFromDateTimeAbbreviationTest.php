@@ -15,6 +15,13 @@ final class ZonedDateTimeFromDateTimeAbbreviationTest extends CalendricsTestCase
         static::assertSame('2026-07-10T18:00:00+00:00[UTC]', (string) $zdt);
     }
 
+    public function testZeroOffsetAbbreviationBecomesUtc(): void
+    {
+        $zdt = ZonedDateTime::fromDateTime(new \DateTimeImmutable('2026-07-10 18:00 GMT'));
+
+        static::assertSame('2026-07-10T18:00:00+00:00[UTC]', (string) $zdt);
+    }
+
     public function testNonIanaAbbreviationBecomesFixedOffset(): void
     {
         $zdt = ZonedDateTime::fromDateTime(new \DateTimeImmutable('2026-07-10 20:00 CEST'));

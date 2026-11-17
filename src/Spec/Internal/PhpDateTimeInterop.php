@@ -26,6 +26,9 @@ use Calendrics\Spec\ZonedDateTime;
  */
 final class PhpDateTimeInterop
 {
+    /** PHP's internal `timezone_type` for a zone parsed from an abbreviation such as `CEST` or `Z`. */
+    private const int ABBREVIATION_ZONE_TYPE = 2;
+
     /** Not instantiable.
      * @psalm-suppress UnusedConstructor
      */
@@ -64,6 +67,23 @@ final class PhpDateTimeInterop
         }
 
         return ($ts * 1_000_000_000) + ((int) $dt->format('u') * 1_000);
+    }
+
+    /**
+     * Returns the Temporal time zone ID for the zone of `$dt`.
+     *
+     * IANA zones and UTC offset zones keep their names. PHP treats an
+     * abbreviation zone as a fixed offset, so it becomes that offset, or
+     * `UTC` when the offset is zero.
+     */
+    public static function timeZoneId(\DateTimeInterface $dt): string
+    {
+        $tz = $dt->getTimezone();
+        if ($tz->__serialize()['timezone_type'] !== self::ABBREVIATION_ZONE_TYPE) {
+            return $tz->getName();
+        }
+
+        return $dt->getOffset() === 0 ? 'UTC' : $dt->format('P');
     }
 
     /**

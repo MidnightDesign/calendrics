@@ -238,9 +238,10 @@ final class ZonedDateTime implements
      *   PHP applied to `$dt`, for example `+02:00`. PHP treats abbreviations
      *   as fixed offsets that never observe daylight saving time, so this
      *   keeps PHP's local time even where the abbreviation is also an IANA
-     *   name with daylight saving rules, such as `CET`. The `Z` designator
-     *   (for example from `2026-07-10T18:00:00Z`) becomes `UTC`, the
-     *   identifier Temporal itself uses for UTC.
+     *   name with daylight saving rules, such as `CET`. An abbreviation
+     *   with a zero offset, such as the `Z` designator (for example from
+     *   `2026-07-10T18:00:00Z`) or `GMT`, becomes `UTC`, the identifier
+     *   Temporal itself uses for UTC.
      *
      * PHP's `\DateTimeImmutable` carries microsecond precision; sub-microsecond
      * Temporal bits (the lowest three decimal digits of `epochNanoseconds`) are
@@ -248,13 +249,7 @@ final class ZonedDateTime implements
      */
     public static function fromDateTime(\DateTimeInterface $dt): self
     {
-        $tz = $dt->getTimezone();
-        $tzId = $tz->getName();
-        if ($tz->__serialize()['timezone_type'] === 2) {
-            $tzId = $tzId === 'Z' ? 'UTC' : $dt->format('P');
-        }
-
-        return new self(PhpDateTimeInterop::epochNanoseconds($dt), $tzId);
+        return new self(PhpDateTimeInterop::epochNanoseconds($dt), PhpDateTimeInterop::timeZoneId($dt));
     }
 
     // -------------------------------------------------------------------------
