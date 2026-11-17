@@ -17,6 +17,8 @@ From 1.0.0 onward, both API layers are supported under the same contract:
 
 Bug fixes that correct incorrect output are not breaking changes, even when an observed value changes. Deprecations are announced in the changelog at least one minor version before removal and marked with `@deprecated`.
 
+New enum cases may be added in a minor version. Removing or renaming a case, or changing its backing value, requires a major version. If you `match` on an enum this library returns, such as `Calendar`, include a `default` arm.
+
 ### Releases
 
 Releases are automated with [release-please](https://github.com/googleapis/release-please). Pull requests are squash-merged, so the pull request title becomes the commit subject release-please reads — it has to be a [Conventional Commit](https://www.conventionalcommits.org/):
