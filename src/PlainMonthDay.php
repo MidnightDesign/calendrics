@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Calendrics;
 
+use Calendrics\Internal\HasLocalizedFormatting;
 use Calendrics\Spec\PlainMonthDay as SpecPlainMonthDay;
-use Calendrics\Trait\HasLocalizedFormatting;
 
 /**
  * A calendar month-day without a year, time, or time zone.

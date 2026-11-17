@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Calendrics\Trait;
+namespace Calendrics\Internal;
 
 use Calendrics\Spec\Instant as SpecInstant;
 use Calendrics\Spec\ZonedDateTime as SpecZonedDateTime;

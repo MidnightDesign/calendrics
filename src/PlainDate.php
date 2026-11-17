@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Calendrics;
 
 use Calendrics\Internal\CalendarResolver;
+use Calendrics\Internal\HasDayOfMonthProperties;
+use Calendrics\Internal\HasDayOfMonthSpec;
+use Calendrics\Internal\HasLocalizedFormatting;
+use Calendrics\Internal\HasYearMonthProperties;
+use Calendrics\Internal\HasYearMonthSpec;
 use Calendrics\Spec\PlainDate as SpecPlainDate;
-use Calendrics\Trait\HasDayOfMonthProperties;
-use Calendrics\Trait\HasDayOfMonthSpec;
-use Calendrics\Trait\HasLocalizedFormatting;
-use Calendrics\Trait\HasYearMonthProperties;
-use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A calendar date without a time or time zone.
