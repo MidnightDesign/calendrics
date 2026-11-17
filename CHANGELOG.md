@@ -7,6 +7,39 @@ All notable changes to this project are documented in this file. It is generated
 
 Until 1.0.0 the public API may change between minor versions.
 
+## [1.0.0](https://github.com/MidnightDesign/calendrics/compare/v0.3.3...v1.0.0) (2026-11-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* RoundingMode::toPhpRoundingMode() and RoundingMode::fromPhpRoundingMode() are removed.
+* PlainDate::withCalendar(), PlainDateTime::withCalendar() and ZonedDateTime::withCalendar() no longer accept a Temporal value. Pass its calendar instead: $date->withCalendar($other->calendar).
+
+### Code Refactoring
+
+* accept only Calendar in withCalendar() ([#300](https://github.com/MidnightDesign/calendrics/issues/300)) ([8574c9c](https://github.com/MidnightDesign/calendrics/commit/8574c9cdcf499561147adfb508f7149054789f0f))
+* move porcelain traits to Calendrics\Internal ([#304](https://github.com/MidnightDesign/calendrics/issues/304)) ([dff5db7](https://github.com/MidnightDesign/calendrics/commit/dff5db7c38bfc79665df08808f4843ccbbd561a6))
+* remove the PHP RoundingMode bridge ([#306](https://github.com/MidnightDesign/calendrics/issues/306)) ([faad78e](https://github.com/MidnightDesign/calendrics/commit/faad78e38239dc22c9de419446fd76a6a668cb43))
+
+
+### Documentation
+
+* allow new enum cases in minor versions ([#302](https://github.com/MidnightDesign/calendrics/issues/302)) ([e711237](https://github.com/MidnightDesign/calendrics/commit/e71123706845e91595daab88721fc23a61e0fcdc))
+* exclude [@internal](https://github.com/internal) symbols from the compatibility promise ([#301](https://github.com/MidnightDesign/calendrics/issues/301)) ([95ca5f5](https://github.com/MidnightDesign/calendrics/commit/95ca5f5becf831787524ba4308c1917f067cd378))
+* put the compatibility promise into effect for 1.0.0 ([#307](https://github.com/MidnightDesign/calendrics/issues/307)) ([1e660ad](https://github.com/MidnightDesign/calendrics/commit/1e660ad0e2454837e80dca69b452c2bed95f0664))
+* treat alignment with TC39 as a bug fix ([#303](https://github.com/MidnightDesign/calendrics/issues/303)) ([5b0838f](https://github.com/MidnightDesign/calendrics/commit/5b0838fa9af208b6e7e1189ab2a080cb18b60e8f))
+
+
+### Build System
+
+* update Mago, PHPStan and Psalm and fix their new findings ([#305](https://github.com/MidnightDesign/calendrics/issues/305)) ([e02e509](https://github.com/MidnightDesign/calendrics/commit/e02e509b9e031ce37bc18ae6e3d6c0eb471b9859))
+* upgrade Psalm to 7 ([#298](https://github.com/MidnightDesign/calendrics/issues/298)) ([c9d0fdc](https://github.com/MidnightDesign/calendrics/commit/c9d0fdcccc8860bbb1c1fbbc85272115ea6a2139))
+
+
+### Continuous Integration
+
+* pin the runner to ubuntu-24.04 ([#293](https://github.com/MidnightDesign/calendrics/issues/293)) ([291c1b5](https://github.com/MidnightDesign/calendrics/commit/291c1b542c8a6f44050ea14f6a651a30fa6a34e5))
+
 ## [0.3.3](https://github.com/MidnightDesign/calendrics/compare/v0.3.2...v0.3.3) (2026-10-05)
 
 
