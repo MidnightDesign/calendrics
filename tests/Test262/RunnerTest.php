@@ -66,12 +66,7 @@ final class RunnerTest extends TestCase
         if (!str_contains($path, 'basic-chinese') || !str_contains($path, '/daysInYear/')) {
             return;
         }
-        // Read INTL_ICU_VERSION via constant() so PHPStan doesn't const-fold it to the
-        // analyzer's host value and prove the version_compare branch unreachable. Static
-        // analysis sees this as a `mixed` lookup; production sees the real linked-libicu
-        // version.
-        /** @var string $icu */
-        $icu = constant('INTL_ICU_VERSION');
+        $icu = \INTL_ICU_VERSION;
         if (version_compare($icu, version2: '76', operator: '<')) {
             static::markTestIncomplete(sprintf(
                 'Chinese-calendar daysInYear fixtures require ICU ≥ 76 (host has %s); leap-year placement diverges below that.',

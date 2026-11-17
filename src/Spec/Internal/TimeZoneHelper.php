@@ -34,7 +34,7 @@ final class TimeZoneHelper
             if (array_key_exists($id, $cacheR)) {
                 return $cacheR[$id];
             }
-            $result = self::normalizeTimezoneIdUncached($id, true);
+            $result = self::normalizeTimezoneIdUncached($id, rejectDatetimeStrings: true);
             if (count($cacheR) >= 1024) {
                 $cacheR = [];
             }
@@ -43,7 +43,7 @@ final class TimeZoneHelper
         if (array_key_exists($id, $cacheN)) {
             return $cacheN[$id];
         }
-        $result = self::normalizeTimezoneIdUncached($id, false);
+        $result = self::normalizeTimezoneIdUncached($id, rejectDatetimeStrings: false);
         if (count($cacheN) >= 1024) {
             $cacheN = [];
         }

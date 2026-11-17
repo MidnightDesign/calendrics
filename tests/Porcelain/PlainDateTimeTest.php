@@ -516,7 +516,7 @@ final class PlainDateTimeTest extends CalendricsTestCase
     public function testRoundWithIncrement(): void
     {
         $dt = new PlainDateTime(2020, 6, 15, 13, 47);
-        $rounded = $dt->round(Unit::Minute, RoundingMode::HalfExpand, 15);
+        $rounded = $dt->round(Unit::Minute, RoundingMode::HalfExpand, roundingIncrement: 15);
 
         static::assertSame(13, $rounded->hour);
         static::assertSame(45, $rounded->minute);

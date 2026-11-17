@@ -91,7 +91,7 @@ final class Options
      */
     public static function overflowOption(mixed $value): string
     {
-        $overflow = self::coerceEnumOption($value, 'overflow');
+        $overflow = self::coerceEnumOption($value, optionName: 'overflow');
         if ($overflow !== 'constrain' && $overflow !== 'reject') {
             throw new RangeError(sprintf(
                 'Invalid overflow value: "%s"; must be \'constrain\' or \'reject\'.',

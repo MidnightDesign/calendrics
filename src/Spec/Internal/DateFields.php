@@ -48,10 +48,10 @@ final class DateFields
     public static function fromBag(array $bag, string $overflow = 'constrain'): PlainDate
     {
         $calendarId = array_key_exists('calendar', $bag)
-            ? CalendarFactory::resolveBagCalendar($bag['calendar'], 'PlainDate')
+            ? CalendarFactory::resolveBagCalendar($bag['calendar'], context: 'PlainDate')
             : null;
 
-        $hasEraAndEraYear = CalendarMath::hasEraAndEraYear($bag, $calendarId, 'PlainDate');
+        $hasEraAndEraYear = CalendarMath::hasEraAndEraYear($bag, $calendarId, className: 'PlainDate');
         $calendarSupportsEras = CalendarMath::supportsEras($calendarId);
 
         // For calendars without eras (ISO, Chinese, Dangi), era+eraYear can't replace year.
@@ -83,12 +83,17 @@ final class DateFields
         if (array_key_exists('year', $bag)) {
             /** @var mixed $yearRaw */
             $yearRaw = $bag['year'];
-            $year = CalendarMath::toFiniteInt($yearRaw, 'PlainDate year');
+            $year = CalendarMath::toFiniteInt($yearRaw, errorContext: 'PlainDate year');
         }
 
         // Resolve era + eraYear if present (overrides year for era-based calendars).
         if ($readsEraFields && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
-            $resolved = CalendarMath::resolveYearFromEra($calendar, $bag['era'], $bag['eraYear'], 'PlainDate');
+            $resolved = CalendarMath::resolveYearFromEra(
+                $calendar,
+                $bag['era'],
+                $bag['eraYear'],
+                errorContext: 'PlainDate',
+            );
             if ($resolved !== null) {
                 $year = $resolved;
             }
@@ -110,7 +115,7 @@ final class DateFields
         if ($hasMonth) {
             /** @var mixed $monthRaw */
             $monthRaw = $bag['month'] ?? null;
-            $newMonth = DateFieldNumber::month($monthRaw, 'PlainDate month');
+            $newMonth = DateFieldNumber::month($monthRaw, context: 'PlainDate month');
             if ($hasMonthCode && $newMonth !== $month) {
                 throw new RangeError('Conflicting month and monthCode fields.');
             }
@@ -121,7 +126,7 @@ final class DateFields
 
         /** @var mixed $dayRaw */
         $dayRaw = $bag['day'];
-        $day = DateFieldNumber::day($dayRaw, 'PlainDate day');
+        $day = DateFieldNumber::day($dayRaw, context: 'PlainDate day');
 
         // month < 1 and day < 1 are always invalid (cannot constrain below minimum of 1).
         if ($month < 1) {
