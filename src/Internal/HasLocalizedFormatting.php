@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Calendrics\Trait;
+namespace Calendrics\Internal;
 
 /**
  * Shared plumbing for the porcelain `toLocaleString()` methods.

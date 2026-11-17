@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Calendrics;
 
+use Calendrics\Internal\HasLocalizedFormatting;
+use Calendrics\Internal\HasTimeOfDayProperties;
+use Calendrics\Internal\HasTimeOfDaySpec;
 use Calendrics\Spec\PlainTime as SpecPlainTime;
-use Calendrics\Trait\HasLocalizedFormatting;
-use Calendrics\Trait\HasTimeOfDayProperties;
-use Calendrics\Trait\HasTimeOfDaySpec;
 
 /**
  * A wall-clock time without a date or time zone.
