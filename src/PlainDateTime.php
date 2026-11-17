@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Calendrics;
 
-use Calendrics\Internal\CalendarResolver;
 use Calendrics\Spec\PlainDateTime as SpecPlainDateTime;
 use Calendrics\Trait\HasDayOfMonthProperties;
 use Calendrics\Trait\HasDayOfMonthSpec;
@@ -305,14 +304,10 @@ final class PlainDateTime implements
      * Returns a new PlainDateTime with a different calendar system.
      *
      * The underlying ISO datetime remains the same; only the calendar projection changes.
-     *
-     * Accepts a {@see Calendar} case or any Temporal date-bearing value
-     * (PlainDate, PlainDateTime, PlainMonthDay, PlainYearMonth, ZonedDateTime),
-     * whose own calendar is used (mirrors TC39 ToTemporalCalendarIdentifier).
      */
-    public function withCalendar(Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar): self
+    public function withCalendar(Calendar $calendar): self
     {
-        return self::fromSpec($this->spec->withCalendar(CalendarResolver::resolve($calendar)->value));
+        return self::fromSpec($this->spec->withCalendar($calendar->value));
     }
 
     /**
