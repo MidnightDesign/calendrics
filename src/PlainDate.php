@@ -202,8 +202,9 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * (PlainDate, PlainDateTime, PlainMonthDay, PlainYearMonth, ZonedDateTime),
      * whose own calendar is used (mirrors TC39 ToTemporalCalendarIdentifier).
      */
-    public function withCalendar(Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar): self
-    {
+    public function withCalendar(
+        Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar,
+    ): self {
         return self::fromSpec($this->spec->withCalendar(CalendarResolver::resolve($calendar)->value));
     }
 

@@ -110,7 +110,7 @@ final class ZonedArithmetic
                 $lc['nanosecond'],
                 $zdt->timeZoneId,
                 $zdt->calendarId,
-                'compatible',
+                disambiguation: 'compatible',
             );
         }
 
@@ -121,7 +121,7 @@ final class ZonedArithmetic
         $intermediateEpochSec = TimeZoneHelper::wallSecToEpochSec(
             $wallSec,
             ZoneOffsets::canonicalize($zdt->timeZoneId),
-            'compatible',
+            disambiguation: 'compatible',
         );
         $intermediateSubNs =
             ($lc['millisecond'] * EpochLimits::NS_PER_MILLISECOND)

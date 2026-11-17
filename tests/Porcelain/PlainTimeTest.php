@@ -20,28 +20,28 @@ final class PlainTimeTest extends CalendricsTestCase
     {
         $t = new PlainTime();
 
-        static::assertPlainTimeIs(0, 0, 0, 0, 0, 0, $t);
+        static::assertPlainTimeIs(0, min: 0, sec: 0, ms: 0, us: 0, ns: 0, time: $t);
     }
 
     public function testConstructorAllFields(): void
     {
         $t = new PlainTime(13, 45, 30, 123, 456, 789);
 
-        static::assertPlainTimeIs(13, 45, 30, 123, 456, 789, $t);
+        static::assertPlainTimeIs(13, min: 45, sec: 30, ms: 123, us: 456, ns: 789, time: $t);
     }
 
     public function testConstructorPartialFields(): void
     {
         $t = new PlainTime(10, 30);
 
-        static::assertPlainTimeIs(10, 30, 0, 0, 0, 0, $t);
+        static::assertPlainTimeIs(10, min: 30, sec: 0, ms: 0, us: 0, ns: 0, time: $t);
     }
 
     public function testConstructorNamedParameters(): void
     {
         $t = new PlainTime(hour: 8, second: 15);
 
-        static::assertPlainTimeIs(8, 0, 15, 0, 0, 0, $t);
+        static::assertPlainTimeIs(8, min: 0, sec: 15, ms: 0, us: 0, ns: 0, time: $t);
     }
 
     // -------------------------------------------------------------------------
@@ -52,35 +52,35 @@ final class PlainTimeTest extends CalendricsTestCase
     {
         $t = PlainTime::parse('13:45:30');
 
-        static::assertPlainTimeIs(13, 45, 30, 0, 0, 0, $t);
+        static::assertPlainTimeIs(13, min: 45, sec: 30, ms: 0, us: 0, ns: 0, time: $t);
     }
 
     public function testParseWithFractionalSeconds(): void
     {
         $t = PlainTime::parse('13:45:30.123456789');
 
-        static::assertPlainTimeIs(13, 45, 30, 123, 456, 789, $t);
+        static::assertPlainTimeIs(13, min: 45, sec: 30, ms: 123, us: 456, ns: 789, time: $t);
     }
 
     public function testParseWithMilliseconds(): void
     {
         $t = PlainTime::parse('09:30:00.500');
 
-        static::assertPlainTimeIs(9, 30, 0, 500, 0, 0, $t);
+        static::assertPlainTimeIs(9, min: 30, sec: 0, ms: 500, us: 0, ns: 0, time: $t);
     }
 
     public function testParseMinimal(): void
     {
         $t = PlainTime::parse('08:00');
 
-        static::assertPlainTimeIs(8, 0, 0, 0, 0, 0, $t);
+        static::assertPlainTimeIs(8, min: 0, sec: 0, ms: 0, us: 0, ns: 0, time: $t);
     }
 
     public function testParseWithLeadingT(): void
     {
         $t = PlainTime::parse('T12:30:00');
 
-        static::assertPlainTimeIs(12, 30, 0, 0, 0, 0, $t);
+        static::assertPlainTimeIs(12, min: 30, sec: 0, ms: 0, us: 0, ns: 0, time: $t);
     }
 
     public function testParseInvalidStringThrows(): void
@@ -142,7 +142,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(10, 20, 30);
         $updated = $t->with(hour: 15);
 
-        static::assertPlainTimeIs(15, 20, 30, 0, 0, 0, $updated);
+        static::assertPlainTimeIs(15, min: 20, sec: 30, ms: 0, us: 0, ns: 0, time: $updated);
     }
 
     public function testWithMultipleFields(): void
@@ -150,7 +150,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(10, 20, 30, 100, 200, 300);
         $updated = $t->with(minute: 45, nanosecond: 999);
 
-        static::assertPlainTimeIs(10, 45, 30, 100, 200, 999, $updated);
+        static::assertPlainTimeIs(10, min: 45, sec: 30, ms: 100, us: 200, ns: 999, time: $updated);
     }
 
     public function testWithSubSecondFields(): void
@@ -158,7 +158,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(10, 20, 30);
         $updated = $t->with(second: 59, millisecond: 111, microsecond: 222, nanosecond: 333);
 
-        static::assertPlainTimeIs(10, 20, 59, 111, 222, 333, $updated);
+        static::assertPlainTimeIs(10, min: 20, sec: 59, ms: 111, us: 222, ns: 333, time: $updated);
     }
 
     public function testWithNoFieldsReturnsCopy(): void
@@ -166,7 +166,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(10, 20, 30);
         $updated = $t->with();
 
-        static::assertPlainTimeIs(10, 20, 30, 0, 0, 0, $updated);
+        static::assertPlainTimeIs(10, min: 20, sec: 30, ms: 0, us: 0, ns: 0, time: $updated);
     }
 
     public function testWithDoesNotMutateOriginal(): void
@@ -186,7 +186,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(10, 0);
         $result = $t->add(new Duration(hours: 3));
 
-        static::assertPlainTimeIs(13, 0, 0, 0, 0, 0, $result);
+        static::assertPlainTimeIs(13, min: 0, sec: 0, ms: 0, us: 0, ns: 0, time: $result);
     }
 
     public function testAddWrapsAroundMidnight(): void
@@ -194,7 +194,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(23, 0);
         $result = $t->add(new Duration(hours: 2));
 
-        static::assertPlainTimeIs(1, 0, 0, 0, 0, 0, $result);
+        static::assertPlainTimeIs(1, min: 0, sec: 0, ms: 0, us: 0, ns: 0, time: $result);
     }
 
     public function testAddMinutesAndSeconds(): void
@@ -202,7 +202,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(10, 30, 45);
         $result = $t->add(new Duration(minutes: 35, seconds: 20));
 
-        static::assertPlainTimeIs(11, 6, 5, 0, 0, 0, $result);
+        static::assertPlainTimeIs(11, min: 6, sec: 5, ms: 0, us: 0, ns: 0, time: $result);
     }
 
     public function testAddSubSecondFields(): void
@@ -210,7 +210,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(12, 0, 0);
         $result = $t->add(new Duration(milliseconds: 500, microseconds: 300, nanoseconds: 100));
 
-        static::assertPlainTimeIs(12, 0, 0, 500, 300, 100, $result);
+        static::assertPlainTimeIs(12, min: 0, sec: 0, ms: 500, us: 300, ns: 100, time: $result);
     }
 
     public function testSubtractHours(): void
@@ -218,7 +218,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(10, 0);
         $result = $t->subtract(new Duration(hours: 3));
 
-        static::assertPlainTimeIs(7, 0, 0, 0, 0, 0, $result);
+        static::assertPlainTimeIs(7, min: 0, sec: 0, ms: 0, us: 0, ns: 0, time: $result);
     }
 
     public function testSubtractWrapsAroundMidnight(): void
@@ -226,7 +226,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(1, 0);
         $result = $t->subtract(new Duration(hours: 3));
 
-        static::assertPlainTimeIs(22, 0, 0, 0, 0, 0, $result);
+        static::assertPlainTimeIs(22, min: 0, sec: 0, ms: 0, us: 0, ns: 0, time: $result);
     }
 
     public function testAddDoesNotMutateOriginal(): void
@@ -246,7 +246,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(13, 45, 30);
         $rounded = $t->round(Unit::Hour);
 
-        static::assertPlainTimeIs(14, 0, 0, 0, 0, 0, $rounded);
+        static::assertPlainTimeIs(14, min: 0, sec: 0, ms: 0, us: 0, ns: 0, time: $rounded);
     }
 
     public function testRoundToMinute(): void
@@ -254,7 +254,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(13, 45, 30);
         $rounded = $t->round(Unit::Minute);
 
-        static::assertPlainTimeIs(13, 46, 0, 0, 0, 0, $rounded);
+        static::assertPlainTimeIs(13, min: 46, sec: 0, ms: 0, us: 0, ns: 0, time: $rounded);
     }
 
     public function testRoundToSecond(): void
@@ -262,7 +262,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(13, 45, 30, 500);
         $rounded = $t->round(Unit::Second);
 
-        static::assertPlainTimeIs(13, 45, 31, 0, 0, 0, $rounded);
+        static::assertPlainTimeIs(13, min: 45, sec: 31, ms: 0, us: 0, ns: 0, time: $rounded);
     }
 
     public function testRoundWithTruncMode(): void
@@ -270,7 +270,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(13, 45, 30, 999);
         $rounded = $t->round(Unit::Second, RoundingMode::Trunc);
 
-        static::assertPlainTimeIs(13, 45, 30, 0, 0, 0, $rounded);
+        static::assertPlainTimeIs(13, min: 45, sec: 30, ms: 0, us: 0, ns: 0, time: $rounded);
     }
 
     public function testRoundToMillisecond(): void
@@ -278,7 +278,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(13, 45, 30, 123, 500);
         $rounded = $t->round(Unit::Millisecond);
 
-        static::assertPlainTimeIs(13, 45, 30, 124, 0, 0, $rounded);
+        static::assertPlainTimeIs(13, min: 45, sec: 30, ms: 124, us: 0, ns: 0, time: $rounded);
     }
 
     public function testRoundToMicrosecond(): void
@@ -286,7 +286,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(13, 45, 30, 123, 456, 500);
         $rounded = $t->round(Unit::Microsecond);
 
-        static::assertPlainTimeIs(13, 45, 30, 123, 457, 0, $rounded);
+        static::assertPlainTimeIs(13, min: 45, sec: 30, ms: 123, us: 457, ns: 0, time: $rounded);
     }
 
     public function testRoundToNanosecond(): void
@@ -294,15 +294,15 @@ final class PlainTimeTest extends CalendricsTestCase
         $t = new PlainTime(13, 45, 30, 123, 456, 789);
         $rounded = $t->round(Unit::Nanosecond);
 
-        static::assertPlainTimeIs(13, 45, 30, 123, 456, 789, $rounded);
+        static::assertPlainTimeIs(13, min: 45, sec: 30, ms: 123, us: 456, ns: 789, time: $rounded);
     }
 
     public function testRoundWithIncrement(): void
     {
         $t = new PlainTime(13, 47);
-        $rounded = $t->round(Unit::Minute, RoundingMode::HalfExpand, 15);
+        $rounded = $t->round(Unit::Minute, RoundingMode::HalfExpand, roundingIncrement: 15);
 
-        static::assertPlainTimeIs(13, 45, 0, 0, 0, 0, $rounded);
+        static::assertPlainTimeIs(13, min: 45, sec: 0, ms: 0, us: 0, ns: 0, time: $rounded);
     }
 
     // -------------------------------------------------------------------------
@@ -503,7 +503,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $spec = $t->toSpec();
         $restored = PlainTime::fromSpec($spec);
 
-        static::assertPlainTimeIs(13, 45, 30, 123, 456, 789, $restored);
+        static::assertPlainTimeIs(13, min: 45, sec: 30, ms: 123, us: 456, ns: 789, time: $restored);
     }
 
     public function testFromSpecMidnight(): void
@@ -511,7 +511,7 @@ final class PlainTimeTest extends CalendricsTestCase
         $spec = new \Calendrics\Spec\PlainTime();
         $t = PlainTime::fromSpec($spec);
 
-        static::assertPlainTimeIs(0, 0, 0, 0, 0, 0, $t);
+        static::assertPlainTimeIs(0, min: 0, sec: 0, ms: 0, us: 0, ns: 0, time: $t);
     }
 
     // -------------------------------------------------------------------------

@@ -143,12 +143,12 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         mixed $nanosecond = null,
     ) {
         // TC39 ToIntegerWithTruncation: null/omitted → 0, bool → 0/1, string/float → truncated int.
-        $h = CalendarMath::toConstructorInt($hour, 'PlainTime hour');
-        $min = CalendarMath::toConstructorInt($minute, 'PlainTime minute');
-        $sec = CalendarMath::toConstructorInt($second, 'PlainTime second');
-        $ms = CalendarMath::toConstructorInt($millisecond, 'PlainTime millisecond');
-        $us = CalendarMath::toConstructorInt($microsecond, 'PlainTime microsecond');
-        $ns = CalendarMath::toConstructorInt($nanosecond, 'PlainTime nanosecond');
+        $h = CalendarMath::toConstructorInt($hour, errorContext: 'PlainTime hour');
+        $min = CalendarMath::toConstructorInt($minute, errorContext: 'PlainTime minute');
+        $sec = CalendarMath::toConstructorInt($second, errorContext: 'PlainTime second');
+        $ms = CalendarMath::toConstructorInt($millisecond, errorContext: 'PlainTime millisecond');
+        $us = CalendarMath::toConstructorInt($microsecond, errorContext: 'PlainTime microsecond');
+        $ns = CalendarMath::toConstructorInt($nanosecond, errorContext: 'PlainTime nanosecond');
 
         CalendarMath::validateTimeFields($h, $min, $sec, $ms, $us, $ns);
 
@@ -262,7 +262,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             throw new TypeError('PlainTime::with() argument must be an object.');
         }
 
-        $fields = FieldBag::forPartial($fields, self::TIME_FIELDS, null);
+        $fields = FieldBag::forPartial($fields, self::TIME_FIELDS, calendarId: null);
 
         // RejectObjectWithCalendarOrTimeZone: calendar/timeZone keys are date-specific
         // and must not appear in a PlainTime fields bag.
@@ -298,22 +298,22 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         $ns = $this->nanosecond;
 
         if (array_key_exists('hour', $fields)) {
-            $h = CalendarMath::toFiniteInt($fields['hour'], 'PlainTime::with() hour');
+            $h = CalendarMath::toFiniteInt($fields['hour'], errorContext: 'PlainTime::with() hour');
         }
         if (array_key_exists('minute', $fields)) {
-            $min = CalendarMath::toFiniteInt($fields['minute'], 'PlainTime::with() minute');
+            $min = CalendarMath::toFiniteInt($fields['minute'], errorContext: 'PlainTime::with() minute');
         }
         if (array_key_exists('second', $fields)) {
-            $sec = CalendarMath::toFiniteInt($fields['second'], 'PlainTime::with() second');
+            $sec = CalendarMath::toFiniteInt($fields['second'], errorContext: 'PlainTime::with() second');
         }
         if (array_key_exists('millisecond', $fields)) {
-            $ms = CalendarMath::toFiniteInt($fields['millisecond'], 'PlainTime::with() millisecond');
+            $ms = CalendarMath::toFiniteInt($fields['millisecond'], errorContext: 'PlainTime::with() millisecond');
         }
         if (array_key_exists('microsecond', $fields)) {
-            $us = CalendarMath::toFiniteInt($fields['microsecond'], 'PlainTime::with() microsecond');
+            $us = CalendarMath::toFiniteInt($fields['microsecond'], errorContext: 'PlainTime::with() microsecond');
         }
         if (array_key_exists('nanosecond', $fields)) {
-            $ns = CalendarMath::toFiniteInt($fields['nanosecond'], 'PlainTime::with() nanosecond');
+            $ns = CalendarMath::toFiniteInt($fields['nanosecond'], errorContext: 'PlainTime::with() nanosecond');
         }
 
         // GetOptionsObject + GetTemporalOverflowOption: explicit null / non-object
@@ -431,7 +431,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         if ($suRaw === null) {
             throw new RangeError('Calendrics\\PlainTime::round() requires smallestUnit.');
         }
-        $suRaw = Options::coerceEnumOption($suRaw, 'smallestUnit');
+        $suRaw = Options::coerceEnumOption($suRaw, optionName: 'smallestUnit');
 
         // ns-per-unit → max increment (exclusive: must be strictly less than this)
         // The max is the number of units in the next-larger unit (for rounding to divide evenly).
@@ -456,7 +456,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
 
         $roundingMode = 'halfExpand';
         if (array_key_exists('roundingMode', $options) && $options['roundingMode'] !== null) {
-            $rmRaw = Options::coerceEnumOption($options['roundingMode'], 'roundingMode');
+            $rmRaw = Options::coerceEnumOption($options['roundingMode'], optionName: 'roundingMode');
             $roundingMode = $rmRaw;
         }
 
@@ -464,7 +464,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         if (array_key_exists('roundingIncrement', $options) && $options['roundingIncrement'] !== null) {
             // Per TC39 ToTemporalRoundingIncrement: GetOption with type «Number» calls ToNumber,
             // which coerces booleans/numeric strings. CalendarMath::toFiniteInt mirrors that.
-            $rawIncrement = CalendarMath::toFiniteInt($options['roundingIncrement'], 'roundingIncrement');
+            $rawIncrement = CalendarMath::toFiniteInt($options['roundingIncrement'], errorContext: 'roundingIncrement');
             if ($rawIncrement < 1) {
                 throw new RangeError('roundingIncrement must be a positive integer.');
             }
@@ -533,7 +533,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
 
             // smallestUnit overrides fractionalSecondDigits.
             if (array_key_exists('smallestUnit', $options) && $options['smallestUnit'] !== null) {
-                $suRaw = Options::coerceEnumOption($options['smallestUnit'], 'smallestUnit');
+                $suRaw = Options::coerceEnumOption($options['smallestUnit'], optionName: 'smallestUnit');
                 $su = $suRaw;
                 [$digits, $isMinute] = match ($su) {
                     'minute', 'minutes' => [-1, true],
@@ -547,7 +547,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
 
             // roundingMode option.
             if (array_key_exists('roundingMode', $options) && $options['roundingMode'] !== null) {
-                $rm = Options::coerceEnumOption($options['roundingMode'], 'roundingMode');
+                $rm = Options::coerceEnumOption($options['roundingMode'], optionName: 'roundingMode');
                 $roundingMode = Options::roundingMode($rm);
             }
         }
@@ -556,6 +556,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         // digits=-2 ('auto'): nanosecond precision (no rounding changes display).
         // digits=-1 ('minute'): minute precision.
         // digits=0..9: second or sub-second precision.
+        /** @var int<1, 60000000000> $nsIncrement */
         $nsIncrement = match ($digits) {
             -2 => 1,
             -1 => self::NS_PER_MINUTE,
@@ -692,7 +693,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             if (preg_match('/Z(?:\[|$)/i', $s) === 1) {
                 throw new RangeError("PlainTime::from() cannot parse \"{$s}\": UTC designator 'Z' is not allowed.");
             }
-            CalendarMath::validateAnnotations($annotationSection, $s, false);
+            CalendarMath::validateAnnotations($annotationSection, $s, checkCalendar: false);
 
             $hourNum = (int) $m[3];
             $minNum = (int) $m[4];
@@ -748,7 +749,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         $m2 = [];
         if (preg_match($colonTimePattern, $timeStr, $m2) === 1) {
             $annotationSection = $m2[5] !== '' ? $m2[5] : '';
-            CalendarMath::validateAnnotations($annotationSection, $s, false);
+            CalendarMath::validateAnnotations($annotationSection, $s, checkCalendar: false);
 
             $hourNum = (int) $m2[1];
             $minNum = (int) $m2[2];
@@ -769,7 +770,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             $fracRaw = $m3[4] !== '' ? $m3[4] : '';
             $subNs = $fracRaw !== '' ? IsoFraction::toNanoseconds($fracRaw) : 0;
             $annotationSection = $m3[5] !== '' ? $m3[5] : '';
-            CalendarMath::validateAnnotations($annotationSection, $s, false);
+            CalendarMath::validateAnnotations($annotationSection, $s, checkCalendar: false);
 
             // If MM was not provided (hours-only), minNum stays 0; that's fine.
             // Disallow fractional seconds without HHMMSS (e.g., HH.frac or HHMM.frac is invalid).
@@ -788,7 +789,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
         if ($second === 60) {
             $second = 59;
         }
-        CalendarMath::validateTimeFields($hour, $minute, $second, 0, 0, 0);
+        CalendarMath::validateTimeFields($hour, $minute, $second, ms: 0, us: 0, ns: 0);
         return self::fromNs(($hour * self::NS_PER_HOUR)
         + ($minute * self::NS_PER_MINUTE)
         + ($second * EpochLimits::NS_PER_SECOND)
@@ -867,12 +868,12 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
             throw new TypeError('PlainTime property bag must have at least one time field.');
         }
 
-        $h = CalendarMath::extractIntField($bag, 'hour', 0, 'PlainTime');
-        $min = CalendarMath::extractIntField($bag, 'minute', 0, 'PlainTime');
-        $sec = CalendarMath::extractIntField($bag, 'second', 0, 'PlainTime');
-        $ms = CalendarMath::extractIntField($bag, 'millisecond', 0, 'PlainTime');
-        $us = CalendarMath::extractIntField($bag, 'microsecond', 0, 'PlainTime');
-        $ns = CalendarMath::extractIntField($bag, 'nanosecond', 0, 'PlainTime');
+        $h = CalendarMath::extractIntField($bag, field: 'hour', default: 0, className: 'PlainTime');
+        $min = CalendarMath::extractIntField($bag, field: 'minute', default: 0, className: 'PlainTime');
+        $sec = CalendarMath::extractIntField($bag, field: 'second', default: 0, className: 'PlainTime');
+        $ms = CalendarMath::extractIntField($bag, field: 'millisecond', default: 0, className: 'PlainTime');
+        $us = CalendarMath::extractIntField($bag, field: 'microsecond', default: 0, className: 'PlainTime');
+        $ns = CalendarMath::extractIntField($bag, field: 'nanosecond', default: 0, className: 'PlainTime');
 
         if ($overflow === 'constrain') {
             $h = max(0, min(23, $h));
@@ -950,7 +951,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
                 /** @var mixed $lu */
                 $lu = $opts['largestUnit'];
                 if ($lu !== null) {
-                    $lu = Options::coerceEnumOption($lu, 'largestUnit');
+                    $lu = Options::coerceEnumOption($lu, optionName: 'largestUnit');
                 }
                 if (is_string($lu)) {
                     if (!in_array($lu, $validUnits, strict: true)) {
@@ -972,7 +973,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
                 /** @var mixed $su */
                 $su = $opts['smallestUnit'];
                 if ($su !== null) {
-                    $su = Options::coerceEnumOption($su, 'smallestUnit');
+                    $su = Options::coerceEnumOption($su, optionName: 'smallestUnit');
                 }
                 if (is_string($su)) {
                     // Valid smallestUnit values for PlainTime (no calendar units).
@@ -1010,7 +1011,7 @@ final class PlainTime implements PlainLocaleFormattable, Stringable
                 /** @var mixed $rm */
                 $rm = $opts['roundingMode'];
                 if ($rm !== null) {
-                    $rm = Options::coerceEnumOption($rm, 'roundingMode');
+                    $rm = Options::coerceEnumOption($rm, optionName: 'roundingMode');
                 }
                 if (is_string($rm)) {
                     $roundingMode = Options::roundingMode($rm);
