@@ -232,15 +232,15 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
         mixed $day,
         string|int|float|bool|object|null $calendar = 'iso8601',
     ) {
-        $this->calendarId = CalendarFactory::resolveConstructorCalendar($calendar, 'PlainDate');
+        $this->calendarId = CalendarFactory::resolveConstructorCalendar($calendar, context: 'PlainDate');
         // TC39 ToIntegerWithTruncation: null → 0, bool → 0/1, string/float → truncated int.
-        $this->isoYear = CalendarMath::toConstructorInt($year, 'PlainDate year');
-        $monthInt = DateFieldNumber::month($month ?? 0, 'PlainDate month');
+        $this->isoYear = CalendarMath::toConstructorInt($year, errorContext: 'PlainDate year');
+        $monthInt = DateFieldNumber::month($month ?? 0, context: 'PlainDate month');
         if ($monthInt < 1 || $monthInt > 12) {
             throw new RangeError("Invalid PlainDate: month {$monthInt} is out of range 1–12.");
         }
         $this->isoMonth = $monthInt;
-        $dayInt = DateFieldNumber::day($day ?? 0, 'PlainDate day');
+        $dayInt = DateFieldNumber::day($day ?? 0, context: 'PlainDate day');
         if ($dayInt < 1) {
             throw new RangeError("Invalid PlainDate: day {$dayInt} must be at least 1.");
         }
@@ -299,7 +299,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
         // GetOptionsObject (step 18), so an accessor on the bag runs — and can throw —
         // ahead of any complaint about the options argument. Both precede the
         // algorithmic field validation in CalendarDateFromFields (steps 19-20).
-        $item = FieldBag::forCalendarType($item, DateFields::CALENDAR_FIELDS, [], 'PlainDate');
+        $item = FieldBag::forCalendarType($item, DateFields::CALENDAR_FIELDS, [], context: 'PlainDate');
         $overflow = Options::overflowFromValue($options);
         return DateFields::fromBag($item, $overflow);
     }
@@ -388,7 +388,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
             $this->year,
             $this->monthCode,
             $this->day,
-            'PlainDate::with()',
+            context: 'PlainDate::with()',
         );
         [$year, $month, $day] = $date->resolve(Options::overflowFromValue($options));
 
@@ -405,7 +405,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
     public function add(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
-        return DateArithmetic::add($this, 1, $dur, $options);
+        return DateArithmetic::add($this, sign: 1, dur: $dur, options: $options);
     }
 
     /**
@@ -438,7 +438,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
                 "Cannot compute since() between different calendars: \"{$this->calendarId}\" and \"{$o->calendarId}\".",
             );
         }
-        return DateDifference::between($this, $o, 'since', $options);
+        return DateDifference::between($this, $o, operation: 'since', options: $options);
     }
 
     /**
@@ -456,7 +456,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
                 "Cannot compute until() between different calendars: \"{$this->calendarId}\" and \"{$o->calendarId}\".",
             );
         }
-        return DateDifference::between($this, $o, 'until', $options);
+        return DateDifference::between($this, $o, operation: 'until', options: $options);
     }
 
     /**
@@ -502,7 +502,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
 
         $calendarName = 'auto';
         if (array_key_exists('calendarName', $opts)) {
-            $cn = Options::coerceEnumOption($opts['calendarName'], 'calendarName');
+            $cn = Options::coerceEnumOption($opts['calendarName'], optionName: 'calendarName');
             $calendarName = $cn;
         }
 
@@ -565,7 +565,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
         if (is_string($item)) {
             // String argument = timezone ID; use startOfDay semantics (TC39 spec).
             $tzId = TimeZoneHelper::normalizeTimezoneId($item);
-            return $this->createZdt($tzId, 0, 0, 0, 0, 0, 0, startOfDay: true);
+            return $this->createZdt($tzId, h: 0, m: 0, s: 0, ms: 0, us: 0, ns: 0, startOfDay: true);
         }
         // Property bag (array or object). Read each property via the faithful
         // TC39 Get(O, P) helper so that an accessor getter — used by test262's
@@ -573,7 +573,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
         // get_object_vars() would snapshot only declared props and never trigger it.
         // Spec order: Get(item, "timeZone") first, then Get(item, "plainTime").
         /** @var mixed $tzRaw */
-        $tzRaw = Options::bagGet($item, 'timeZone');
+        $tzRaw = Options::bagGet($item, prop: 'timeZone');
         if ($tzRaw === Options::ABSENT) {
             throw new TypeError('PlainDate::toZonedDateTime() property bag must have a timeZone property.');
         }
@@ -596,7 +596,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
         $us = 0;
         $ns = 0;
         /** @var mixed $ptRaw */
-        $ptRaw = Options::bagGet($item, 'plainTime');
+        $ptRaw = Options::bagGet($item, prop: 'plainTime');
         $hasPlainTime = $ptRaw !== Options::ABSENT;
         if ($hasPlainTime) {
             if ($ptRaw === null) {
@@ -659,7 +659,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
      */
     public function withCalendar(mixed $calendar): self
     {
-        $calId = CalendarFactory::resolveBagCalendar($calendar, 'PlainDate');
+        $calId = CalendarFactory::resolveBagCalendar($calendar, context: 'PlainDate');
         return new self($this->isoYear, $this->isoMonth, $this->isoDay, $calId);
     }
 
@@ -693,7 +693,7 @@ final class PlainDate implements PlainLocaleFormattable, Stringable
         // for cross-midnight DST gaps instead of regular disambiguation.
         if ($startOfDay && $h === 0 && $m === 0 && $s === 0 && $ms === 0 && $us === 0 && $ns === 0) {
             $epochSec = TimeZoneHelper::wallSecToEpochSec($wallSec, $tzId);
-            $zdt = ZonedDateTime::fromEpochParts($epochSec, 0, $tzId, $this->calendarId);
+            $zdt = ZonedDateTime::fromEpochParts($epochSec, subNs: 0, tzId: $tzId, calendarId: $this->calendarId);
             return $zdt->startOfDay();
         }
 

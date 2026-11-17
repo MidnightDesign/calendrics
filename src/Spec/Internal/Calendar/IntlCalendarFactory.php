@@ -76,7 +76,7 @@ final class IntlCalendarFactory
     {
         $calendar = self::forLocale($timeZone, $locale);
         if ($calendar->getType() === 'iso8601') {
-            $calendar = self::forCalendarId($timeZone, 'gregory');
+            $calendar = self::forCalendarId($timeZone, calendarId: 'gregory');
         }
 
         return self::makeGregorianProleptic($calendar);

@@ -36,7 +36,7 @@ final class IntlPatternRecords
         } elseif ($base === '' || str_starts_with($base, '_')) {
             $base = self::requireLocale($intlCalendar->getLocale(\Locale::VALID_LOCALE));
         }
-        $standards = self::resource($base, $calendar, 'DateTimePatterns', fallback: true);
+        $standards = self::resource($base, $calendar, name: 'DateTimePatterns', fallback: true);
         $standardLocale = sprintf('%s@calendar=%s', $base, $calendar);
         for ($i = 0; $i < 8; $i++) {
             $pattern = $standards === null
@@ -67,7 +67,7 @@ final class IntlPatternRecords
                 $genericAdded = true;
             }
             $visited[$base] = true;
-            $formats = self::resource($base, $calendar, 'availableFormats');
+            $formats = self::resource($base, $calendar, name: 'availableFormats');
             if ($formats !== null) {
                 /**
                  * @var mixed $skeleton
@@ -93,7 +93,7 @@ final class IntlPatternRecords
             if ($base === 'root') {
                 break;
             }
-            $bundle = \ResourceBundle::create($base, null, fallback: false);
+            $bundle = \ResourceBundle::create($base, bundle: null, fallback: false);
             $parent = $bundle?->get('%%Parent', fallback: false);
             $separator = strrpos($base, needle: '_');
             $base = match (true) {
@@ -115,7 +115,7 @@ final class IntlPatternRecords
         string $name,
         bool $fallback = false,
     ): ?\ResourceBundle {
-        $bundle = \ResourceBundle::create($locale, null, fallback: $fallback);
+        $bundle = \ResourceBundle::create($locale, bundle: null, fallback: $fallback);
         $calendars = $bundle?->get('calendar', fallback: $fallback);
         $data = $calendars instanceof \ResourceBundle ? $calendars->get($calendar, fallback: $fallback) : null;
         $resource = $data instanceof \ResourceBundle ? $data->get($name, fallback: $fallback) : null;

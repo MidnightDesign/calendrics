@@ -95,7 +95,7 @@ final class ZonedParse
         if ($dayNum < 1 || $dayNum > $daysInMonth) {
             throw new RangeError("Invalid ZonedDateTime string \"{$text}\": day out of range.");
         }
-        DateParse::validateOptionalTime($hourStr, $minStr, $secStr, $text, 'ZonedDateTime');
+        DateParse::validateOptionalTime($hourStr, $minStr, $secStr, $text, context: 'ZonedDateTime');
         if ($fractionRaw !== '' && $secStr === '') {
             throw new RangeError("Invalid ZonedDateTime string \"{$text}\": a fraction requires seconds.");
         }
