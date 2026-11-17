@@ -89,7 +89,7 @@ final class DateParse
         }
         $year = (int) $yearRaw;
 
-        self::validateOptionalTime($m[3], $m[4], $m[5], $s, 'PlainDate');
+        self::validateOptionalTime($m[3], $m[4], $m[5], $s, context: 'PlainDate');
 
         // Validate bracket annotations and extract calendar ID.
         $annotationSection = $m[7];

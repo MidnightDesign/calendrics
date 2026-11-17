@@ -120,7 +120,7 @@ final class DateTimeDifference
             /** @var mixed $lu */
             $lu = $opts['largestUnit'];
             if ($lu !== null) {
-                $lu = Options::coerceEnumOption($lu, 'largestUnit');
+                $lu = Options::coerceEnumOption($lu, optionName: 'largestUnit');
             }
             if (is_string($lu)) {
                 if (!in_array($lu, $validUnits, strict: true)) {
@@ -143,7 +143,7 @@ final class DateTimeDifference
             /** @var mixed $rm */
             $rm = $opts['roundingMode'];
             if ($rm !== null) {
-                $rm = Options::coerceEnumOption($rm, 'roundingMode');
+                $rm = Options::coerceEnumOption($rm, optionName: 'roundingMode');
             }
             if (is_string($rm)) {
                 $roundingMode = Options::roundingMode($rm);
@@ -154,7 +154,7 @@ final class DateTimeDifference
             /** @var mixed $su */
             $su = $opts['smallestUnit'];
             if ($su !== null) {
-                $su = Options::coerceEnumOption($su, 'smallestUnit');
+                $su = Options::coerceEnumOption($su, optionName: 'smallestUnit');
             }
             if (is_string($su)) {
                 if ($su === 'auto' || !in_array($su, $validUnits, strict: true)) {
@@ -381,7 +381,7 @@ final class DateTimeDifference
                             // BubbleRelativeDuration checks the next year once,
                             // even when the month increment spans several years.
                             $roundedJdn = self::addSigned($temporalDate, $sign * $years, $sign * $roundedMonths);
-                            $nextYearJdn = self::addSigned($temporalDate, $sign * ($years + 1), 0);
+                            $nextYearJdn = self::addSigned($temporalDate, $sign * ($years + 1), signedMonths: 0);
                             if (($sign * ($roundedJdn - $nextYearJdn)) >= 0) {
                                 $years++;
                                 $roundedMonths = 0;
@@ -428,9 +428,9 @@ final class DateTimeDifference
                         $otherJdn + ($sign * ($roundedDays - $days)),
                         $otherNs - ($sign * $timeDiffNs),
                         $roundedDate,
-                        0,
-                        $normLargest,
-                        $sign,
+                        timeNs: 0,
+                        largestUnit: $normLargest,
+                        direction: $sign,
                     );
                 }
                 return new Duration(
@@ -686,8 +686,8 @@ final class DateTimeDifference
         $floorCount = intdiv(num1: $years, num2: $increment) * $increment;
 
         // Calendar years can contain leap months, so do not convert them to months.
-        $anchorJdn = self::addSigned($receiver, $dir * $floorCount, 0);
-        $nextJdn = self::addSigned($receiver, $dir * ($floorCount + $increment), 0);
+        $anchorJdn = self::addSigned($receiver, $dir * $floorCount, signedMonths: 0);
+        $nextJdn = self::addSigned($receiver, $dir * ($floorCount + $increment), signedMonths: 0);
 
         $intervalDays = abs($nextJdn - $anchorJdn);
 
@@ -710,7 +710,7 @@ final class DateTimeDifference
         $roundedAbsYears = $roundUp ? $floorCount + $increment : $floorCount;
 
         // Validate range.
-        self::addSigned($receiver, $dir * $roundedAbsYears, 0);
+        self::addSigned($receiver, $dir * $roundedAbsYears, signedMonths: 0);
 
         return $roundedAbsYears;
     }
@@ -762,13 +762,13 @@ final class DateTimeDifference
             $signedYears,
             $signedMonths,
             $signedWeeks,
-            0,
-            'constrain',
+            days: 0,
+            overflow: 'constrain',
         );
 
         $jdn = CalendarMath::toJulianDay($y, $m, $d);
-        $minJdn = CalendarMath::toJulianDay(-271_821, 4, 19);
-        $maxJdn = CalendarMath::toJulianDay(275_760, 9, 13);
+        $minJdn = CalendarMath::toJulianDay(-271_821, month: 4, day: 19);
+        $maxJdn = CalendarMath::toJulianDay(275_760, month: 9, day: 13);
         if ($jdn < $minJdn || $jdn > $maxJdn) {
             throw new RangeError('Rounded PlainDateTime is outside the representable range.');
         }

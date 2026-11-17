@@ -9,6 +9,10 @@ parameters:
         - tests
     excludePaths:
         - tests/Test262/scripts
+    # The linked libicu differs per host; without this PHPStan folds in the analyzing
+    # host's version and treats ICU-version branches as dead code.
+    dynamicConstantNames:
+        - INTL_ICU_VERSION
     stubFiles:
         - tools/phpstan-stubs/Locale.stub
         - tools/phpstan-stubs/IntlTimeZone.stub

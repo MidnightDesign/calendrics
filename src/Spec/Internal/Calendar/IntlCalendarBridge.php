@@ -27,6 +27,9 @@ final class IntlCalendarBridge implements CalendarProtocol
     /** ICU field ID for IS_LEAP_MONTH. */
     private const int FIELD_IS_LEAP_MONTH = 22;
 
+    /** A day every lunisolar month has, used to probe a month without rolling into the next. */
+    private const int MID_MONTH_DAY = 15;
+
     private readonly \IntlCalendar $intlCal;
 
     /** Calendars whose year/month/day share the ISO 8601 proleptic Gregorian structure. */
@@ -585,7 +588,7 @@ final class IntlCalendarBridge implements CalendarProtocol
                 }
             } else {
                 try {
-                    $this->setCalendarFieldsFromMonthCode($calYear, $monthCode, 1);
+                    $this->setCalendarFieldsFromMonthCode($calYear, $monthCode, calDay: 1);
                     $_ = $this->intlCal->get(\IntlCalendar::FIELD_MONTH);
                     if ($this->intlCal->get(self::FIELD_IS_LEAP_MONTH) !== 1) {
                         throw new RangeError("monthCode \"{$monthCode}\" does not exist in this calendar year.");
@@ -625,7 +628,7 @@ final class IntlCalendarBridge implements CalendarProtocol
         // including dates before ICU's historical Julian/Gregorian cutover.
         if ($this->isGregorianBased) {
             $totalMonths = $isoMonth + $months - 1;
-            $yearAdd = CalendarMath::floorDiv($totalMonths, 12);
+            $yearAdd = CalendarMath::floorDiv($totalMonths, b: 12);
             $calMonth = $totalMonths - ($yearAdd * 12) + 1;
             $finalIsoYear = $isoYear + $years + $yearAdd;
             $newMaxDay = CalendarMath::calcDaysInMonth($finalIsoYear, $calMonth);
@@ -772,7 +775,15 @@ final class IntlCalendarBridge implements CalendarProtocol
             $yearDiff = abs($calY2 - $calY1);
             $years = max(0, $yearDiff - 1);
 
-            while ($this->trialDateAddDoesNotSurpass($isoY1, $isoM1, $isoD1, $sign * ($years + 1), 0, $jdn2, $sign)) {
+            while ($this->trialDateAddDoesNotSurpass(
+                $isoY1,
+                $isoM1,
+                $isoD1,
+                $sign * ($years + 1),
+                months: 0,
+                targetJdn: $jdn2,
+                sign: $sign,
+            )) {
                 $years++;
             }
 
@@ -807,7 +818,15 @@ final class IntlCalendarBridge implements CalendarProtocol
                 $months = max(0, $monthEstimate - 14);
             }
 
-            while ($this->trialDateAddDoesNotSurpass($isoY1, $isoM1, $isoD1, 0, $sign * ($months + 1), $jdn2, $sign)) {
+            while ($this->trialDateAddDoesNotSurpass(
+                $isoY1,
+                $isoM1,
+                $isoD1,
+                years: 0,
+                months: $sign * ($months + 1),
+                targetJdn: $jdn2,
+                sign: $sign,
+            )) {
                 $months++;
             }
         }
@@ -819,9 +838,9 @@ final class IntlCalendarBridge implements CalendarProtocol
             $isoD1,
             $sign * $years,
             $sign * $months,
-            0,
-            0,
-            'constrain',
+            weeks: 0,
+            days: 0,
+            overflow: 'constrain',
         );
         $days = $jdn2 - CalendarMath::toJulianDay($intIsoY, $intIsoM, $intIsoD);
 
@@ -846,7 +865,16 @@ final class IntlCalendarBridge implements CalendarProtocol
         int $targetJdn,
         int $sign,
     ): bool {
-        [$tY, $tM, $tD] = $this->dateAdd($isoY1, $isoM1, $isoD1, $years, $months, 0, 0, 'constrain');
+        [$tY, $tM, $tD] = $this->dateAdd(
+            $isoY1,
+            $isoM1,
+            $isoD1,
+            $years,
+            $months,
+            weeks: 0,
+            days: 0,
+            overflow: 'constrain',
+        );
         $trialJdn = CalendarMath::toJulianDay($tY, $tM, $tD);
 
         if ($months === 0) {
@@ -931,7 +959,16 @@ final class IntlCalendarBridge implements CalendarProtocol
         for ($i = 0; $i < $yearCount; $i++) {
             $this->setIsoDate($curIsoY, $curIsoM, $curIsoD);
             $total += $this->calendarMonthsInYear();
-            [$curIsoY, $curIsoM, $curIsoD] = $this->dateAdd($curIsoY, $curIsoM, $curIsoD, $sign, 0, 0, 0, 'constrain');
+            [$curIsoY, $curIsoM, $curIsoD] = $this->dateAdd(
+                $curIsoY,
+                $curIsoM,
+                $curIsoD,
+                $sign,
+                months: 0,
+                weeks: 0,
+                days: 0,
+                overflow: 'constrain',
+            );
         }
         return $total;
     }
@@ -1102,12 +1139,12 @@ final class IntlCalendarBridge implements CalendarProtocol
             $this->intlCal->clear();
             $this->intlCal->set(self::FIELD_EXTENDED_YEAR, $icuYear);
             $this->intlCal->set(\IntlCalendar::FIELD_MONTH, $m);
-            $this->intlCal->set(\IntlCalendar::FIELD_DAY_OF_MONTH, 15);
+            $this->intlCal->set(\IntlCalendar::FIELD_DAY_OF_MONTH, self::MID_MONTH_DAY);
             $_ = $this->intlCal->get(\IntlCalendar::FIELD_MONTH);
 
             $daysInMonth = $this->intlCal->getActualMaximum(\IntlCalendar::FIELD_DAY_OF_MONTH);
             $this->intlCal->set(\IntlCalendar::FIELD_DAY_OF_MONTH, $daysInMonth);
-            $this->intlCal->add(\IntlCalendar::FIELD_DAY_OF_MONTH, 1);
+            $this->intlCal->add(\IntlCalendar::FIELD_DAY_OF_MONTH, value: 1);
 
             if ($this->intlCal->get(self::FIELD_IS_LEAP_MONTH) === 1) {
                 $result = $m;
@@ -1286,7 +1323,7 @@ final class IntlCalendarBridge implements CalendarProtocol
             default => null,
         };
         if ($isoYear !== null) {
-            $jdn = CalendarMath::toJulianDay($isoYear, $calMonth, 1);
+            $jdn = CalendarMath::toJulianDay($isoYear, $calMonth, day: 1);
             $epochMs = ($jdn - 2_440_588) * self::MS_PER_DAY;
             $this->intlCal->setTime((float) $epochMs);
             $this->intlCal->set(\IntlCalendar::FIELD_DAY_OF_MONTH, $calDay);
