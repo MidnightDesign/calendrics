@@ -165,12 +165,12 @@ final class IntlDateTimeFormat
         $from = $this->formatToParts($start);
         $to = $this->formatToParts($end);
         if (self::partsToString($from) === self::partsToString($to)) {
-            return self::withSource($from, 'shared');
+            return self::withSource($from, source: 'shared');
         }
         return [
-            ...self::withSource($from, 'startRange'),
+            ...self::withSource($from, source: 'startRange'),
             new IntlFormatPart('literal', self::RANGE_SEPARATOR, 'shared'),
-            ...self::withSource($to, 'endRange'),
+            ...self::withSource($to, source: 'endRange'),
         ];
     }
 
@@ -213,14 +213,19 @@ final class IntlDateTimeFormat
             $options = IntlDateTimeFormatOptions::forKind($this->options, $format->components);
             IntlFormatter::validateCalendar($format->calendarId, $locale, $options, $format->components);
             return [
-                IntlFormatter::buildIntlFormatter($locale, 'UTC', $options, $format->components),
+                IntlFormatter::buildIntlFormatter(
+                    $locale,
+                    timeZone: 'UTC',
+                    opts: $options,
+                    defaultComponents: $format->components,
+                ),
                 $format->epochSec,
                 $format->subNs,
             ];
         }
 
         self::assertExactValue($value);
-        $options = IntlDateTimeFormatOptions::forKind($this->options, 'exact');
+        $options = IntlDateTimeFormatOptions::forKind($this->options, kind: 'exact');
         $timeZone = $this->timeZone();
         $formatter = IntlFormatter::buildIntlFormatter($locale, $timeZone, $options);
 

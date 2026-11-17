@@ -277,15 +277,15 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         // An omitted (or null — PHP cannot distinguish JS `undefined` positionally)
         // calendar defaults to ISO 8601; a non-string is a wrong-type TypeError; an
         // unknown calendar string is a RangeError. Shared with PlainDate's constructor.
-        $this->calendarId = CalendarFactory::resolveConstructorCalendar($calendar, 'PlainDateTime');
+        $this->calendarId = CalendarFactory::resolveConstructorCalendar($calendar, context: 'PlainDateTime');
         // TC39 ToIntegerWithTruncation: null/omitted → 0, bool → 0/1, string/float → truncated int.
-        $this->isoYear = CalendarMath::toConstructorInt($year, 'PlainDateTime year');
-        $monthInt = DateFieldNumber::month($month ?? 0, 'PlainDateTime month');
+        $this->isoYear = CalendarMath::toConstructorInt($year, errorContext: 'PlainDateTime year');
+        $monthInt = DateFieldNumber::month($month ?? 0, context: 'PlainDateTime month');
         if ($monthInt < 1 || $monthInt > 12) {
             throw new RangeError("Invalid PlainDateTime: month {$monthInt} is out of range 1–12.");
         }
         $this->isoMonth = $monthInt;
-        $dayInt = DateFieldNumber::day($day ?? 0, 'PlainDateTime day');
+        $dayInt = DateFieldNumber::day($day ?? 0, context: 'PlainDateTime day');
         if ($dayInt < 1) {
             throw new RangeError("Invalid PlainDateTime: day {$dayInt} must be at least 1.");
         }
@@ -298,12 +298,12 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         /** @psalm-suppress InvalidPropertyAssignmentValue — $dayInt <= $daysInMonth <= 31 */
         // @mago-ignore analysis:invalid-property-assignment-value
         $this->isoDay = $dayInt;
-        $hInt = CalendarMath::toConstructorInt($hour, 'PlainDateTime hour');
-        $minInt = CalendarMath::toConstructorInt($minute, 'PlainDateTime minute');
-        $secInt = CalendarMath::toConstructorInt($second, 'PlainDateTime second');
-        $msInt = CalendarMath::toConstructorInt($millisecond, 'PlainDateTime millisecond');
-        $usInt = CalendarMath::toConstructorInt($microsecond, 'PlainDateTime microsecond');
-        $nsInt = CalendarMath::toConstructorInt($nanosecond, 'PlainDateTime nanosecond');
+        $hInt = CalendarMath::toConstructorInt($hour, errorContext: 'PlainDateTime hour');
+        $minInt = CalendarMath::toConstructorInt($minute, errorContext: 'PlainDateTime minute');
+        $secInt = CalendarMath::toConstructorInt($second, errorContext: 'PlainDateTime second');
+        $msInt = CalendarMath::toConstructorInt($millisecond, errorContext: 'PlainDateTime millisecond');
+        $usInt = CalendarMath::toConstructorInt($microsecond, errorContext: 'PlainDateTime microsecond');
+        $nsInt = CalendarMath::toConstructorInt($nanosecond, errorContext: 'PlainDateTime nanosecond');
         CalendarMath::validateTimeFields($hInt, $minInt, $secInt, $msInt, $usInt, $nsInt);
         // TC39 range: strictly after -271821-04-19T00:00:00 … up to +275760-09-13T23:59:59.999999999.
         // epochDays = days from Unix epoch (1970-01-01 = 0).
@@ -385,7 +385,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
             Options::overflowFromValue($options);
             return $result;
         }
-        $item = FieldBag::forCalendarType($item, DateTimeFields::CALENDAR_FIELDS, [], 'PlainDateTime');
+        $item = FieldBag::forCalendarType($item, DateTimeFields::CALENDAR_FIELDS, [], context: 'PlainDateTime');
         $overflow = Options::overflowFromValue($options);
         return DateTimeFields::fromBag($item, $overflow);
     }
@@ -510,7 +510,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
             $this->year,
             $this->monthCode,
             $this->day,
-            'PlainDateTime::with()',
+            context: 'PlainDateTime::with()',
         );
         [$h, $min, $sec, $ms, $us, $ns] = $this->mergeTimeFields($fields);
         $overflow = Options::overflowFromValue($options);
@@ -544,22 +544,22 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         $ns = $this->nanosecond;
 
         if (array_key_exists('hour', $fields)) {
-            $h = CalendarMath::toFiniteInt($fields['hour'], 'PlainDateTime::with() hour');
+            $h = CalendarMath::toFiniteInt($fields['hour'], errorContext: 'PlainDateTime::with() hour');
         }
         if (array_key_exists('minute', $fields)) {
-            $min = CalendarMath::toFiniteInt($fields['minute'], 'PlainDateTime::with() minute');
+            $min = CalendarMath::toFiniteInt($fields['minute'], errorContext: 'PlainDateTime::with() minute');
         }
         if (array_key_exists('second', $fields)) {
-            $sec = CalendarMath::toFiniteInt($fields['second'], 'PlainDateTime::with() second');
+            $sec = CalendarMath::toFiniteInt($fields['second'], errorContext: 'PlainDateTime::with() second');
         }
         if (array_key_exists('millisecond', $fields)) {
-            $ms = CalendarMath::toFiniteInt($fields['millisecond'], 'PlainDateTime::with() millisecond');
+            $ms = CalendarMath::toFiniteInt($fields['millisecond'], errorContext: 'PlainDateTime::with() millisecond');
         }
         if (array_key_exists('microsecond', $fields)) {
-            $us = CalendarMath::toFiniteInt($fields['microsecond'], 'PlainDateTime::with() microsecond');
+            $us = CalendarMath::toFiniteInt($fields['microsecond'], errorContext: 'PlainDateTime::with() microsecond');
         }
         if (array_key_exists('nanosecond', $fields)) {
-            $ns = CalendarMath::toFiniteInt($fields['nanosecond'], 'PlainDateTime::with() nanosecond');
+            $ns = CalendarMath::toFiniteInt($fields['nanosecond'], errorContext: 'PlainDateTime::with() nanosecond');
         }
 
         return [$h, $min, $sec, $ms, $us, $ns];
@@ -575,7 +575,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
     public function add(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
-        return DateTimeArithmetic::add($this, 1, $dur, $options);
+        return DateTimeArithmetic::add($this, sign: 1, dur: $dur, options: $options);
     }
 
     /**
@@ -608,7 +608,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
                 "Cannot compute since() between different calendars: \"{$this->calendarId}\" and \"{$o->calendarId}\".",
             );
         }
-        return DateTimeDifference::between($this, $o, 'since', $options);
+        return DateTimeDifference::between($this, $o, operation: 'since', options: $options);
     }
 
     /**
@@ -626,7 +626,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
                 "Cannot compute until() between different calendars: \"{$this->calendarId}\" and \"{$o->calendarId}\".",
             );
         }
-        return DateTimeDifference::between($this, $o, 'until', $options);
+        return DateTimeDifference::between($this, $o, operation: 'until', options: $options);
     }
 
     /**
@@ -660,7 +660,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         if ($suRaw === null) {
             throw new RangeError('Calendrics\\PlainDateTime::round() requires smallestUnit.');
         }
-        $suRaw = Options::coerceEnumOption($suRaw, 'smallestUnit');
+        $suRaw = Options::coerceEnumOption($suRaw, optionName: 'smallestUnit');
 
         // ns-per-unit and max increment (exclusive) for each unit.
         // For 'day', max = 1 (only increment 1 is valid).
@@ -687,7 +687,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
 
         $roundingMode = 'halfExpand';
         if (array_key_exists('roundingMode', $options) && $options['roundingMode'] !== null) {
-            $roundingMode = Options::coerceEnumOption($options['roundingMode'], 'roundingMode');
+            $roundingMode = Options::coerceEnumOption($options['roundingMode'], optionName: 'roundingMode');
         }
 
         $increment = 1;
@@ -730,8 +730,8 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         $newJdn = $jdn + $overflowDays;
 
         // Range check.
-        $minJdn = CalendarMath::toJulianDay(-271_821, 4, 19);
-        $maxJdn = CalendarMath::toJulianDay(275_760, 9, 13);
+        $minJdn = CalendarMath::toJulianDay(-271_821, month: 4, day: 19);
+        $maxJdn = CalendarMath::toJulianDay(275_760, month: 9, day: 13);
         if ($newJdn < $minJdn || $newJdn > $maxJdn) {
             throw new RangeError('PlainDateTime rounding result is outside the representable range.');
         }
@@ -797,7 +797,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
 
         if ($options !== []) {
             if (array_key_exists('calendarName', $options)) {
-                $cn = Options::coerceEnumOption($options['calendarName'], 'calendarName');
+                $cn = Options::coerceEnumOption($options['calendarName'], optionName: 'calendarName');
                 $calendarName = $cn;
             }
 
@@ -811,7 +811,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
 
             // smallestUnit overrides fractionalSecondDigits.
             if (array_key_exists('smallestUnit', $options) && $options['smallestUnit'] !== null) {
-                $su = Options::coerceEnumOption($options['smallestUnit'], 'smallestUnit');
+                $su = Options::coerceEnumOption($options['smallestUnit'], optionName: 'smallestUnit');
                 [$digits, $isMinute] = match ($su) {
                     'minute', 'minutes' => [-1, true],
                     'second', 'seconds' => [0, false],
@@ -824,7 +824,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
 
             // roundingMode (default 'trunc' for toString).
             if (array_key_exists('roundingMode', $options) && $options['roundingMode'] !== null) {
-                $rm = Options::coerceEnumOption($options['roundingMode'], 'roundingMode');
+                $rm = Options::coerceEnumOption($options['roundingMode'], optionName: 'roundingMode');
                 $roundMode = $rm;
             }
         }
@@ -867,8 +867,8 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         $jdn = CalendarMath::toJulianDay($this->isoYear, $this->isoMonth, $this->isoDay) + $overflowDays;
 
         // Range check the rounded result.
-        $minJdn = CalendarMath::toJulianDay(-271_821, 4, 19);
-        $maxJdn = CalendarMath::toJulianDay(275_760, 9, 13);
+        $minJdn = CalendarMath::toJulianDay(-271_821, month: 4, day: 19);
+        $maxJdn = CalendarMath::toJulianDay(275_760, month: 9, day: 13);
         if ($jdn < $minJdn || $jdn > $maxJdn) {
             throw new RangeError('PlainDateTime rounding result is outside the representable range.');
         }
@@ -1009,7 +1009,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
         // Validate disambiguation option if present.
         $disambiguation = 'compatible';
         if (array_key_exists('disambiguation', $opts)) {
-            $disamb = Options::coerceEnumOption($opts['disambiguation'], 'disambiguation');
+            $disamb = Options::coerceEnumOption($opts['disambiguation'], optionName: 'disambiguation');
             if (!in_array($disamb, ['compatible', 'earlier', 'later', 'reject'], strict: true)) {
                 throw new RangeError(
                     'PlainDateTime::toZonedDateTime() disambiguation must be one of: compatible, earlier, later, reject.',
@@ -1051,7 +1051,7 @@ final class PlainDateTime implements PlainLocaleFormattable, Stringable
      */
     public function withCalendar(mixed $calendar): self
     {
-        $calId = CalendarFactory::resolveBagCalendar($calendar, 'PlainDateTime');
+        $calId = CalendarFactory::resolveBagCalendar($calendar, context: 'PlainDateTime');
         return new self(
             $this->isoYear,
             $this->isoMonth,

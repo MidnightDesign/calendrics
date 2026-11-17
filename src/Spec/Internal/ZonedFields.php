@@ -71,7 +71,7 @@ final class ZonedFields
         // reports as such even on a bag that is also missing a year.
         $calendarId = 'iso8601';
         if (array_key_exists('calendar', $bag)) {
-            $calendarId = CalendarFactory::resolveBagCalendar($bag['calendar'], 'ZonedDateTime');
+            $calendarId = CalendarFactory::resolveBagCalendar($bag['calendar'], context: 'ZonedDateTime');
         }
 
         if (!array_key_exists('timeZone', $bag)) {
@@ -87,7 +87,7 @@ final class ZonedFields
             throw new TypeError('ZonedDateTime timeZone must be a string.');
         }
 
-        $hasEraAndEraYear = CalendarMath::hasEraAndEraYear($bag, $calendarId, 'ZonedDateTime');
+        $hasEraAndEraYear = CalendarMath::hasEraAndEraYear($bag, $calendarId, className: 'ZonedDateTime');
         $calendarSupportsEras = CalendarMath::supportsEras($calendarId);
 
         if (!array_key_exists('year', $bag) && (!$hasEraAndEraYear || !$calendarSupportsEras)) {
@@ -146,8 +146,8 @@ final class ZonedFields
         // Coercing year through toFiniteInt is what makes a non-coercible year (a Symbol,
         // say) a TypeError here — between the syntax RangeErrors above and the suitability
         // RangeErrors below, which is the ordering the fixtures pin down.
-        $year = $yr !== null ? CalendarMath::toFiniteInt($yr, 'ZonedDateTime year') : 0;
-        $day = DateFieldNumber::day($dy, 'ZonedDateTime day');
+        $year = $yr !== null ? CalendarMath::toFiniteInt($yr, errorContext: 'ZonedDateTime year') : 0;
+        $day = DateFieldNumber::day($dy, context: 'ZonedDateTime day');
         $hour = intval($hr);
         $minute = intval($mn);
         $second = intval($sc);
@@ -159,7 +159,12 @@ final class ZonedFields
         $readsEraFields = CalendarMath::readsEraFields($calendarId);
 
         if ($readsEraFields && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
-            $resolved = CalendarMath::resolveYearFromEra($calendar, $bag['era'], $bag['eraYear'], 'ZonedDateTime');
+            $resolved = CalendarMath::resolveYearFromEra(
+                $calendar,
+                $bag['era'],
+                $bag['eraYear'],
+                errorContext: 'ZonedDateTime',
+            );
             if ($resolved !== null) {
                 $year = $resolved;
             }
@@ -177,7 +182,7 @@ final class ZonedFields
             $month = $calendar->monthCodeToMonth($mc, $year);
         }
         if ($hasMonth) {
-            $newMonth = DateFieldNumber::month($bag['month'] ?? null, 'ZonedDateTime month');
+            $newMonth = DateFieldNumber::month($bag['month'] ?? null, context: 'ZonedDateTime month');
             if ($hasMC && $newMonth !== $month) {
                 throw new RangeError('Conflicting month and monthCode fields.');
             }
@@ -306,7 +311,7 @@ final class ZonedFields
         $opts = Options::requireObject($options, ['disambiguation', 'offset', 'overflow']);
 
         if (array_key_exists('disambiguation', $opts)) {
-            $dv = Options::coerceEnumOption($opts['disambiguation'], 'disambiguation');
+            $dv = Options::coerceEnumOption($opts['disambiguation'], optionName: 'disambiguation');
             if (!in_array(needle: $dv, haystack: ['compatible', 'earlier', 'later', 'reject'], strict: true)) {
                 throw new RangeError(
                     "Invalid disambiguation value \"{$dv}\"; must be 'compatible', 'earlier', 'later', or 'reject'.",
@@ -323,7 +328,7 @@ final class ZonedFields
             /** @var mixed $offOpt */
             $offOpt = $opts['offset'];
             if ($offOpt !== null) {
-                $offOpt = Options::coerceEnumOption($offOpt, 'offset');
+                $offOpt = Options::coerceEnumOption($offOpt, optionName: 'offset');
                 if (!in_array(needle: $offOpt, haystack: ['use', 'ignore', 'prefer', 'reject'], strict: true)) {
                     throw new RangeError(
                         "Invalid offset option \"{$offOpt}\"; must be 'use', 'ignore', 'prefer', or 'reject'.",
@@ -349,7 +354,7 @@ final class ZonedFields
         }
         /** @var mixed $val */
         $val = $options['disambiguation'];
-        $val = Options::coerceEnumOption($val, 'disambiguation');
+        $val = Options::coerceEnumOption($val, optionName: 'disambiguation');
         if (!in_array(needle: $val, haystack: ['compatible', 'earlier', 'later', 'reject'], strict: true)) {
             throw new RangeError(
                 "Invalid disambiguation value \"{$val}\"; must be 'compatible', 'earlier', 'later', or 'reject'.",

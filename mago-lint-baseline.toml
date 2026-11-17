@@ -1,0 +1,73 @@
+variant = "loose"
+
+[[issues]]
+file = "tests/Porcelain/Constraint/DurationEqualsTest.php"
+code = "literal-named-argument"
+message = "Literal argument `''` should be passed as a named argument for clarity."
+count = 5
+
+[[issues]]
+file = "tests/Porcelain/Constraint/DurationEqualsTest.php"
+code = "literal-named-argument"
+message = "Literal argument `'custom context'` should be passed as a named argument for clarity."
+count = 1
+
+[[issues]]
+file = "tests/Porcelain/Constraint/DurationEqualsTest.php"
+code = "literal-named-argument"
+message = "Literal argument `true` should be passed as a named argument for clarity."
+count = 5
+
+[[issues]]
+file = "tests/Porcelain/Constraint/PlainTimeEqualsTest.php"
+code = "literal-named-argument"
+message = "Literal argument `''` should be passed as a named argument for clarity."
+count = 5
+
+[[issues]]
+file = "tests/Porcelain/Constraint/PlainTimeEqualsTest.php"
+code = "literal-named-argument"
+message = "Literal argument `'custom context'` should be passed as a named argument for clarity."
+count = 1
+
+[[issues]]
+file = "tests/Porcelain/Constraint/PlainTimeEqualsTest.php"
+code = "literal-named-argument"
+message = "Literal argument `true` should be passed as a named argument for clarity."
+count = 5
+
+[[issues]]
+file = "tests/Porcelain/NowTest.php"
+code = "literal-named-argument"
+message = "Literal argument `2` should be passed as a named argument for clarity."
+count = 2
+
+[[issues]]
+file = "tests/Porcelain/PorcelainCalendarAwarenessTest.php"
+code = "literal-named-argument"
+message = "Literal argument `'ext-intl must be loaded'` should be passed as a named argument for clarity."
+count = 1
+
+[[issues]]
+file = "tests/Test262/Helper/ChecksBehavior.php"
+code = "literal-named-argument"
+message = "Literal argument `'checkPlainDateTimeConversionFastPath: no exception thrown'` should be passed as a named argument for clarity."
+count = 1
+
+[[issues]]
+file = "tests/Test262/Helper/ChecksBehavior.php"
+code = "literal-named-argument"
+message = "Literal argument `'checkToTemporalInstantFastPath: no exception thrown'` should be passed as a named argument for clarity."
+count = 1
+
+[[issues]]
+file = "tests/Test262/Helper/ChecksBehavior.php"
+code = "literal-named-argument"
+message = "Literal argument `'checkToTemporalPlainDateTimeFastPath: no exception thrown'` should be passed as a named argument for clarity."
+count = 1
+
+[[issues]]
+file = "tests/Test262/Helper/ChecksBehavior.php"
+code = "literal-named-argument"
+message = "Literal argument `'roundingIncrement=false throws a Temporal exception'` should be passed as a named argument for clarity."
+count = 1

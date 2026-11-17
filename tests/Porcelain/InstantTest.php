@@ -325,7 +325,7 @@ final class InstantTest extends CalendricsTestCase
     {
         // 7 seconds rounded to increment of 5 with halfExpand = 5 seconds
         $i = new Instant(7_000_000_000);
-        $result = $i->round(Unit::Second, RoundingMode::HalfExpand, 5);
+        $result = $i->round(Unit::Second, RoundingMode::HalfExpand, roundingIncrement: 5);
 
         static::assertSame(5_000_000_000, $result->epochNanoseconds);
     }

@@ -50,7 +50,7 @@ final class FieldBag
         // GetTemporalCalendarIdentifierWithISODefault precedes PrepareCalendarFields, so
         // `calendar` is read — and an unusable one rejected — before any field is touched.
         /** @var mixed $calendarRaw */
-        $calendarRaw = Options::bagGet($bag, 'calendar');
+        $calendarRaw = Options::bagGet($bag, prop: 'calendar');
         $calendarId = $calendarRaw === Options::ABSENT
             ? null
             : CalendarFactory::resolveBagCalendar($calendarRaw, $context);

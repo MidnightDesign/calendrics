@@ -152,7 +152,7 @@ final class DurationTotal
         $tz = new \DateTimeZone('UTC');
         $start = new \DateTimeImmutable('now', $tz)
             ->setDate($year, $month, $day)
-            ->setTime(0, 0, 0);
+            ->setTime(hour: 0, minute: 0, second: 0);
 
         // Compute calendar days: apply years/months/weeks to get endDate, count days.
         // Use TC39-compliant clamped arithmetic to avoid PHP month-overflow (e.g. Jan 31 + 1M = Mar 2 in PHP).
@@ -238,8 +238,8 @@ final class DurationTotal
                     (abs($totalWholeDays + $timeWholeDays) * 86_400)
                     + intdiv(abs($timeRemainderNs), num2: 1_000_000_000),
                     abs($timeRemainderNs) % 1_000_000_000,
-                    604_800,
-                    0,
+                    divisor: 604_800,
+                    shift: 0,
                 ),
             ),
             'days' => self::toIntIfWhole((float) $totalWholeDays + $fracDay),
@@ -393,7 +393,7 @@ final class DurationTotal
                 + intdiv(num1: $absFracNs, num2: 1_000_000_000),
                 $absFracNs % 1_000_000_000,
                 $daysInNextMonth * 86_400,
-                0,
+                shift: 0,
             );
 
         return self::toIntIfWhole($result);
@@ -504,7 +504,7 @@ final class DurationTotal
             ($wholeUnits * $denominator) + abs($target - $lower) + intdiv(abs($remainderNs), num2: 1_000_000_000),
             abs($remainderNs) % 1_000_000_000,
             $denominator,
-            0,
+            shift: 0,
         );
     }
 

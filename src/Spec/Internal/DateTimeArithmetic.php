@@ -82,13 +82,13 @@ final class DateTimeArithmetic
             $dt->isoDay,
             $years,
             $months,
-            0,
-            $days,
-            $overflow,
+            weeks: 0,
+            days: $days,
+            overflow: $overflow,
         );
 
-        $minJdn = CalendarMath::toJulianDay(-271_821, 4, 19);
-        $maxJdn = CalendarMath::toJulianDay(275_760, 9, 13);
+        $minJdn = CalendarMath::toJulianDay(-271_821, month: 4, day: 19);
+        $maxJdn = CalendarMath::toJulianDay(275_760, month: 9, day: 13);
         $jdn = CalendarMath::toJulianDay($newYear, $newMonth, $newDay);
         if ($jdn < $minJdn || $jdn > $maxJdn) {
             throw new RangeError('PlainDateTime arithmetic result is outside the representable range.');
