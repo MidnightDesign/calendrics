@@ -228,9 +228,19 @@ final class ZonedDateTime implements
     /**
      * Creates a ZonedDateTime from a PHP `\DateTimeInterface`.
      *
-     * The zone of `$dt` (as returned by `\DateTimeZone::getName()`) is used as
-     * the resulting `timeZoneId`; this preserves both IANA names like
-     * `Europe/Vienna` and fixed-offset strings like `+05:30`.
+     * The resulting `timeZoneId` depends on which of PHP's three kinds of
+     * zone `$dt` carries:
+     *
+     * - An IANA zone such as `Europe/Vienna` or `UTC` keeps its name.
+     * - A UTC offset zone such as `+05:30` keeps its offset string.
+     * - An abbreviation zone, which PHP creates when a parsed string ends in
+     *   an abbreviation such as `CEST` or `EST`, becomes the fixed offset that
+     *   PHP applied to `$dt`, for example `+02:00`. PHP treats abbreviations
+     *   as fixed offsets that never observe daylight saving time, so this
+     *   keeps PHP's local time even where the abbreviation is also an IANA
+     *   name with daylight saving rules, such as `CET`. The `Z` designator
+     *   (for example from `2026-07-10T18:00:00Z`) becomes `UTC`, the
+     *   identifier Temporal itself uses for UTC.
      *
      * PHP's `\DateTimeImmutable` carries microsecond precision; sub-microsecond
      * Temporal bits (the lowest three decimal digits of `epochNanoseconds`) are
@@ -238,7 +248,11 @@ final class ZonedDateTime implements
      */
     public static function fromDateTime(\DateTimeInterface $dt): self
     {
-        $tzId = $dt->getTimezone()->getName();
+        $tz = $dt->getTimezone();
+        $tzId = $tz->getName();
+        if ($tz->__serialize()['timezone_type'] === 2) {
+            $tzId = $tzId === 'Z' ? 'UTC' : $dt->format('P');
+        }
 
         return new self(PhpDateTimeInterop::epochNanoseconds($dt), $tzId);
     }
