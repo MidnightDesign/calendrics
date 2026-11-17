@@ -40,7 +40,7 @@ Two parallel, fully supported public API tiers plus an internal core:
 
 Each porcelain class has a matching spec class and pairs of `toSpec()` / `fromSpec()` for round-tripping. Every porcelain↔spec seam is covered by the BC promise (`X::fromSpec($x->toSpec()) === $x` within a major).
 
-Shared property/getter logic lives in `src/Trait/Has*Properties.php` (porcelain) and `Has*Spec.php` (spec). When adding a field that crosses several classes, look for the relevant trait first.
+Shared property/getter logic lives in `src/Internal/Has*Properties.php` (porcelain traits) and `Has*Spec.php` (their marker interfaces). When adding a field that crosses several classes, look for the relevant trait first.
 
 ## Which layer gets which tests
 

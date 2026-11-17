@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Calendrics;
 
+use Calendrics\Internal\HasDayOfMonthProperties;
+use Calendrics\Internal\HasDayOfMonthSpec;
+use Calendrics\Internal\HasEpochProperties;
+use Calendrics\Internal\HasEpochSpec;
+use Calendrics\Internal\HasLocalizedFormatting;
+use Calendrics\Internal\HasTimeOfDayProperties;
+use Calendrics\Internal\HasTimeOfDaySpec;
+use Calendrics\Internal\HasYearMonthProperties;
+use Calendrics\Internal\HasYearMonthSpec;
 use Calendrics\Spec\Internal\PhpDateTimeInterop;
-use Calendrics\Trait\HasDayOfMonthProperties;
-use Calendrics\Trait\HasDayOfMonthSpec;
-use Calendrics\Trait\HasEpochProperties;
-use Calendrics\Trait\HasEpochSpec;
-use Calendrics\Trait\HasLocalizedFormatting;
-use Calendrics\Trait\HasTimeOfDayProperties;
-use Calendrics\Trait\HasTimeOfDaySpec;
-use Calendrics\Trait\HasYearMonthProperties;
-use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A date-time anchored to a specific time zone and instant.
