@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Calendrics;
 
+use Calendrics\Internal\HasLocalizedFormatting;
+use Calendrics\Internal\HasYearMonthProperties;
+use Calendrics\Internal\HasYearMonthSpec;
 use Calendrics\Spec\PlainYearMonth as SpecPlainYearMonth;
-use Calendrics\Trait\HasLocalizedFormatting;
-use Calendrics\Trait\HasYearMonthProperties;
-use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A calendar year-month without a specific day, time, or time zone.

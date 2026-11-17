@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Calendrics;
 
+use Calendrics\Internal\HasEpochProperties;
+use Calendrics\Internal\HasEpochSpec;
+use Calendrics\Internal\HasLocalizedFormatting;
 use Calendrics\Spec\Internal\PhpDateTimeInterop;
-use Calendrics\Trait\HasEpochProperties;
-use Calendrics\Trait\HasEpochSpec;
-use Calendrics\Trait\HasLocalizedFormatting;
 
 /**
  * A fixed point in time with nanosecond precision.
