@@ -64,10 +64,10 @@ final class DateTimeFields
         // Validate calendar key if present.
         $calendarId = null;
         if (array_key_exists('calendar', $bag)) {
-            $calendarId = CalendarFactory::resolveBagCalendar($bag['calendar'], 'PlainDateTime');
+            $calendarId = CalendarFactory::resolveBagCalendar($bag['calendar'], context: 'PlainDateTime');
         }
 
-        $hasEraAndEraYear = CalendarMath::hasEraAndEraYear($bag, $calendarId, 'PlainDateTime');
+        $hasEraAndEraYear = CalendarMath::hasEraAndEraYear($bag, $calendarId, className: 'PlainDateTime');
         $calendarSupportsEras = CalendarMath::supportsEras($calendarId);
 
         if (!array_key_exists('year', $bag) && (!$hasEraAndEraYear || !$calendarSupportsEras)) {
@@ -103,12 +103,17 @@ final class DateTimeFields
             if ($yearRaw === null) {
                 throw new TypeError('PlainDateTime property bag year field must not be undefined.');
             }
-            $year = CalendarMath::toFiniteInt($yearRaw, 'PlainDateTime year');
+            $year = CalendarMath::toFiniteInt($yearRaw, errorContext: 'PlainDateTime year');
         }
 
         // Resolve era + eraYear if present (overrides year for era-based calendars).
         if ($readsEraFields && array_key_exists('era', $bag) && array_key_exists('eraYear', $bag)) {
-            $resolved = CalendarMath::resolveYearFromEra($calendar, $bag['era'], $bag['eraYear'], 'PlainDateTime');
+            $resolved = CalendarMath::resolveYearFromEra(
+                $calendar,
+                $bag['era'],
+                $bag['eraYear'],
+                errorContext: 'PlainDateTime',
+            );
             if ($resolved !== null) {
                 $year = $resolved;
             }
@@ -131,7 +136,7 @@ final class DateTimeFields
             if ($monthRaw === null) {
                 throw new TypeError('PlainDateTime property bag month field must not be undefined.');
             }
-            $newMonth = DateFieldNumber::month($monthRaw, 'PlainDateTime month');
+            $newMonth = DateFieldNumber::month($monthRaw, context: 'PlainDateTime month');
             if ($hasMonthCode && $newMonth !== $month) {
                 throw new RangeError('Conflicting month and monthCode fields.');
             }
@@ -145,15 +150,15 @@ final class DateTimeFields
         if ($dayRaw === null) {
             throw new TypeError('PlainDateTime property bag day field must not be undefined.');
         }
-        $day = DateFieldNumber::day($dayRaw, 'PlainDateTime day');
+        $day = DateFieldNumber::day($dayRaw, context: 'PlainDateTime day');
 
         // Time fields default to 0 when absent.
-        $h = CalendarMath::extractIntField($bag, 'hour', 0, 'PlainDateTime');
-        $min = CalendarMath::extractIntField($bag, 'minute', 0, 'PlainDateTime');
-        $sec = CalendarMath::extractIntField($bag, 'second', 0, 'PlainDateTime');
-        $ms = CalendarMath::extractIntField($bag, 'millisecond', 0, 'PlainDateTime');
-        $us = CalendarMath::extractIntField($bag, 'microsecond', 0, 'PlainDateTime');
-        $ns = CalendarMath::extractIntField($bag, 'nanosecond', 0, 'PlainDateTime');
+        $h = CalendarMath::extractIntField($bag, field: 'hour', default: 0, className: 'PlainDateTime');
+        $min = CalendarMath::extractIntField($bag, field: 'minute', default: 0, className: 'PlainDateTime');
+        $sec = CalendarMath::extractIntField($bag, field: 'second', default: 0, className: 'PlainDateTime');
+        $ms = CalendarMath::extractIntField($bag, field: 'millisecond', default: 0, className: 'PlainDateTime');
+        $us = CalendarMath::extractIntField($bag, field: 'microsecond', default: 0, className: 'PlainDateTime');
+        $ns = CalendarMath::extractIntField($bag, field: 'nanosecond', default: 0, className: 'PlainDateTime');
 
         if ($month < 1) {
             throw new RangeError("Invalid PlainDateTime: month {$month} must be at least 1.");

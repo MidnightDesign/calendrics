@@ -316,7 +316,7 @@ final class Instant implements Stringable
             throw new RangeError("Invalid Instant string \"{$text}\": UTC offset out of range.");
         }
 
-        CalendarMath::validateAnnotations($annotationSection, $text, false);
+        CalendarMath::validateAnnotations($annotationSection, $text, checkCalendar: false);
 
         // Build a UTC-only DateTimeImmutable (always +00:00) so that PHP does
         // not apply any offset itself. Use validated numeric values to avoid
@@ -399,7 +399,7 @@ final class Instant implements Stringable
         // store the true value behind a saturated sentinel.
         $threshold = EpochLimits::MAX_EPOCH_MILLISECONDS_FOR_INT64_NS;
         if ($epochMilliseconds > $threshold || $epochMilliseconds < -$threshold) {
-            $epochSec = CalendarMath::floorDiv($epochMilliseconds, 1_000);
+            $epochSec = CalendarMath::floorDiv($epochMilliseconds, b: 1_000);
             $subMs = $epochMilliseconds - ($epochSec * 1_000);
             return self::fromEpochParts($epochSec, $subMs * EpochLimits::NS_PER_MILLISECOND);
         }
@@ -510,7 +510,7 @@ final class Instant implements Stringable
 
         // smallestUnit overrides fractionalSecondDigits
         if (array_key_exists('smallestUnit', $options) && $options['smallestUnit'] !== null) {
-            $su = Options::coerceEnumOption($options['smallestUnit'], 'smallestUnit');
+            $su = Options::coerceEnumOption($options['smallestUnit'], optionName: 'smallestUnit');
             [$digits, $isMinute] = match ($su) {
                 'minute', 'minutes' => [-1, true],
                 'second', 'seconds' => [0, false],
@@ -525,7 +525,7 @@ final class Instant implements Stringable
         // (increment === 1) path so an unknown / non-string mode is rejected
         // rather than silently accepted.
         if (array_key_exists('roundingMode', $options) && $options['roundingMode'] !== null) {
-            $roundMode = Options::coerceEnumOption($options['roundingMode'], 'roundingMode');
+            $roundMode = Options::coerceEnumOption($options['roundingMode'], optionName: 'roundingMode');
             self::validateRoundingMode($roundMode);
         }
 
@@ -769,7 +769,7 @@ final class Instant implements Stringable
         if ($suRaw === null) {
             throw new RangeError('Calendrics\\Instant::round() requires smallestUnit.');
         }
-        $suRaw = Options::coerceEnumOption($suRaw, 'smallestUnit');
+        $suRaw = Options::coerceEnumOption($suRaw, optionName: 'smallestUnit');
         // Maps unit name → [ns-per-unit, max-increment-divisor (next unit size)]
         $unitMap = [
             'nanosecond' => [1, 86_400_000_000_000],
@@ -792,7 +792,7 @@ final class Instant implements Stringable
 
         $roundingMode = 'halfExpand';
         if (array_key_exists('roundingMode', $roundTo) && $roundTo['roundingMode'] !== null) {
-            $rmRaw = Options::coerceEnumOption($roundTo['roundingMode'], 'roundingMode');
+            $rmRaw = Options::coerceEnumOption($roundTo['roundingMode'], optionName: 'roundingMode');
             self::validateRoundingMode($rmRaw);
             $roundingMode = $rmRaw;
         }
@@ -801,7 +801,7 @@ final class Instant implements Stringable
         if (array_key_exists('roundingIncrement', $roundTo) && $roundTo['roundingIncrement'] !== null) {
             // Per TC39 ToTemporalRoundingIncrement: GetOption with type «Number» calls ToNumber,
             // which coerces booleans/numeric strings. CalendarMath::toFiniteInt mirrors that.
-            $increment = CalendarMath::toFiniteInt($roundTo['roundingIncrement'], 'roundingIncrement');
+            $increment = CalendarMath::toFiniteInt($roundTo['roundingIncrement'], errorContext: 'roundingIncrement');
         }
         if ($increment < 1) {
             throw new RangeError('roundingIncrement must be a positive integer.');
@@ -985,10 +985,10 @@ final class Instant implements Stringable
         $suVal = array_key_exists('smallestUnit', $options) ? $options['smallestUnit'] : null;
 
         if ($luVal !== null) {
-            $luVal = Options::coerceEnumOption($luVal, 'largestUnit');
+            $luVal = Options::coerceEnumOption($luVal, optionName: 'largestUnit');
         }
         if ($suVal !== null) {
-            $suVal = Options::coerceEnumOption($suVal, 'smallestUnit');
+            $suVal = Options::coerceEnumOption($suVal, optionName: 'smallestUnit');
         }
 
         $suRaw = is_string($suVal) ? $suVal : 'nanosecond';
@@ -1018,13 +1018,13 @@ final class Instant implements Stringable
 
         $roundingMode = 'trunc';
         if (array_key_exists('roundingMode', $options) && $options['roundingMode'] !== null) {
-            $roundingMode = Options::coerceEnumOption($options['roundingMode'], 'roundingMode');
+            $roundingMode = Options::coerceEnumOption($options['roundingMode'], optionName: 'roundingMode');
             self::validateRoundingMode($roundingMode);
         }
 
         $increment = 1;
         if (array_key_exists('roundingIncrement', $options) && $options['roundingIncrement'] !== null) {
-            $increment = CalendarMath::toFiniteInt($options['roundingIncrement'], 'roundingIncrement');
+            $increment = CalendarMath::toFiniteInt($options['roundingIncrement'], errorContext: 'roundingIncrement');
         }
         if ($increment < 1) {
             throw new RangeError('roundingIncrement must be a positive integer.');

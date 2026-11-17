@@ -189,7 +189,7 @@ final class ZonedDifference
             /** @var mixed $lu */
             $lu = $opts['largestUnit'];
             if ($lu !== null) {
-                $lu = Options::coerceEnumOption($lu, 'largestUnit');
+                $lu = Options::coerceEnumOption($lu, optionName: 'largestUnit');
             }
             if (is_string($lu)) {
                 if (!in_array($lu, self::VALID_UNITS, strict: true)) {
@@ -212,7 +212,7 @@ final class ZonedDifference
             /** @var mixed $rm */
             $rm = $opts['roundingMode'];
             if ($rm !== null) {
-                $rm = Options::coerceEnumOption($rm, 'roundingMode');
+                $rm = Options::coerceEnumOption($rm, optionName: 'roundingMode');
             }
             if (is_string($rm)) {
                 $roundingMode = Options::roundingMode($rm);
@@ -223,7 +223,7 @@ final class ZonedDifference
             /** @var mixed $su */
             $su = $opts['smallestUnit'];
             if ($su !== null) {
-                $su = Options::coerceEnumOption($su, 'smallestUnit');
+                $su = Options::coerceEnumOption($su, optionName: 'smallestUnit');
             }
             if (is_string($su)) {
                 if ($su === 'auto' || !in_array($su, self::VALID_UNITS, strict: true)) {
@@ -742,8 +742,8 @@ final class ZonedDifference
             $y2,
             $m2,
             $d2,
-            'year',
-            $receiverIsLater,
+            largestUnit: 'year',
+            receiverIsLater: $receiverIsLater,
         );
 
         return new DateSpan(years: $years, months: $months, days: $days);
@@ -887,7 +887,7 @@ final class ZonedDifference
             $comparison === 0 => 0.5,
             default => 0.75,
         };
-        return CalendarMath::applyRoundingProgress($progress, $mode, 1, $floorMultiple);
+        return CalendarMath::applyRoundingProgress($progress, $mode, sign: 1, absFloorUnits: $floorMultiple);
     }
 
     /** @return array{int, int} */

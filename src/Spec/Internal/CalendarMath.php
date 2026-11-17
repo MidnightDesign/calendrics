@@ -552,9 +552,9 @@ final class CalendarMath
         if ($thursdayOrdinal < 1) {
             // Thursday fell in the previous year → last week of that year.
             $prevYear = $year - 1;
-            $dec31Dow = self::isoWeekday($prevYear, 12, 31);
+            $dec31Dow = self::isoWeekday($prevYear, month: 12, day: 31);
             $dec31Ord = self::isLeapYear($prevYear) ? 366 : 365;
-            /** @var int<1, 53> ISO week of previous year's Dec 31 */
+            /** @var int<52, 53> ISO week of previous year's Dec 31 */
             $prevWeek = intdiv(num1: $dec31Ord + (4 - $dec31Dow) - 1, num2: 7) + 1;
             return ['week' => $prevWeek, 'year' => $prevYear];
         }
@@ -601,9 +601,9 @@ final class CalendarMath
                 - 32_045;
         } else {
             $jdn =
-                $day + intdiv(num1: (153 * $m) + 2, num2: 5) + (365 * $y) + self::floorDiv($y, 4)
-                    - self::floorDiv($y, 100)
-                    + self::floorDiv($y, 400)
+                $day + intdiv(num1: (153 * $m) + 2, num2: 5) + (365 * $y) + self::floorDiv($y, b: 4)
+                    - self::floorDiv($y, b: 100)
+                    + self::floorDiv($y, b: 400)
                 - 32_045;
         }
 
@@ -631,11 +631,11 @@ final class CalendarMath
             $e = $c - intdiv(num1: 1_461 * $d, num2: 4);
             $m = intdiv(num1: (5 * $e) + 2, num2: 153);
         } else {
-            $b = self::floorDiv((4 * $a) + 3, 146_097);
-            $c = $a - self::floorDiv(146_097 * $b, 4);
-            $d = self::floorDiv((4 * $c) + 3, 1_461);
-            $e = $c - self::floorDiv(1_461 * $d, 4);
-            $m = self::floorDiv((5 * $e) + 2, 153);
+            $b = self::floorDiv((4 * $a) + 3, b: 146_097);
+            $c = $a - self::floorDiv(146_097 * $b, b: 4);
+            $d = self::floorDiv((4 * $c) + 3, b: 1_461);
+            $e = $c - self::floorDiv(1_461 * $d, b: 4);
+            $m = self::floorDiv((5 * $e) + 2, b: 153);
         }
 
         /** @var int<1, 31> Richards algorithm guarantees day is 1–31 */

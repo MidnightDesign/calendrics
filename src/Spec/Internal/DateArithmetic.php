@@ -57,14 +57,14 @@ final class DateArithmetic
             $date->isoDay,
             $years,
             $months,
-            0,
-            $days,
-            $overflow,
+            weeks: 0,
+            days: $days,
+            overflow: $overflow,
         );
 
         // Arithmetic that crosses the valid PlainDate range always throws, regardless of overflow.
-        $minJdn = CalendarMath::toJulianDay(-271_821, 4, 19);
-        $maxJdn = CalendarMath::toJulianDay(275_760, 9, 13);
+        $minJdn = CalendarMath::toJulianDay(-271_821, month: 4, day: 19);
+        $maxJdn = CalendarMath::toJulianDay(275_760, month: 9, day: 13);
         $jdn = CalendarMath::toJulianDay($newYear, $newMonth, $newDay);
         if ($jdn < $minJdn || $jdn > $maxJdn) {
             throw new RangeError('PlainDate arithmetic result is outside the representable range.');

@@ -457,7 +457,7 @@ final class ZonedDateTime implements Stringable
         $epoch = EpochValue::fromNanoseconds($epochNanoseconds);
         $this->epochNanoseconds = $epoch->epochNanoseconds;
         $this->applyEpoch($epoch);
-        $this->timeZoneId = TimeZoneHelper::normalizeTimezoneId($timeZoneId, true);
+        $this->timeZoneId = TimeZoneHelper::normalizeTimezoneId($timeZoneId, rejectDatetimeStrings: true);
         $this->calendarId = CalendarFactory::canonicalize($calendarId);
         $this->resolvedTimeZoneId = ZoneOffsets::canonicalize($this->timeZoneId);
     }
@@ -500,7 +500,12 @@ final class ZonedDateTime implements Stringable
             return ZonedParse::parse($item, $options);
         }
 
-        $bag = FieldBag::forCalendarType($item, ZonedFields::CALENDAR_FIELDS, ['offset', 'timeZone'], 'ZonedDateTime');
+        $bag = FieldBag::forCalendarType(
+            $item,
+            ZonedFields::CALENDAR_FIELDS,
+            ['offset', 'timeZone'],
+            context: 'ZonedDateTime',
+        );
         $opts = ZonedFields::fromOptions($options);
 
         $overflow = array_key_exists('overflow', $opts) && is_string($opts['overflow'])
@@ -625,7 +630,7 @@ final class ZonedDateTime implements Stringable
      */
     public function withCalendar(mixed $calendar): self
     {
-        $calId = CalendarFactory::resolveBagCalendar($calendar, 'ZonedDateTime');
+        $calId = CalendarFactory::resolveBagCalendar($calendar, context: 'ZonedDateTime');
         [$epochSec, $subNs] = $this->epochParts();
         return self::fromEpochParts($epochSec, $subNs, $this->timeZoneId, $calId);
     }
@@ -704,7 +709,7 @@ final class ZonedDateTime implements Stringable
         // epoch itself — the first valid instant of the day.
         $epochSec = TimeZoneHelper::wallSecToEpochSecStartOfDay($wallSec, $this->resolvedTimeZoneId);
 
-        return self::fromEpochParts($epochSec, 0, $this->timeZoneId, $this->calendarId);
+        return self::fromEpochParts($epochSec, subNs: 0, tzId: $this->timeZoneId, calendarId: $this->calendarId);
     }
 
     /**
@@ -768,7 +773,7 @@ final class ZonedDateTime implements Stringable
 
         // smallestUnit overrides fractionalSecondDigits.
         if (array_key_exists('smallestUnit', $options) && $options['smallestUnit'] !== null) {
-            $su = Options::coerceEnumOption($options['smallestUnit'], 'smallestUnit');
+            $su = Options::coerceEnumOption($options['smallestUnit'], optionName: 'smallestUnit');
             [$digits, $isMinute] = match ($su) {
                 'minute', 'minutes' => [-1, true],
                 'second', 'seconds' => [0, false],
@@ -781,12 +786,12 @@ final class ZonedDateTime implements Stringable
 
         // roundingMode (default 'trunc').
         if (array_key_exists('roundingMode', $options) && $options['roundingMode'] !== null) {
-            $rm = Options::coerceEnumOption($options['roundingMode'], 'roundingMode');
+            $rm = Options::coerceEnumOption($options['roundingMode'], optionName: 'roundingMode');
             $roundMode = $rm;
         }
 
         if (array_key_exists('offset', $options)) {
-            $ov = Options::coerceEnumOption($options['offset'], 'offset');
+            $ov = Options::coerceEnumOption($options['offset'], optionName: 'offset');
             if ($ov !== 'auto' && $ov !== 'never') {
                 throw new RangeError("Invalid offset option \"{$ov}\"; must be 'auto' or 'never'.");
             }
@@ -794,7 +799,7 @@ final class ZonedDateTime implements Stringable
         }
 
         if (array_key_exists('timeZoneName', $options)) {
-            $tzn = Options::coerceEnumOption($options['timeZoneName'], 'timeZoneName');
+            $tzn = Options::coerceEnumOption($options['timeZoneName'], optionName: 'timeZoneName');
             if ($tzn !== 'auto' && $tzn !== 'never' && $tzn !== 'critical') {
                 throw new RangeError("Invalid timeZoneName option \"{$tzn}\".");
             }
@@ -802,7 +807,7 @@ final class ZonedDateTime implements Stringable
         }
 
         if (array_key_exists('calendarName', $options)) {
-            $cn = Options::coerceEnumOption($options['calendarName'], 'calendarName');
+            $cn = Options::coerceEnumOption($options['calendarName'], optionName: 'calendarName');
             if ($cn !== 'auto' && $cn !== 'always' && $cn !== 'never' && $cn !== 'critical') {
                 throw new RangeError("Invalid calendarName value: \"{$cn}\".");
             }
@@ -973,7 +978,7 @@ final class ZonedDateTime implements Stringable
     public function add(string|array|object $duration, mixed $options = []): self
     {
         $dur = $duration instanceof Duration ? $duration : Duration::from($duration);
-        return ZonedArithmetic::add($this, 1, $dur, $options);
+        return ZonedArithmetic::add($this, sign: 1, dur: $dur, options: $options);
     }
 
     /**
@@ -1006,7 +1011,7 @@ final class ZonedDateTime implements Stringable
                 "Cannot compute since() between different calendars: \"{$this->calendarId}\" and \"{$o->calendarId}\".",
             );
         }
-        return ZonedDifference::between($this, $o, 'since', $options);
+        return ZonedDifference::between($this, $o, operation: 'since', options: $options);
     }
 
     /**
@@ -1026,7 +1031,7 @@ final class ZonedDateTime implements Stringable
                 "Cannot compute until() between different calendars: \"{$this->calendarId}\" and \"{$o->calendarId}\".",
             );
         }
-        return ZonedDifference::between($this, $o, 'until', $options);
+        return ZonedDifference::between($this, $o, operation: 'until', options: $options);
     }
 
     /**
@@ -1061,7 +1066,7 @@ final class ZonedDateTime implements Stringable
         if ($suRaw === null) {
             throw new RangeError('Calendrics\\ZonedDateTime::round() requires smallestUnit.');
         }
-        $suRaw = Options::coerceEnumOption($suRaw, 'smallestUnit');
+        $suRaw = Options::coerceEnumOption($suRaw, optionName: 'smallestUnit');
 
         // [nsPerUnit, maxIncrement (next-unit size, or 1 for day)]
         $unitMap = [
@@ -1087,7 +1092,7 @@ final class ZonedDateTime implements Stringable
 
         $roundingMode = 'halfExpand';
         if (array_key_exists('roundingMode', $options) && $options['roundingMode'] !== null) {
-            $rmRaw = Options::coerceEnumOption($options['roundingMode'], 'roundingMode');
+            $rmRaw = Options::coerceEnumOption($options['roundingMode'], optionName: 'roundingMode');
             $roundingMode = $rmRaw;
         }
 
@@ -1095,7 +1100,7 @@ final class ZonedDateTime implements Stringable
         if (array_key_exists('roundingIncrement', $options) && $options['roundingIncrement'] !== null) {
             // Per TC39 ToTemporalRoundingIncrement: GetOption with type «Number» calls ToNumber,
             // which coerces booleans/numeric strings. CalendarMath::toFiniteInt mirrors that.
-            $rawIncrement = CalendarMath::toFiniteInt($options['roundingIncrement'], 'roundingIncrement');
+            $rawIncrement = CalendarMath::toFiniteInt($options['roundingIncrement'], errorContext: 'roundingIncrement');
             if ($rawIncrement < 1) {
                 throw new RangeError('roundingIncrement must be a positive integer.');
             }
@@ -1229,7 +1234,7 @@ final class ZonedDateTime implements Stringable
             /** @var mixed $offOpt */
             $offOpt = $opts['offset'];
             if ($offOpt !== null) {
-                $offOpt = Options::coerceEnumOption($offOpt, 'offset');
+                $offOpt = Options::coerceEnumOption($offOpt, optionName: 'offset');
                 if (!in_array($offOpt, ['prefer', 'use', 'ignore', 'reject'], strict: true)) {
                     throw new RangeError(
                         "Invalid offset option \"{$offOpt}\": must be 'prefer', 'use', 'ignore', or 'reject'.",
@@ -1262,22 +1267,22 @@ final class ZonedDateTime implements Stringable
 
         // --- Resolve time fields (shared by ISO and non-ISO paths) ---
         if (array_key_exists('hour', $fields)) {
-            $h = CalendarMath::toFiniteInt($fields['hour'], 'ZonedDateTime::with() hour');
+            $h = CalendarMath::toFiniteInt($fields['hour'], errorContext: 'ZonedDateTime::with() hour');
         }
         if (array_key_exists('minute', $fields)) {
-            $min = CalendarMath::toFiniteInt($fields['minute'], 'ZonedDateTime::with() minute');
+            $min = CalendarMath::toFiniteInt($fields['minute'], errorContext: 'ZonedDateTime::with() minute');
         }
         if (array_key_exists('second', $fields)) {
-            $sec = CalendarMath::toFiniteInt($fields['second'], 'ZonedDateTime::with() second');
+            $sec = CalendarMath::toFiniteInt($fields['second'], errorContext: 'ZonedDateTime::with() second');
         }
         if (array_key_exists('millisecond', $fields)) {
-            $ms = CalendarMath::toFiniteInt($fields['millisecond'], 'ZonedDateTime::with() millisecond');
+            $ms = CalendarMath::toFiniteInt($fields['millisecond'], errorContext: 'ZonedDateTime::with() millisecond');
         }
         if (array_key_exists('microsecond', $fields)) {
-            $us = CalendarMath::toFiniteInt($fields['microsecond'], 'ZonedDateTime::with() microsecond');
+            $us = CalendarMath::toFiniteInt($fields['microsecond'], errorContext: 'ZonedDateTime::with() microsecond');
         }
         if (array_key_exists('nanosecond', $fields)) {
-            $ns = CalendarMath::toFiniteInt($fields['nanosecond'], 'ZonedDateTime::with() nanosecond');
+            $ns = CalendarMath::toFiniteInt($fields['nanosecond'], errorContext: 'ZonedDateTime::with() nanosecond');
         }
 
         // --- Constrain/reject time fields ---
@@ -1289,7 +1294,15 @@ final class ZonedDateTime implements Stringable
             $us = max(0, min(999, $us));
             $ns = max(0, min(999, $ns));
         } else {
-            CalendarMath::validateTimeFields($h, $min, $sec, $ms, $us, $ns, 'Invalid %s %d: must be 0–%d.');
+            CalendarMath::validateTimeFields(
+                $h,
+                $min,
+                $sec,
+                $ms,
+                $us,
+                $ns,
+                errorFormat: 'Invalid %s %d: must be 0–%d.',
+            );
         }
 
         $date = PartialDateFields::prepare(
@@ -1298,7 +1311,7 @@ final class ZonedDateTime implements Stringable
             $this->year,
             $this->monthCode,
             $this->day,
-            'ZonedDateTime::with()',
+            context: 'ZonedDateTime::with()',
         );
         [$year, $month, $day] = $date->resolve($overflow);
 
@@ -1405,7 +1418,7 @@ final class ZonedDateTime implements Stringable
             }
             $dir = null;
             if (array_key_exists('direction', $bag)) {
-                $dir = Options::coerceEnumOption($bag['direction'], 'direction');
+                $dir = Options::coerceEnumOption($bag['direction'], optionName: 'direction');
             }
             if ($dir === null) {
                 throw new RangeError(
@@ -1547,7 +1560,7 @@ final class ZonedDateTime implements Stringable
         // so negative local seconds produce the correct pre-1970 date. The JDN
         // roundtrip hits CalendarMath's cached fromJulianDay — cheaper than a
         // DateTimeImmutable + 6 format() calls.
-        $localDay = CalendarMath::floorDiv($localSec, 86_400);
+        $localDay = CalendarMath::floorDiv($localSec, b: 86_400);
         $timeOfDaySec = $localSec - ($localDay * 86_400);
         [$year, $month, $day] = CalendarMath::fromJulianDay($localDay + 2_440_588);
         /** @var int<0, 23> $hour */

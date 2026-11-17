@@ -34,6 +34,11 @@ jobs:
       - name: Lint (Mago)
         run: ./vendor/bin/mago lint
 
+      # Fails when an entry goes stale. Remove the fixed entry; never regenerate,
+      # which would absorb new issues.
+      - name: Verify lint baseline (Mago)
+        run: ./vendor/bin/mago lint --only literal-named-argument --verify-baseline
+
       - name: Analyze (Mago)
         run: ./vendor/bin/mago analyze
 
