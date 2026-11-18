@@ -21,4 +21,5 @@ $minCases = [['-P273790Y8M11D', 'string with min years'], [JsUndefined::strip(['
 foreach ($minCases as $__entry__) {
 [$arg, $descr] = array_pad($__entry__, 2, null);
 $result = $instance->add($arg);
+Assert::sameValue($result->epochParts(), [-8640000000000, 0], "operation succeeds with {$descr}");
 }

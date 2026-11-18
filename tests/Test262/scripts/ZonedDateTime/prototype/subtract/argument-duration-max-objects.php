@@ -13,6 +13,7 @@ $maxCases = [['P273790Y8M11D', 'string with max years'], [(object) ['years' => 2
 foreach ($maxCases as $__entry__) {
 [$arg, $descr] = array_pad($__entry__, 2, null);
 $result = $instance->subtract($arg);
+Assert::sameValue($result->epochParts(), [-8640000000000, 0], "operation succeeds with {$descr}");
 }
 $minCases = [['-P273790Y8M12D', 'string with min years'], [(object) JsUndefined::strip(['years' => -273_790, 'months' => -8, 'days' => -12]), 'property bag with min years'], ['-P3285488M12D', 'string with min months'], [(object) JsUndefined::strip(['months' => -3_285_488, 'days' => -12]), 'property bag with min months'], ['-P14285714W2D', 'string with min weeks'], [(object) JsUndefined::strip(['weeks' => -14_285_714, 'days' => -2]), 'property bag with min weeks'], ['-P100000000D', 'string with min days'], [(object) JsUndefined::strip(['days' => -100_000_000]), 'property bag with min days'], ['-PT2400000000H', 'string with min hours'], [(object) JsUndefined::strip(['hours' => -2_400_000_000]), 'property bag with min hours'], ['-PT144000000000M', 'string with min minutes'], [(object) JsUndefined::strip(['minutes' => -144_000_000_000]), 'property bag with min minutes'], ['-PT8640000000000S', 'string with min seconds'], [(object) JsUndefined::strip(['seconds' => -8_640_000_000_000]), 'property bag with min seconds']];
 foreach ($minCases as $__entry__) {

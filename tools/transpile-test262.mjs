@@ -2195,6 +2195,10 @@ class Emitter {
         parts.push('JsUndefined::singleton()');
         continue;
       }
+      if (el.type === 'Identifier' && this.bigIntUnrepresentableVars.has(el.name)) {
+        parts.push('Assert::int64Overflow()');
+        continue;
+      }
       const php = this.transpileExpr(el);
       // Overflow BigInt inside an array → sentinel; sameValue() will skip it.
       parts.push(php ?? 'Assert::int64Overflow()');
@@ -3735,6 +3739,19 @@ class Emitter {
           return `Assert::assertTrue(${argPhp} instanceof ${SPEC_NS}${protoTarget.class}, ${msgPhp})`;
         }
       }
+    }
+
+    // `assert.sameValue(<instant-like>.epochNanoseconds, <over-int64 BigInt>)`: the public
+    // field holds a clamp sentinel there, so compare the exact (epochSec, subNs) pair.
+    const expectedBig = this.evalBigInt(expected);
+    if (expectedBig !== null && overflowsInt64(expectedBig)
+        && actual?.type === 'MemberExpression' && !actual.computed
+        && actual.property?.type === 'Identifier' && actual.property.name === 'epochNanoseconds') {
+      const objPhp = this.transpileExpr(actual.object);
+      const msgPhp = msg ? this.transpileExpr(msg) : "''";
+      if (objPhp === null || msgPhp === null) return null;
+      const { epochSec, subNs } = epochNsToFloorParts(expectedBig);
+      return `Assert::sameValue(${objPhp}->epochParts(), [${epochSec}, ${subNs}], ${msgPhp})`;
     }
 
     const actualPhp   = this.transpileExpr(actual);

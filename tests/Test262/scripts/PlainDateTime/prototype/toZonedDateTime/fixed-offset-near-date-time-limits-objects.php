@@ -17,9 +17,11 @@ Assert::throws(\RangeException::class, function () use (&$minDt) { return $minDt
 Assert::throws(\RangeException::class, function () use (&$minDt) { return $minDt->toZonedDateTime('-01'); }, '');
 foreach (['earlier', 'later'] as $disambiguation) {
 $zdt = $minValidDt->toZonedDateTime('+00', (object) JsUndefined::strip(['disambiguation' => $disambiguation]));
+Assert::sameValue($zdt->epochParts(), [-8640000000000, 0], '');
 }
 foreach (['earlier', 'later'] as $disambiguation) {
 $zdt = $minValidDt->toZonedDateTime('-01', (object) JsUndefined::strip(['disambiguation' => $disambiguation]));
+Assert::sameValue($zdt->epochParts(), [-8639999996400, 0], '');
 }
 Assert::throws(\RangeException::class, function () use (&$minValidDt) { return $minValidDt->toZonedDateTime('+01'); }, '');
 foreach (['earlier', 'later'] as $disambiguation) {
@@ -30,5 +32,6 @@ $zdt = $maxDt->toZonedDateTime('+00');
 }
 foreach (['earlier', 'later'] as $disambiguation) {
 $zdt = $maxDt->toZonedDateTime('+01');
+Assert::sameValue($zdt->epochParts(), [8639999996400, 0], '');
 }
 Assert::throws(\RangeException::class, function () use (&$maxDt) { return $maxDt->toZonedDateTime('-01'); }, '');
