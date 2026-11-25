@@ -8,4 +8,9 @@ declare(strict_types=1);
 
 use Calendrics\Tests\Test262\Assert;
 use Calendrics\Tests\Test262\JsUndefined;
-Assert::incomplete('untranslatable: Intl.Locale has no harness shim');
+$intlCalendarObjects = [['Intl.DateTimeFormat', new \Calendrics\Tests\Test262\IntlDateTimeFormat('en', (object) ['calendar' => 'iso8601'])], ['Intl.Locale', new \Calendrics\Tests\Test262\IntlLocale('en', (object) ['calendar' => 'iso8601'])]];
+$instance = new \Calendrics\Spec\PlainDate(1976, 11, 18);
+foreach ($intlCalendarObjects as $__entry__) {
+[$name, $calendarLike] = array_pad($__entry__, 2, null);
+Assert::throws(\TypeError::class, function () use (&$instance, &$calendarLike) { return $instance->withCalendar($calendarLike); }, "{$name} instance is not accepted as a calendar");
+}
