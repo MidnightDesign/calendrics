@@ -31,7 +31,7 @@
         "ext-intl": "*"
     },
     "require-dev": {
-        "carthage-software/mago": "^1.60.2",
+        "carthage-software/mago": "^1.61.0",
         "infection/infection": "^0.32 || ^0.35",
         "phpstan/extension-installer": "^1.4",
         "phpstan/phpstan": "^2.3.6",
@@ -68,7 +68,6 @@
         "psalm": "psalm",
         "mago": [
             "mago lint",
-            "mago lint --only literal-named-argument --verify-baseline",
             "mago analyze"
         ],
         "mago-format": "mago format",
