@@ -7,6 +7,25 @@ All notable changes to this project are documented in this file. It is generated
 
 Until 1.0.0 the public API may change between minor versions.
 
+## [1.0.2](https://github.com/MidnightDesign/calendrics/compare/v1.0.1...v1.0.2) (2026-11-25)
+
+
+### Tests
+
+* add an Intl.Locale shim for the test262 harness ([#291](https://github.com/MidnightDesign/calendrics/issues/291)) ([e413216](https://github.com/MidnightDesign/calendrics/commit/e41321652e3d3c5500e62f27b58dadb617801dad))
+* sync test262 with upstream ([#290](https://github.com/MidnightDesign/calendrics/issues/290)) ([08b50e4](https://github.com/MidnightDesign/calendrics/commit/08b50e4f6ac409e9e0da6ee1ae85a13686d1dabc))
+
+
+### Build System
+
+* require Mago 1.61 and drop the lint baseline ([#312](https://github.com/MidnightDesign/calendrics/issues/312)) ([9ba1452](https://github.com/MidnightDesign/calendrics/commit/9ba1452aac15f8799712a5cd526c34cd8f2b5958))
+
+
+### Miscellaneous Chores
+
+* **deps-dev:** update psalm/plugin-phpunit requirement ([39093d5](https://github.com/MidnightDesign/calendrics/commit/39093d5b455790278ccaf135b6cf00028ce0e9da))
+* **deps-dev:** update psalm/plugin-phpunit requirement from ^0.22 to ^0.22 || ^1.0 ([#299](https://github.com/MidnightDesign/calendrics/issues/299)) ([39093d5](https://github.com/MidnightDesign/calendrics/commit/39093d5b455790278ccaf135b6cf00028ce0e9da))
+
 ## [1.0.1](https://github.com/MidnightDesign/calendrics/compare/v1.0.0...v1.0.1) (2026-11-17)
 
 
