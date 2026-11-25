@@ -8,7 +8,6 @@ use Calendrics\Calendar;
 use Calendrics\Exception\CalendricsException;
 use Calendrics\Exception\InvalidArgument;
 use Calendrics\Exception\RangeError;
-use Calendrics\RoundingMode;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -60,42 +59,6 @@ final class ExceptionHierarchyTest extends TestCase
 
         static::assertInstanceOf(InvalidArgument::class, $caught);
         static::assertStringContainsString('bogus', $caught->getMessage());
-    }
-
-    public function testRoundingModeToPhpThrowsCalendricsInvalidArgumentForHalfCeil(): void
-    {
-        $caught = null;
-        try {
-            RoundingMode::HalfCeil->toPhpRoundingMode();
-        } catch (\Throwable $e) {
-            $caught = $e;
-        }
-
-        static::assertInstanceOf(InvalidArgument::class, $caught);
-    }
-
-    public function testRoundingModeToPhpThrowsCalendricsInvalidArgumentForHalfFloor(): void
-    {
-        $caught = null;
-        try {
-            RoundingMode::HalfFloor->toPhpRoundingMode();
-        } catch (\Throwable $e) {
-            $caught = $e;
-        }
-
-        static::assertInstanceOf(InvalidArgument::class, $caught);
-    }
-
-    public function testRoundingModeFromPhpThrowsCalendricsInvalidArgumentForHalfOdd(): void
-    {
-        $caught = null;
-        try {
-            RoundingMode::fromPhpRoundingMode(\RoundingMode::HalfOdd);
-        } catch (\Throwable $e) {
-            $caught = $e;
-        }
-
-        static::assertInstanceOf(InvalidArgument::class, $caught);
     }
 
     /**

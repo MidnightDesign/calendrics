@@ -40,7 +40,7 @@ Two parallel, fully supported public API tiers plus an internal core:
 
 Each porcelain class has a matching spec class and pairs of `toSpec()` / `fromSpec()` for round-tripping. Every porcelain↔spec seam is covered by the BC promise (`X::fromSpec($x->toSpec()) === $x` within a major).
 
-Shared property/getter logic lives in `src/Trait/Has*Properties.php` (porcelain) and `Has*Spec.php` (spec). When adding a field that crosses several classes, look for the relevant trait first.
+Shared property/getter logic lives in `src/Internal/Has*Properties.php` (porcelain traits) and `Has*Spec.php` (their marker interfaces). When adding a field that crosses several classes, look for the relevant trait first.
 
 ## Which layer gets which tests
 
@@ -91,7 +91,6 @@ Versioning and `CHANGELOG.md` are owned by [release-please](https://github.com/g
 - **`CHANGELOG.md` is generated. Do not hand-edit it**, and do not add an `Unreleased` section — release-please inserts each new entry between the preamble and the newest existing entry.
 - **PR titles are load-bearing.** Squash is the repository's only merge method, so the PR title becomes the commit subject release-please parses. It must be a Conventional Commit (`feat:`, `fix:`, `refactor:`, `test:`, …); `feat!:` or a `BREAKING CHANGE:` footer marks a breaking change. A subject that does not parse is skipped silently — no changelog entry, no bump. See README's *Releases* section for the type → section → bump table. Dependabot gets its prefixes from `.github/dependabot.yml`.
 - Release type is `php`, which writes no version number outside `.release-please-manifest.json`: `composer.json` has no `version` key (correct for Packagist — do not add one) and there is no `VERSION` file. The `VERSION` updater is therefore a no-op, but the `composer.json` one still re-serializes the file, so a release PR can carry a one-time reformat of it.
-- `bootstrap-sha` in the config pins the first run's starting point at the 0.2.0 handoff commit. It is ignored once a release-please PR has been merged and can be deleted then.
 
 ## Git worktrees
 

@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Calendrics;
 
-use Calendrics\Internal\CalendarResolver;
+use Calendrics\Internal\HasDayOfMonthProperties;
+use Calendrics\Internal\HasDayOfMonthSpec;
+use Calendrics\Internal\HasLocalizedFormatting;
+use Calendrics\Internal\HasYearMonthProperties;
+use Calendrics\Internal\HasYearMonthSpec;
 use Calendrics\Spec\PlainDate as SpecPlainDate;
-use Calendrics\Trait\HasDayOfMonthProperties;
-use Calendrics\Trait\HasDayOfMonthSpec;
-use Calendrics\Trait\HasLocalizedFormatting;
-use Calendrics\Trait\HasYearMonthProperties;
-use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A calendar date without a time or time zone.
@@ -197,15 +196,10 @@ final class PlainDate implements \Stringable, \JsonSerializable, HasYearMonthSpe
      * Returns a new PlainDate with a different calendar system.
      *
      * The underlying ISO date remains the same; only the calendar projection changes.
-     *
-     * Accepts a {@see Calendar} case or any Temporal date-bearing value
-     * (PlainDate, PlainDateTime, PlainMonthDay, PlainYearMonth, ZonedDateTime),
-     * whose own calendar is used (mirrors TC39 ToTemporalCalendarIdentifier).
      */
-    public function withCalendar(
-        Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar,
-    ): self {
-        return self::fromSpec($this->spec->withCalendar(CalendarResolver::resolve($calendar)->value));
+    public function withCalendar(Calendar $calendar): self
+    {
+        return self::fromSpec($this->spec->withCalendar($calendar->value));
     }
 
     /**

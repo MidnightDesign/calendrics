@@ -4,17 +4,16 @@ declare(strict_types=1);
 
 namespace Calendrics;
 
-use Calendrics\Internal\CalendarResolver;
+use Calendrics\Internal\HasDayOfMonthProperties;
+use Calendrics\Internal\HasDayOfMonthSpec;
+use Calendrics\Internal\HasEpochProperties;
+use Calendrics\Internal\HasEpochSpec;
+use Calendrics\Internal\HasLocalizedFormatting;
+use Calendrics\Internal\HasTimeOfDayProperties;
+use Calendrics\Internal\HasTimeOfDaySpec;
+use Calendrics\Internal\HasYearMonthProperties;
+use Calendrics\Internal\HasYearMonthSpec;
 use Calendrics\Spec\Internal\PhpDateTimeInterop;
-use Calendrics\Trait\HasDayOfMonthProperties;
-use Calendrics\Trait\HasDayOfMonthSpec;
-use Calendrics\Trait\HasEpochProperties;
-use Calendrics\Trait\HasEpochSpec;
-use Calendrics\Trait\HasLocalizedFormatting;
-use Calendrics\Trait\HasTimeOfDayProperties;
-use Calendrics\Trait\HasTimeOfDaySpec;
-use Calendrics\Trait\HasYearMonthProperties;
-use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A date-time anchored to a specific time zone and instant.
@@ -229,9 +228,17 @@ final class ZonedDateTime implements
     /**
      * Creates a ZonedDateTime from a PHP `\DateTimeInterface`.
      *
-     * The zone of `$dt` (as returned by `\DateTimeZone::getName()`) is used as
-     * the resulting `timeZoneId`; this preserves both IANA names like
-     * `Europe/Vienna` and fixed-offset strings like `+05:30`.
+     * The resulting `timeZoneId` depends on which of PHP's three kinds of
+     * zone `$dt` carries:
+     *
+     * - An IANA zone such as `Europe/Vienna` or `UTC` keeps its name.
+     * - A UTC offset zone such as `+05:30` keeps its offset string.
+     * - An abbreviation zone, which PHP creates when a parsed string ends in
+     *   an abbreviation such as `CEST`, `CET` or `Z`, becomes the fixed offset
+     *   PHP applied to `$dt`, for example `+02:00`. This keeps PHP's local
+     *   time even for `CET`, which is also an IANA name with daylight saving
+     *   rules. A zero offset, as from `Z` or `GMT`, becomes `UTC`, the
+     *   identifier Temporal itself uses for UTC.
      *
      * PHP's `\DateTimeImmutable` carries microsecond precision; sub-microsecond
      * Temporal bits (the lowest three decimal digits of `epochNanoseconds`) are
@@ -239,9 +246,26 @@ final class ZonedDateTime implements
      */
     public static function fromDateTime(\DateTimeInterface $dt): self
     {
-        $tzId = $dt->getTimezone()->getName();
+        return new self(PhpDateTimeInterop::epochNanoseconds($dt), self::timeZoneIdOf($dt));
+    }
 
-        return new self(PhpDateTimeInterop::epochNanoseconds($dt), $tzId);
+    private static function timeZoneIdOf(\DateTimeInterface $dt): string
+    {
+        $tz = $dt->getTimezone();
+        if (!self::isAbbreviationZone($tz)) {
+            return $tz->getName();
+        }
+
+        return $dt->getOffset() === 0 ? 'UTC' : $dt->format('P');
+    }
+
+    /**
+     * PHP exposes a zone's kind only through its serialized `timezone_type`,
+     * where 2 marks a zone parsed from an abbreviation.
+     */
+    private static function isAbbreviationZone(\DateTimeZone $tz): bool
+    {
+        return $tz->__serialize()['timezone_type'] === 2;
     }
 
     // -------------------------------------------------------------------------
@@ -626,15 +650,10 @@ final class ZonedDateTime implements
      * Returns a new ZonedDateTime with a different calendar system.
      *
      * The epoch nanoseconds and time zone remain the same; only the calendar projection changes.
-     *
-     * Accepts a {@see Calendar} case or any Temporal date-bearing value
-     * (PlainDate, PlainDateTime, PlainMonthDay, PlainYearMonth, ZonedDateTime),
-     * whose own calendar is used (mirrors TC39 ToTemporalCalendarIdentifier).
      */
-    public function withCalendar(
-        Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar,
-    ): self {
-        return self::fromSpec($this->spec->withCalendar(CalendarResolver::resolve($calendar)->value));
+    public function withCalendar(Calendar $calendar): self
+    {
+        return self::fromSpec($this->spec->withCalendar($calendar->value));
     }
 
     /**

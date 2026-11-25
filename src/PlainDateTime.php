@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace Calendrics;
 
-use Calendrics\Internal\CalendarResolver;
+use Calendrics\Internal\HasDayOfMonthProperties;
+use Calendrics\Internal\HasDayOfMonthSpec;
+use Calendrics\Internal\HasLocalizedFormatting;
+use Calendrics\Internal\HasTimeOfDayProperties;
+use Calendrics\Internal\HasTimeOfDaySpec;
+use Calendrics\Internal\HasYearMonthProperties;
+use Calendrics\Internal\HasYearMonthSpec;
 use Calendrics\Spec\PlainDateTime as SpecPlainDateTime;
-use Calendrics\Trait\HasDayOfMonthProperties;
-use Calendrics\Trait\HasDayOfMonthSpec;
-use Calendrics\Trait\HasLocalizedFormatting;
-use Calendrics\Trait\HasTimeOfDayProperties;
-use Calendrics\Trait\HasTimeOfDaySpec;
-use Calendrics\Trait\HasYearMonthProperties;
-use Calendrics\Trait\HasYearMonthSpec;
 
 /**
  * A calendar date combined with a wall-clock time, without a time zone.
@@ -305,15 +304,10 @@ final class PlainDateTime implements
      * Returns a new PlainDateTime with a different calendar system.
      *
      * The underlying ISO datetime remains the same; only the calendar projection changes.
-     *
-     * Accepts a {@see Calendar} case or any Temporal date-bearing value
-     * (PlainDate, PlainDateTime, PlainMonthDay, PlainYearMonth, ZonedDateTime),
-     * whose own calendar is used (mirrors TC39 ToTemporalCalendarIdentifier).
      */
-    public function withCalendar(
-        Calendar|PlainDate|PlainDateTime|PlainMonthDay|PlainYearMonth|ZonedDateTime $calendar,
-    ): self {
-        return self::fromSpec($this->spec->withCalendar(CalendarResolver::resolve($calendar)->value));
+    public function withCalendar(Calendar $calendar): self
+    {
+        return self::fromSpec($this->spec->withCalendar($calendar->value));
     }
 
     /**

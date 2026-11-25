@@ -14,7 +14,7 @@ You need **PHP 8.4 or newer**, Composer, and the **`intl` extension**. The proje
 composer require midnight/calendrics
 ```
 
-The package is currently pre-1.0. Public APIs may change between minor versions; see the [compatibility policy](docs/compatibility.md#public-api-policy) before upgrading.
+Public APIs are stable within a major version; see the [compatibility policy](docs/compatibility.md#public-api-policy) for what that covers.
 
 ## Quickstart
 
